@@ -1,0 +1,17 @@
+{
+	"name": "VisualPinball.Engine.PinMAME",
+	"rootNamespace": "VisualPinball.Engine.PinMAME",
+	"references": [
+		"VisualPinball.Engine",
+		"VisualPinball.Unity"
+	],
+	"includePlatforms": [],
+	"excludePlatforms": [],
+	"allowUnsafeCode": true,
+	"overrideReferences": false,
+	"precompiledReferences": [],
+	"autoReferenced": true,
+	"defineConstraints": [],
+	"versionDefines": [],
+	"noEngineReferences": false
+}
