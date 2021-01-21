@@ -32,11 +32,19 @@ namespace VisualPinball.Unity
 	{
 		public string Name { get; } = "PinMAME Gamelogic Engine";
 
-		public string GameName = "mm_109c";
+		public PinMameGame Game {
+			get => _game;
+			set {
+				_game = value;
+				UpdateCaches();
+			}
+		}
+		[HideInInspector] public string romId = string.Empty;
 
-		public GameObject Dmd;
+		public GameObject dmd;
 
-		public GamelogicEngineSwitch[] AvailableSwitches => _gameMeta.AvailableSwitches;
+
+		public GamelogicEngineSwitch[] AvailableSwitches => _game?.AvailableSwitches ?? new GamelogicEngineSwitch[0];
 		public GamelogicEngineCoil[] AvailableCoils => _coils.Values.ToArray();
 		public GamelogicEngineLamp[] AvailableLamps => _lamps.Values.ToArray();
 
@@ -48,7 +56,7 @@ namespace VisualPinball.Unity
 
 		private PinMame.PinMame _pinMame;
 		private Player _player;
-		private readonly MedievalMadness _gameMeta;
+		private PinMameGame _game;
 
 		private Dictionary<int, GamelogicEngineSwitch> _switches = new Dictionary<int, GamelogicEngineSwitch>();
 		private Dictionary<int, GamelogicEngineCoil> _coils = new Dictionary<int, GamelogicEngineCoil>();
@@ -68,10 +76,11 @@ namespace VisualPinball.Unity
 			{0x64, Color.Lerp(Color.black, Tint, 1f)}
 		};
 
-		public PinMameGamelogicEngine()
+		private void UpdateCaches()
 		{
-			_gameMeta = new MedievalMadness();
-			foreach (var lamp in _gameMeta.AvailableLamps) {
+			_lamps.Clear();
+			_coils.Clear();
+			foreach (var lamp in _game.AvailableLamps) {
 				if (int.TryParse(lamp.Id, out var id)) {
 					_lamps[id] = lamp;
 
@@ -79,7 +88,7 @@ namespace VisualPinball.Unity
 					Logger.Error("Cannot parse lamp ID " + lamp.Id);
 				}
 			}
-			foreach (var coil in _gameMeta.AvailableCoils) {
+			foreach (var coil in _game.AvailableCoils) {
 				if (int.TryParse(coil.Id, out var id)) {
 					_coils[id] = coil;
 
@@ -97,7 +106,7 @@ namespace VisualPinball.Unity
 			}
 
 			_pinMame = PinMame.PinMame.Instance();
-			_pinMame.StartGame(GameName, showConsole: true);
+			_pinMame.StartGame(romId, showConsole: true);
 			_player = player;
 		}
 
@@ -143,11 +152,11 @@ namespace VisualPinball.Unity
 			}
 
 			// dmd
-			if (Dmd != null && _pinMame.NeedsDmdUpdate()) {
+			if (dmd != null && _pinMame.NeedsDmdUpdate()) {
 				if (_texture == null) {
 					_dmdDimensions = _pinMame.GetDmdDimensions();
 					_texture = new Texture2D(_dmdDimensions.Width, _dmdDimensions.Height);
-					Dmd.GetComponent<Renderer>().sharedMaterial.mainTexture = _texture;
+					dmd.GetComponent<Renderer>().sharedMaterial.mainTexture = _texture;
 				}
 
 				var frame = _pinMame.GetDmdPixels();
