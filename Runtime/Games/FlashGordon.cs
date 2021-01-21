@@ -18,11 +18,12 @@
 
 using System;
 using VisualPinball.Engine.Game.Engines;
+using VisualPinball.Engine.PinMAME.MPUs;
 
-namespace VisualPinball.Unity
+namespace VisualPinball.Engine.PinMAME.Games
 {
 	[Serializable]
-	public class FlashGordon : PinMameGame
+	public class FlashGordon : Bally
 	{
 		public override string Name { get; } = "Flash Gordon";
 		public override string Id { get; } = "fg";
@@ -41,13 +42,13 @@ namespace VisualPinball.Unity
 			new PinMameRom("flashgva", description: "Vocalizer Sound Free Play"),
 		};
 
-		public override GamelogicEngineSwitch[] AvailableSwitches { get; } = {
+		protected override GamelogicEngineSwitch[] Switches { get; } = {
 		};
 
 		public override GamelogicEngineLamp[] AvailableLamps { get; } = {
 		};
 
-		public override GamelogicEngineCoil[] AvailableCoils { get; } = {
+		protected override GamelogicEngineCoil[] Coils { get; } = {
 			new GamelogicEngineCoil("01", 7) { Description = "Out Hole" },
 			new GamelogicEngineCoil("02", 6) { Description = "Knocker" },
 			new GamelogicEngineCoil("03", 4) { Description = "Saucer Kick Down" },

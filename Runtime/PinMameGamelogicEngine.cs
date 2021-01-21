@@ -21,9 +21,10 @@ using NLog;
 using PinMame;
 using UnityEngine;
 using VisualPinball.Engine.Game.Engines;
+using VisualPinball.Unity;
 using Logger = NLog.Logger;
 
-namespace VisualPinball.Unity
+namespace VisualPinball.Engine.PinMAME
 {
 	[Serializable]
 	[DisallowMultipleComponent]
@@ -39,7 +40,9 @@ namespace VisualPinball.Unity
 				UpdateCaches();
 			}
 		}
-		[HideInInspector] public string romId = string.Empty;
+
+		[HideInInspector]
+		public string romId = string.Empty;
 
 		public GameObject dmd;
 
@@ -58,7 +61,7 @@ namespace VisualPinball.Unity
 		private Player _player;
 		private PinMameGame _game;
 
-		private Dictionary<int, GamelogicEngineSwitch> _switches = new Dictionary<int, GamelogicEngineSwitch>();
+		private Dictionary<string, GamelogicEngineSwitch> _switches = new Dictionary<string, GamelogicEngineSwitch>();
 		private Dictionary<int, GamelogicEngineCoil> _coils = new Dictionary<int, GamelogicEngineCoil>();
 		private Dictionary<int, GamelogicEngineLamp> _lamps = new Dictionary<int, GamelogicEngineLamp>();
 
@@ -75,28 +78,6 @@ namespace VisualPinball.Unity
 			{0x43, Color.Lerp(Color.black, Tint, 1f)},
 			{0x64, Color.Lerp(Color.black, Tint, 1f)}
 		};
-
-		private void UpdateCaches()
-		{
-			_lamps.Clear();
-			_coils.Clear();
-			foreach (var lamp in _game.AvailableLamps) {
-				if (int.TryParse(lamp.Id, out var id)) {
-					_lamps[id] = lamp;
-
-				} else {
-					Logger.Error("Cannot parse lamp ID " + lamp.Id);
-				}
-			}
-			foreach (var coil in _game.AvailableCoils) {
-				if (int.TryParse(coil.Id, out var id)) {
-					_coils[id] = coil;
-
-				} else {
-					Logger.Error("Cannot parse coil ID " + coil.Id);
-				}
-			}
-		}
 
 		public void OnInit(Player player, TableApi tableApi, BallManager ballManager)
 		{
@@ -130,24 +111,24 @@ namespace VisualPinball.Unity
 			// coils
 			var changedCoils = _pinMame.GetChangedSolenoids();
 			for (var i = 0; i < changedCoils.Length; i += 2) {
-				var id = changedCoils[i];
+				var internalId = changedCoils[i];
 				var val = changedCoils[i + 1];
 
-				if (_coils.ContainsKey(id)) {
-					Logger.Info($"[PinMAME] <= coil {id}: {val}");
-					OnCoilChanged?.Invoke(this, new CoilEventArgs(_coils[id].Id, val == 1));
+				if (_coils.ContainsKey(internalId)) {
+					Logger.Info($"[PinMAME] <= coil {_coils[internalId].Id} ({internalId}): {val} | {_coils[internalId].Description}");
+					OnCoilChanged?.Invoke(this, new CoilEventArgs(_coils[internalId].Id, val == 1));
 				}
 			}
 
 			// lamps
 			var changedLamps = _pinMame.GetChangedLamps();
 			for (var i = 0; i < changedLamps.Length; i += 2) {
-				var id = changedLamps[i];
+				var internalId = changedLamps[i];
 				var val = changedLamps[i + 1];
 
-				if (_lamps.ContainsKey(id)) {
+				if (_lamps.ContainsKey(internalId)) {
 					//Logger.Info($"[PinMAME] <= lamp {id}: {val}");
-					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[id].Id, val));
+					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[internalId].Id, val));
 				}
 			}
 
@@ -172,6 +153,23 @@ namespace VisualPinball.Unity
 			}
 		}
 
+
+		private void UpdateCaches()
+		{
+			_lamps.Clear();
+			_coils.Clear();
+			_switches.Clear();
+			foreach (var lamp in _game.AvailableLamps) {
+				_lamps[lamp.InternalId] = lamp;
+			}
+			foreach (var coil in _game.AvailableCoils) {
+				_coils[coil.InternalId] = coil;
+			}
+			foreach (var sw in _game.AvailableSwitches) {
+				_switches[sw.Id] = sw;
+			}
+		}
+
 		private void OnDestroy()
 		{
 			_pinMame?.StopGame();
@@ -179,12 +177,11 @@ namespace VisualPinball.Unity
 
 		public void Switch(string id, bool isClosed)
 		{
-			if (int.TryParse(id, out var n)) {
-				Logger.Info($"[PinMAME] => sw {id}: {isClosed}");
-				_pinMame.SetSwitch(n, isClosed);
-
+			if (_switches.ContainsKey(id)) {
+				Logger.Info($"[PinMAME] => sw {id} ({_switches[id].InternalId}): {isClosed} | {_switches[id].Description}");
+				_pinMame.SetSwitch(_switches[id].InternalId, isClosed);
 			} else {
-				Logger.Error($"[PinMAME] Cannot parse switch ID {id}.");
+				Logger.Error($"[PinMAME] Unknown switch \"{id}\".");
 			}
 		}
 	}

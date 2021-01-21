@@ -17,12 +17,13 @@
 using System;
 using VisualPinball.Engine.Common;
 using VisualPinball.Engine.Game.Engines;
+using VisualPinball.Engine.PinMAME.MPUs;
 using VisualPinball.Engine.VPT.Trough;
 
-namespace VisualPinball.Unity
+namespace VisualPinball.Engine.PinMAME.Games
 {
 	[Serializable]
-	public class MedievalMadness : PinMameGame
+	public class MedievalMadness : Wpc
 	{
 		public override string Name { get; } = "Medieval Madness";
 		public override string Id { get; } = "mm";
@@ -38,15 +39,7 @@ namespace VisualPinball.Unity
 			new PinMameRom("mm_109c", "1.09c", "Profanity ROM"),
 		};
 
-		public override GamelogicEngineSwitch[] AvailableSwitches { get; } = {
-			new GamelogicEngineSwitch("1") { Description = "Left Coin Chute", InputActionHint = InputConstants.ActionInsertCoin1 },
-			new GamelogicEngineSwitch("2") { Description = "Center Coin Chute", InputActionHint = InputConstants.ActionInsertCoin2 },
-			new GamelogicEngineSwitch("3") { Description = "Right Coin Chute", InputActionHint = InputConstants.ActionInsertCoin3 },
-			new GamelogicEngineSwitch("4") { Description = "Fourth Coin Chute", InputActionHint = InputConstants.ActionInsertCoin4 },
-			new GamelogicEngineSwitch("5") { Description = "Door: Escape", InputActionHint = InputConstants.ActionCoinDoorCancel },
-			new GamelogicEngineSwitch("6") { Description = "Door: Down", InputActionHint = InputConstants.ActionCoinDoorDown },
-			new GamelogicEngineSwitch("7") { Description = "Door: Up", InputActionHint = InputConstants.ActionCoinDoorUp },
-			new GamelogicEngineSwitch("8") { Description = "Door: Enter", InputActionHint = InputConstants.ActionCoinDoorEnter },
+		protected override GamelogicEngineSwitch[] Switches { get; } = {
 			new GamelogicEngineSwitch("11") { Description = "Launch Ball", InputActionHint = InputConstants.ActionPlunger },
 			new GamelogicEngineSwitch("12") { Description = "Catapult Target" },
 			new GamelogicEngineSwitch("13") { Description = "Start Button", InputActionHint = InputConstants.ActionStartGame },
@@ -55,7 +48,7 @@ namespace VisualPinball.Unity
 			new GamelogicEngineSwitch("16") { Description = "Left Outline" },
 			new GamelogicEngineSwitch("17") { Description = "Right Return Lane" },
 			new GamelogicEngineSwitch("18") { Description = "Shooter Lane" },
-			new GamelogicEngineSwitch("21") { Description = "Slam Tilt" },
+			//new GamelogicEngineSwitch("21") { Description = "Slam Tilt" },
 			new GamelogicEngineSwitch("22") { Description = "Coin Door Closed", InputActionHint = InputConstants.ActionCoinDoorOpenClose },
 			new GamelogicEngineSwitch("24") { Description = "Always Closed", ConstantHint = true},
 			new GamelogicEngineSwitch("25") { Description = "Right Troll Target" },
@@ -169,7 +162,7 @@ namespace VisualPinball.Unity
 			new GamelogicEngineLamp("88") { Description = "Start Button" }
 		};
 
-		public override GamelogicEngineCoil[] AvailableCoils { get; } = {
+		protected override GamelogicEngineCoil[] Coils { get; } = {
 			new GamelogicEngineCoil("01") { Description = "Auto Plunger" },
 			new GamelogicEngineCoil("02") { Description = "Trough Eject", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = Trough.EjectCoilId },
 			new GamelogicEngineCoil("03") { Description = "Left Popper" },

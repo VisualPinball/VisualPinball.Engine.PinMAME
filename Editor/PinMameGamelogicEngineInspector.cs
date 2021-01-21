@@ -17,8 +17,9 @@
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
+using VisualPinball.Engine.PinMAME.Games;
 
-namespace VisualPinball.Unity.Editor
+namespace VisualPinball.Engine.PinMAME.Editor
 {
 	[CustomEditor(typeof(PinMameGamelogicEngine))]
 	public class PinMameGamelogicEngineInspector : UnityEditor.Editor

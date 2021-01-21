@@ -14,12 +14,36 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+using System;
 using VisualPinball.Engine.Game.Engines;
 
-namespace VisualPinball.Unity
+namespace VisualPinball.Engine.PinMAME
 {
+	[Serializable]
 	public abstract class PinMameGame
 	{
+		public const string SwCoin1 = "s_coin_1";
+		public const string SwCoin2 = "s_coin_2";
+		public const string SwCoin3 = "s_coin_3";
+		public const string SwCoin4 = "s_coin_4";
+		public const string SwCancel = "s_cancel";
+		public const string SwDown = "s_down";
+		public const string SwUp = "s_up";
+		public const string SwEnter = "s_down";
+		public const string SwFlipperLowerRight = "s_flipper_lower_right";
+		public const string SwFlipperLowerLeft = "s_flipper_lower_left";
+		public const string SwFlipperUpperRight = "s_flipper_upper_right";
+		public const string SwFlipperUpperLeft = "s_flipper_upper_left";
+		public const string SwSelfTest = "s_self_test";
+		public const string SwCpuDiagnose = "s_cpu_diagnose";
+		public const string SwSoundDiagnose = "s_sound_diagnose";
+		public const string SwTilt = "s_tilt";
+		public const string SwBallRollTilt = "s_ball_roll_tilt";
+		public const string SwSlamTilt = "s_slam_tilt";
+		public const string SwStartButton = "s_start_button";
+
+		public const string CoilGameOn = "c_game_on";
+
 		public abstract string Name { get; }
 		public abstract string Id { get; }
 		public abstract int Year { get; }
