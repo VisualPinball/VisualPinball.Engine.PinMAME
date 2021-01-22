@@ -24,17 +24,17 @@ namespace VisualPinball.Engine.PinMAME.MPUs
 	{
 		public override GamelogicEngineSwitch[] AvailableSwitches => Switches.Concat(_switches).ToArray();
 
-		public override GamelogicEngineCoil[] AvailableCoils => Coils.Concat(_coils).ToArray();
+		protected override GamelogicEngineCoil[] Coils => GameCoils.Concat(_coils).ToArray();
+		protected abstract GamelogicEngineCoil[] GameCoils { get; }
+
 
 		protected abstract GamelogicEngineSwitch[] Switches { get; }
-
-		protected abstract GamelogicEngineCoil[] Coils { get; }
 
 		private readonly GamelogicEngineSwitch[] _switches = {
 			new GamelogicEngineSwitch(SwCoin1, 1) {Description = "Coin Button 1", InputActionHint = InputConstants.ActionInsertCoin1, InputMapHint = InputConstants.MapCabinetSwitches },
 			new GamelogicEngineSwitch(SwCoin2, 2) {Description = "Coin Button 2", InputActionHint = InputConstants.ActionInsertCoin2, InputMapHint = InputConstants.MapCabinetSwitches },
 			new GamelogicEngineSwitch(SwCoin3, 3) {Description = "Coin Button 3", InputActionHint = InputConstants.ActionInsertCoin3, InputMapHint = InputConstants.MapCabinetSwitches },
-			new GamelogicEngineSwitch(SwCoin3, 4) {Description = "Coin Button 3", InputActionHint = InputConstants.ActionInsertCoin4, InputMapHint = InputConstants.MapCabinetSwitches },
+			new GamelogicEngineSwitch(SwCoin3, 4) {Description = "Coin Button 4", InputActionHint = InputConstants.ActionInsertCoin4, InputMapHint = InputConstants.MapCabinetSwitches },
 			new GamelogicEngineSwitch(SwCancel, 5) {Description = "Cancel", InputActionHint = InputConstants.ActionCoinDoorCancel, InputMapHint = InputConstants.MapCabinetSwitches },
 			new GamelogicEngineSwitch(SwDown, 6) {Description = "Down", InputActionHint = InputConstants.ActionCoinDoorDown, InputMapHint = InputConstants.MapCabinetSwitches },
 			new GamelogicEngineSwitch(SwUp, 7) {Description = "Up", InputActionHint = InputConstants.ActionCoinDoorUp, InputMapHint = InputConstants.MapCabinetSwitches },

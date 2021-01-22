@@ -35,31 +35,40 @@ namespace VisualPinball.Engine.PinMAME
 
 		public PinMameGame Game {
 			get => _game;
-			set {
-				_game = value;
-				UpdateCaches();
-			}
+			set => _game = value;
 		}
 
 		[HideInInspector]
 		public string romId = string.Empty;
-
 		public GameObject dmd;
 
-
-		public GamelogicEngineSwitch[] AvailableSwitches => _game?.AvailableSwitches ?? new GamelogicEngineSwitch[0];
-		public GamelogicEngineCoil[] AvailableCoils => _coils.Values.ToArray();
-		public GamelogicEngineLamp[] AvailableLamps => _lamps.Values.ToArray();
+		public GamelogicEngineSwitch[] AvailableSwitches {
+			get {
+				UpdateCaches();
+				return _game?.AvailableSwitches ?? new GamelogicEngineSwitch[0];
+			}
+		}
+		public GamelogicEngineCoil[] AvailableCoils {
+			get {
+				UpdateCaches();
+				return _coils.Values.ToArray();
+			}
+		}
+		public GamelogicEngineLamp[] AvailableLamps {
+			get {
+				UpdateCaches();
+				return _lamps.Values.ToArray();
+			}
+		}
 
 		public event EventHandler<CoilEventArgs> OnCoilChanged;
-
 		public event EventHandler<LampEventArgs> OnLampChanged;
 		public event EventHandler<LampsEventArgs> OnLampsChanged;
 		public event EventHandler<LampColorEventArgs> OnLampColorChanged;
 
-		private PinMame.PinMame _pinMame;
-		private Player _player;
-		private PinMameGame _game;
+		[NonSerialized] private Player _player;
+		[NonSerialized] private PinMame.PinMame _pinMame;
+		[SerializeReference] private PinMameGame _game;
 
 		private Dictionary<string, GamelogicEngineSwitch> _switches = new Dictionary<string, GamelogicEngineSwitch>();
 		private Dictionary<int, GamelogicEngineCoil> _coils = new Dictionary<int, GamelogicEngineCoil>();
@@ -79,6 +88,11 @@ namespace VisualPinball.Engine.PinMAME
 			{0x64, Color.Lerp(Color.black, Tint, 1f)}
 		};
 
+		private void Start()
+		{
+			UpdateCaches();
+		}
+
 		public void OnInit(Player player, TableApi tableApi, BallManager ballManager)
 		{
 			// turn off all lamps
@@ -93,11 +107,17 @@ namespace VisualPinball.Engine.PinMAME
 
 		public void SendInitialSwitches()
 		{
-			var switches = _player.SwitchStatuses;
-			Debug.Log("Sending initial switch statuses...");
-			foreach (var sw in switches.Keys) {
-				if (int.TryParse(sw, out var s)) {
-					_pinMame.SetSwitch(s, switches[sw]);
+			var switches = _player.SwitchStatusesClosed;
+			Logger.Info("[PinMAME] Sending initial switch statuses...");
+			foreach (var id in switches.Keys) {
+				var isClosed = switches[id];
+				// skip open switches
+				if (!isClosed) {
+					continue;
+				}
+				if (_switches.ContainsKey(id)) {
+					Logger.Info($"[PinMAME] => sw {id} ({_switches[id].InternalId}): {true} | {_switches[id].Description}");
+					_pinMame.SetSwitch(_switches[id].InternalId, true);
 				}
 			}
 		}
@@ -117,6 +137,9 @@ namespace VisualPinball.Engine.PinMAME
 				if (_coils.ContainsKey(internalId)) {
 					Logger.Info($"[PinMAME] <= coil {_coils[internalId].Id} ({internalId}): {val} | {_coils[internalId].Description}");
 					OnCoilChanged?.Invoke(this, new CoilEventArgs(_coils[internalId].Id, val == 1));
+
+				} else {
+					Logger.Warn($"[PinMAME] <= coil UNMAPPED {internalId}: {val}");
 				}
 			}
 

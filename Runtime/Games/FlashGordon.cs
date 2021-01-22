@@ -48,7 +48,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 		public override GamelogicEngineLamp[] AvailableLamps { get; } = {
 		};
 
-		protected override GamelogicEngineCoil[] Coils { get; } = {
+		protected override GamelogicEngineCoil[] GameCoils { get; } = {
 			new GamelogicEngineCoil("01", 7) { Description = "Out Hole" },
 			new GamelogicEngineCoil("02", 6) { Description = "Knocker" },
 			new GamelogicEngineCoil("03", 4) { Description = "Saucer Kick Down" },

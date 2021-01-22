@@ -15,6 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 using System;
+using System.Linq;
 using VisualPinball.Engine.Game.Engines;
 
 namespace VisualPinball.Engine.PinMAME
@@ -43,6 +44,10 @@ namespace VisualPinball.Engine.PinMAME
 		public const string SwStartButton = "s_start_button";
 
 		public const string CoilGameOn = "c_game_on";
+		public const string CoilFlipperLowerRight = "c_flipper_lower_right";
+		public const string CoilFlipperLowerLeft = "c_flipper_lower_left";
+		public const string CoilFlipperUpperRight = "c_flipper_upper_right";
+		public const string CoilFlipperUpperLeft = "c_flipper_upper_left";
 
 		public abstract string Name { get; }
 		public abstract string Id { get; }
@@ -52,8 +57,32 @@ namespace VisualPinball.Engine.PinMAME
 
 		public abstract PinMameRom[] Roms { get; }
 
+		/// <summary>
+		/// All available switches for that game
+		/// </summary>
 		public abstract GamelogicEngineSwitch[] AvailableSwitches { get; }
+
+		/// <summary>
+		/// All available coils for that game
+		/// </summary>
+		public GamelogicEngineCoil[] AvailableCoils => Coils.Concat(_coils).ToArray();
+
+		/// <summary>
+		/// Coils specific to the MPU
+		/// </summary>
+		protected abstract GamelogicEngineCoil[] Coils { get; }
+
 		public abstract GamelogicEngineLamp[] AvailableLamps { get; }
-		public abstract GamelogicEngineCoil[] AvailableCoils { get; }
+
+		/// <summary>
+		/// These coils are common to all games.
+		/// </summary>
+		private readonly GamelogicEngineCoil[] _coils = {
+			new GamelogicEngineCoil(CoilFlipperLowerRight, 46) { Description = "Lower Right Flipper", PlayfieldItemHint = "^(RightFlipper|RFlipper|FlipperRight|FlipperR)$"},
+			new GamelogicEngineCoil(CoilFlipperLowerLeft, 48) { Description = "Lower Left Flipper", PlayfieldItemHint = "^(LeftFlipper|LFlipper|FlipperLeft|FlipperL)$"},
+			new GamelogicEngineCoil(CoilFlipperUpperRight, 34) { Description = "Upper Right Flipper"},
+			new GamelogicEngineCoil(CoilFlipperUpperLeft, 36) { Description = "Upper Left Flipper"},
+		};
+
 	}
 }

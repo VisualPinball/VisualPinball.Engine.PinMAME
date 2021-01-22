@@ -22,13 +22,16 @@ namespace VisualPinball.Engine.PinMAME.MPUs
 {
 	public abstract class Bally : PinMameGame
 	{
+
+		protected override GamelogicEngineCoil[] Coils => GameCoils.Concat(_coils).ToArray();
+		protected abstract GamelogicEngineCoil[] GameCoils { get; }
+
+
 		public override GamelogicEngineSwitch[] AvailableSwitches => Switches.Concat(_switches).ToArray();
 
-		public override GamelogicEngineCoil[] AvailableCoils => Coils.Concat(_coils).ToArray();
 
 		protected abstract GamelogicEngineSwitch[] Switches { get; }
 
-		protected abstract GamelogicEngineCoil[] Coils { get; }
 
 		private readonly GamelogicEngineSwitch[] _switches = {
 			new GamelogicEngineSwitch(SwSelfTest, -7) {Description = "Self Test" },

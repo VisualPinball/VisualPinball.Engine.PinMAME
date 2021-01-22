@@ -49,8 +49,8 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineSwitch("17") { Description = "Right Return Lane" },
 			new GamelogicEngineSwitch("18") { Description = "Shooter Lane" },
 			//new GamelogicEngineSwitch("21") { Description = "Slam Tilt" },
-			new GamelogicEngineSwitch("22") { Description = "Coin Door Closed", InputActionHint = InputConstants.ActionCoinDoorOpenClose },
-			new GamelogicEngineSwitch("24") { Description = "Always Closed", ConstantHint = true},
+			new GamelogicEngineSwitch("22") { Description = "Coin Door Closed", NormallyClosed = true, InputActionHint = InputConstants.ActionCoinDoorOpenClose },
+			new GamelogicEngineSwitch("24") { Description = "Always Closed", ConstantHint = SwitchConstantHint.AlwaysClosed},
 			new GamelogicEngineSwitch("25") { Description = "Right Troll Target" },
 			new GamelogicEngineSwitch("26") { Description = "Left Return Lane" },
 			new GamelogicEngineSwitch("27") { Description = "Right Outlane" },
@@ -91,8 +91,8 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineSwitch("74") { Description = "Left Troll Up" },
 			new GamelogicEngineSwitch("75") { Description = "Right Troll Up" },
 
-			new GamelogicEngineSwitch("112") { Description = "Lower Right Flipper", InputActionHint = InputConstants.ActionRightFlipper },
-			new GamelogicEngineSwitch("114") { Description = "Lower Left Flipper", InputActionHint = InputConstants.ActionLeftFlipper },
+			// new GamelogicEngineSwitch("112") { Description = "Lower Right Flipper", InputActionHint = InputConstants.ActionRightFlipper },
+			// new GamelogicEngineSwitch("114") { Description = "Lower Left Flipper", InputActionHint = InputConstants.ActionLeftFlipper },
 		};
 
 		public override GamelogicEngineLamp[] AvailableLamps { get; } = {
@@ -162,16 +162,16 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineLamp("88") { Description = "Start Button" }
 		};
 
-		protected override GamelogicEngineCoil[] Coils { get; } = {
-			new GamelogicEngineCoil("01") { Description = "Auto Plunger" },
-			new GamelogicEngineCoil("02") { Description = "Trough Eject", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = Trough.EjectCoilId },
-			new GamelogicEngineCoil("03") { Description = "Left Popper" },
-			new GamelogicEngineCoil("04") { Description = "Castle" },
-			new GamelogicEngineCoil("05") { Description = "Castle Gate (power)" },
-			new GamelogicEngineCoil("06") { Description = "Castle Gate (hold)", MainCoilIdOfHoldCoil = "05" },
-			new GamelogicEngineCoil("07") { Description = "Knocker" },
-			new GamelogicEngineCoil("08") { Description = "Catapult" },
-			new GamelogicEngineCoil("09") { Description = "Right Eject" },
+		protected override GamelogicEngineCoil[] GameCoils { get; } = {
+			new GamelogicEngineCoil("01", 1) { Description = "Auto Plunger" },
+			new GamelogicEngineCoil("02", 2) { Description = "Trough Eject", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = Trough.EjectCoilId },
+			new GamelogicEngineCoil("03", 3) { Description = "Left Popper" },
+			new GamelogicEngineCoil("04", 4) { Description = "Castle" },
+			new GamelogicEngineCoil("05", 5) { Description = "Castle Gate (power)" },
+			new GamelogicEngineCoil("06", 6) { Description = "Castle Gate (hold)", MainCoilIdOfHoldCoil = "05" },
+			new GamelogicEngineCoil("07", 7) { Description = "Knocker" },
+			new GamelogicEngineCoil("08", 8) { Description = "Catapult" },
+			new GamelogicEngineCoil("09", 9) { Description = "Right Eject" },
 			new GamelogicEngineCoil("10") { Description = "Left Slingshot" },
 			new GamelogicEngineCoil("11") { Description = "Right Slingshot" },
 			new GamelogicEngineCoil("12") { Description = "Left Jet Bumper" },
@@ -191,14 +191,15 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineCoil("26") { Description = "Tower Lock Post" },
 			new GamelogicEngineCoil("27") { Description = "Right Gate" },
 			new GamelogicEngineCoil("28") { Description = "Left Gate" },
-			new GamelogicEngineCoil("29", 46) { Description = "Lower Right Flipper (power)", PlayfieldItemHint = "^(RightFlipper|RFlipper|FlipperRight|FlipperR)$" },
-			new GamelogicEngineCoil("30") { Description = "Lower Right Flipper (hold)", MainCoilIdOfHoldCoil = "29" },
-			new GamelogicEngineCoil("31", 48) { Description = "Lower Left Flipper (power)", PlayfieldItemHint = "^(LeftFlipper|LFlipper|FlipperLeft|FlipperL)$" },
-			new GamelogicEngineCoil("32") { Description = "Lower Left Flipper (hold)", MainCoilIdOfHoldCoil = "31" },
+			// new GamelogicEngineCoil("29", 46) { Description = "Lower Right Flipper (power)", PlayfieldItemHint = "^(RightFlipper|RFlipper|FlipperRight|FlipperR)$" },
+			// new GamelogicEngineCoil("30") { Description = "Lower Right Flipper (hold)", MainCoilIdOfHoldCoil = "29" },
+			// new GamelogicEngineCoil("31", 48) { Description = "Lower Left Flipper (power)", PlayfieldItemHint = "^(LeftFlipper|LFlipper|FlipperLeft|FlipperL)$" },
+			// new GamelogicEngineCoil("32") { Description = "Lower Left Flipper (hold)", MainCoilIdOfHoldCoil = "31" },
 			new GamelogicEngineCoil("33") { Description = "Left Troll (power)" },
 			new GamelogicEngineCoil("34") { Description = "Left Troll (hold)", MainCoilIdOfHoldCoil = "33" },
 			new GamelogicEngineCoil("35") { Description = "Right Troll (power)" },
 			new GamelogicEngineCoil("36") { Description = "Right Troll (hold)", MainCoilIdOfHoldCoil = "35" },
+			new GamelogicEngineCoil("37") { Description = "Drawbridge Motor" },
 		};
 	}
 }
