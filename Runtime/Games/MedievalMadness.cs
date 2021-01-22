@@ -48,35 +48,40 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineSwitch("16") { Description = "Left Outline" },
 			new GamelogicEngineSwitch("17") { Description = "Right Return Lane" },
 			new GamelogicEngineSwitch("18") { Description = "Shooter Lane" },
+
 			//new GamelogicEngineSwitch("21") { Description = "Slam Tilt" },
 			new GamelogicEngineSwitch("22") { Description = "Coin Door Closed", NormallyClosed = true, InputActionHint = InputConstants.ActionCoinDoorOpenClose },
-			new GamelogicEngineSwitch("24") { Description = "Always Closed", ConstantHint = SwitchConstantHint.AlwaysClosed},
+			new GamelogicEngineSwitch("24") { Description = "Always Closed", ConstantHint = SwitchConstantHint.AlwaysOpen},
 			new GamelogicEngineSwitch("25") { Description = "Right Troll Target" },
 			new GamelogicEngineSwitch("26") { Description = "Left Return Lane" },
 			new GamelogicEngineSwitch("27") { Description = "Right Outlane" },
 			new GamelogicEngineSwitch("28") { Description = "Right Eject" },
+
 			new GamelogicEngineSwitch("31") { Description = "Trough Eject (jam)", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "jam"},
 			new GamelogicEngineSwitch("32") { Description = "Trough Ball 1", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "1" },
 			new GamelogicEngineSwitch("33") { Description = "Trough Ball 2", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "2" },
 			new GamelogicEngineSwitch("34") { Description = "Trough Ball 3", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "3" },
 			new GamelogicEngineSwitch("35") { Description = "Trough Ball 4", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "4" },
-			new GamelogicEngineSwitch("36") { Description = "Left Popper" },
-			new GamelogicEngineSwitch("37") { Description = "Castle Gate" },
+			new GamelogicEngineSwitch("36") { Description = "Left Popper", ConstantHint = SwitchConstantHint.AlwaysClosed },
+			new GamelogicEngineSwitch("37") { Description = "Castle Gate", ConstantHint = SwitchConstantHint.AlwaysClosed },
 			new GamelogicEngineSwitch("38") { Description = "Catapult" },
-			new GamelogicEngineSwitch("41") { Description = "Moat Enter" },
+
+			new GamelogicEngineSwitch("41") { Description = "Moat Enter", ConstantHint = SwitchConstantHint.AlwaysClosed },
 			new GamelogicEngineSwitch("44") { Description = "Castle Lock" },
 			new GamelogicEngineSwitch("45") { Description = "Left Troll (under playfield)" },
 			new GamelogicEngineSwitch("46") { Description = "Right Troll (under playfield)" },
 			new GamelogicEngineSwitch("47") { Description = "Left Top Lane" },
 			new GamelogicEngineSwitch("48") { Description = "Right Top Lane" },
+
 			new GamelogicEngineSwitch("51") { Description = "Left Slingshot" },
 			new GamelogicEngineSwitch("52") { Description = "Right Slingshot" },
 			new GamelogicEngineSwitch("53") { Description = "Left Jet Bumper" },
 			new GamelogicEngineSwitch("54") { Description = "Bottom Jet Bumper" },
 			new GamelogicEngineSwitch("55") { Description = "Right Jet Bumper" },
-			new GamelogicEngineSwitch("56") { Description = "Draw-Bridge Up" },
+			new GamelogicEngineSwitch("56") { Description = "Draw-Bridge Up", ConstantHint = SwitchConstantHint.AlwaysClosed },
 			new GamelogicEngineSwitch("57") { Description = "Draw-Bridge Down" },
 			new GamelogicEngineSwitch("58") { Description = "Tower Exit" },
+
 			new GamelogicEngineSwitch("61") { Description = "Left Ramp Enter" },
 			new GamelogicEngineSwitch("62") { Description = "Left Ramp Exit" },
 			new GamelogicEngineSwitch("63") { Description = "Right Ramp Enter" },
@@ -85,6 +90,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineSwitch("66") { Description = "Left Loop High" },
 			new GamelogicEngineSwitch("67") { Description = "Right Loop Low" },
 			new GamelogicEngineSwitch("68") { Description = "Right Loop High" },
+
 			new GamelogicEngineSwitch("71") { Description = "Right Bank Top" },
 			new GamelogicEngineSwitch("72") { Description = "Right Bank Middle" },
 			new GamelogicEngineSwitch("73") { Description = "Right Bank Bottom" },
@@ -104,6 +110,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineLamp("16") { Description = "Dragon Death" },
 			new GamelogicEngineLamp("17") { Description = "Dragon Snack" },
 			new GamelogicEngineLamp("18") { Description = "Dragon Breath" },
+
 			new GamelogicEngineLamp("21") { Description = "Right Loop Jackpot" },
 			new GamelogicEngineLamp("22") { Description = "Right Joust Victory" },
 			new GamelogicEngineLamp("23") { Description = "Right Clash!" },
@@ -112,6 +119,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineLamp("26") { Description = "Catapult Ace" },
 			new GamelogicEngineLamp("27") { Description = "Joust Champion" },
 			new GamelogicEngineLamp("28") { Description = "Castle Crusher" },
+
 			new GamelogicEngineLamp("31") { Description = "Trolls!" },
 			new GamelogicEngineLamp("32") { Description = "Extra Ball" },
 			new GamelogicEngineLamp("33") { Description = "Merlin's Magic" },
@@ -120,6 +128,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineLamp("36") { Description = "Peasant Madness" },
 			new GamelogicEngineLamp("37") { Description = "Catapult Madness" },
 			new GamelogicEngineLamp("38") { Description = "Joust Madness" },
+
 			new GamelogicEngineLamp("41") { Description = "Left Loop Jackpot" },
 			new GamelogicEngineLamp("42") { Description = "Left Joust Victory" },
 			new GamelogicEngineLamp("43") { Description = "Left Clash!" },
@@ -128,6 +137,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineLamp("46") { Description = "Catapult Slam!" },
 			new GamelogicEngineLamp("47") { Description = "BAM!" },
 			new GamelogicEngineLamp("48") { Description = "WAM!" },
+
 			new GamelogicEngineLamp("51") { Description = "Center Arrow" },
 			new GamelogicEngineLamp("52") { Description = "Battle for the Kingdom" },
 			new GamelogicEngineLamp("53") { Description = "Master of Trolls" },
@@ -136,6 +146,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineLamp("56") { Description = "Right Top Lane" },
 			new GamelogicEngineLamp("57") { Description = "Left Troll Target" },
 			new GamelogicEngineLamp("58") { Description = "Right Troll Target" },
+
 			new GamelogicEngineLamp("61") { Description = "Francois d'Grimm" },
 			new GamelogicEngineLamp("62") { Description = "King of Payne" },
 			new GamelogicEngineLamp("63") { Description = "Earl of Ego" },
@@ -144,6 +155,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineLamp("66") { Description = "Ugly Riot!" },
 			new GamelogicEngineLamp("67") { Description = "Angry Mob!" },
 			new GamelogicEngineLamp("68") { Description = "Rabble Rouser" },
+
 			new GamelogicEngineLamp("71") { Description = "Howard Hurtz" },
 			new GamelogicEngineLamp("72") { Description = "Magic Shield" },
 			new GamelogicEngineLamp("73") { Description = "Sir Psycho" },
@@ -152,6 +164,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineLamp("76") { Description = "Castle Lock 1" },
 			new GamelogicEngineLamp("77") { Description = "Super Jackpot" },
 			new GamelogicEngineLamp("78") { Description = "Super Jets (2)" },
+
 			new GamelogicEngineLamp("81") { Description = "Right Outlane" },
 			new GamelogicEngineLamp("82") { Description = "Right Return" },
 			new GamelogicEngineLamp("83") { Description = "Left Return" },
@@ -163,7 +176,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 		};
 
 		protected override GamelogicEngineCoil[] GameCoils { get; } = {
-			new GamelogicEngineCoil("01", 1) { Description = "Auto Plunger" },
+			new GamelogicEngineCoil("01", 1) { Description = "Auto Plunger", PlayfieldItemHint = "Plunger"},
 			new GamelogicEngineCoil("02", 2) { Description = "Trough Eject", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = Trough.EjectCoilId },
 			new GamelogicEngineCoil("03", 3) { Description = "Left Popper" },
 			new GamelogicEngineCoil("04", 4) { Description = "Castle" },
