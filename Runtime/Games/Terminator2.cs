@@ -64,7 +64,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineSwitch("31") { Description = "Gun Loaded" },
 			new GamelogicEngineSwitch("32") { Description = "Gun Mark" },
 			new GamelogicEngineSwitch("33") { Description = "Gun Home" },
-			new GamelogicEngineSwitch("34") { Description = "Grip Trigger" },
+			new GamelogicEngineSwitch("34") { Description = "Grip Trigger", InputActionHint = InputConstants.ActionPlunger },
 			new GamelogicEngineSwitch("36") { Description = "Mid Left Stand-up Target" },
 			new GamelogicEngineSwitch("37") { Description = "Mid Center Stand-up Target" },
 			new GamelogicEngineSwitch("38") { Description = "Mid Right Stand-up Target" },

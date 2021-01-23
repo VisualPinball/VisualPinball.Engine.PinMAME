@@ -179,6 +179,9 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void UpdateCaches()
 		{
+			if (_game == null) {
+				return;
+			}
 			_lamps.Clear();
 			_coils.Clear();
 			_switches.Clear();
