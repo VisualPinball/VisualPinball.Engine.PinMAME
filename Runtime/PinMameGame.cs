@@ -30,7 +30,7 @@ namespace VisualPinball.Engine.PinMAME
 		public const string SwCancel = "s_cancel";
 		public const string SwDown = "s_down";
 		public const string SwUp = "s_up";
-		public const string SwEnter = "s_down";
+		public const string SwEnter = "s_enter";
 		public const string SwFlipperLowerRight = "s_flipper_lower_right";
 		public const string SwFlipperLowerLeft = "s_flipper_lower_left";
 		public const string SwFlipperUpperRight = "s_flipper_upper_right";
