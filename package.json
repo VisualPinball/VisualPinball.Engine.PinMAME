@@ -10,7 +10,7 @@
   "unity": "2020.2",
   "unityRelease": "0f1",
   "dependencies": {
-    "org.visualpinball.engine.unity": "0.0.1-preview.24"
+    "org.visualpinball.engine.unity": "0.0.1-preview.33"
   },
   "author": "freezy <freezy@vpdb.io>",
   "contributors": [
