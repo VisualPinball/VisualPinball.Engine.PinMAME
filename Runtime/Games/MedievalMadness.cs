@@ -18,6 +18,7 @@ using System;
 using VisualPinball.Engine.Common;
 using VisualPinball.Engine.Game.Engines;
 using VisualPinball.Engine.PinMAME.MPUs;
+using VisualPinball.Engine.VPT.Plunger;
 using VisualPinball.Engine.VPT.Trough;
 
 namespace VisualPinball.Engine.PinMAME.Games
@@ -176,7 +177,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 		};
 
 		protected override GamelogicEngineCoil[] GameCoils { get; } = {
-			new GamelogicEngineCoil("01", 1) { Description = "Auto Plunger", PlayfieldItemHint = "Plunger"},
+			new GamelogicEngineCoil("01", 1) { Description = "Auto Plunger", DeviceHint = "Plunger", DeviceItemHint = Plunger.FireCoilId },
 			new GamelogicEngineCoil("02", 2) { Description = "Trough Eject", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = Trough.EjectCoilId },
 			new GamelogicEngineCoil("03", 3) { Description = "Left Popper" },
 			new GamelogicEngineCoil("04", 4) { Description = "Castle" },
