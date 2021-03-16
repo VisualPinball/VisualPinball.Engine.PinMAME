@@ -47,10 +47,10 @@ namespace VisualPinball.Engine.PinMAME.Games
 		protected override GamelogicEngineSwitch[] Switches { get; } = {
 			new GamelogicEngineSwitch("13") { Description = "Start Button", InputActionHint = InputConstants.ActionStartGame },
 			new GamelogicEngineSwitch("14") { Description = "Plumb Bob Tilt" },
-			new GamelogicEngineSwitch("15") { Description = "Trough Left", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "1" },
-			new GamelogicEngineSwitch("16") { Description = "Trough Center", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "2" },
-			new GamelogicEngineSwitch("17") { Description = "Trough Right", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "3" },
-			new GamelogicEngineSwitch("18") { Description = "Outhole" },
+			new GamelogicEngineSwitch("15") { Description = "Trough Left", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "2" },
+			new GamelogicEngineSwitch("16") { Description = "Trough Center", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "3" },
+			new GamelogicEngineSwitch("17") { Description = "Trough Right", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "4" },
+			new GamelogicEngineSwitch("18") { Description = "Outhole", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "1" },
 
 			//new GamelogicEngineSwitch("21") { Description = "Slam Tilt" },
 			new GamelogicEngineSwitch("22") { Description = "Coin Door Closed", NormallyClosed = true, InputActionHint = InputConstants.ActionCoinDoorOpenClose },
@@ -205,6 +205,12 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineCoil("26") { Description = "Left Popper Flashlamps", IsLamp = true },
 			new GamelogicEngineCoil("27") { Description = "Right Popper" },
 			new GamelogicEngineCoil("28") { Description = "Flashlamps Drop Target" },
+
+			new GamelogicEngineCoil(CoilFlipperLowerRight, 46) { Description = "Lower Right Flipper", PlayfieldItemHint = "^RightFlipper$"},
+			new GamelogicEngineCoil(CoilFlipperLowerLeft, 48) { Description = "Lower Left Flipper", PlayfieldItemHint = "^LeftFlipper$"},
+
+			new GamelogicEngineCoil(CoilFlipperUpperRight, 34) { IsUnused = true },
+			new GamelogicEngineCoil(CoilFlipperUpperLeft, 36) { IsUnused = true },
 		};
 	}
 }

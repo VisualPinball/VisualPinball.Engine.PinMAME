@@ -22,9 +22,9 @@ namespace VisualPinball.Engine.PinMAME.MPUs
 {
 	public abstract class Wpc : PinMameGame
 	{
-		public override GamelogicEngineSwitch[] AvailableSwitches => Switches.Concat(_switches).ToArray();
+		public override GamelogicEngineSwitch[] AvailableSwitches => Concat(_switches, Switches);
 
-		protected override GamelogicEngineCoil[] Coils => GameCoils.Concat(_coils).ToArray();
+		protected override GamelogicEngineCoil[] Coils => Concat(_coils, GameCoils);
 		protected abstract GamelogicEngineCoil[] GameCoils { get; }
 
 

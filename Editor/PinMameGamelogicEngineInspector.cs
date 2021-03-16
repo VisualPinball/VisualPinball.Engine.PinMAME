@@ -18,12 +18,15 @@ using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using VisualPinball.Engine.PinMAME.Games;
+using VisualPinball.Unity;
 
 namespace VisualPinball.Engine.PinMAME.Editor
 {
 	[CustomEditor(typeof(PinMameGamelogicEngine))]
 	public class PinMameGamelogicEngineInspector : UnityEditor.Editor
 	{
+		private bool IsGameSet => _gle.Game != null;
+
 		private PinMameGamelogicEngine _gle;
 		private PinMameGame[] _games;
 		private string[] _gameNames;
@@ -31,6 +34,8 @@ namespace VisualPinball.Engine.PinMAME.Editor
 
 		private int _selectedGameIndex;
 		private int _selectedRomIndex;
+
+		private TableAuthoring _tableAuthoring;
 
 		private PinMameRom Rom => _gle.Game.Roms[_selectedRomIndex];
 
@@ -46,7 +51,11 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				.Concat(_games.Select(g => g.Name))
 				.ToArray();
 
-			if (_gle.Game != null) {
+			if (_gle != null) {
+				_tableAuthoring = _gle.gameObject.GetComponentInParent<TableAuthoring>();
+			}
+
+			if (IsGameSet) {
 				for (var i = 0; i < _games.Length; i++) {
 					if (_games[i].Id == _gle.Game.Id) {
 						_selectedGameIndex = i + 1;
@@ -98,6 +107,16 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			_selectedRomIndex = EditorGUILayout.Popup("ROM", _selectedRomIndex, _romNames);
 			if (EditorGUI.EndChangeCheck()) {
 				_gle.romId = Rom.Id;
+			}
+			EditorGUI.EndDisabledGroup();
+
+			EditorGUI.BeginDisabledGroup(!IsGameSet);
+			if (GUILayout.Button("Populate Hardware")) {
+				if (EditorUtility.DisplayDialog("Mission Pinball Framework", "This will clear all linked switches, coils and lamps and re-populate them. You sure you want to do that?", "Yes", "No")) {
+					_tableAuthoring.RepopulateHardware(_gle);
+					TableSelector.Instance.TableUpdated();
+					SceneView.RepaintAll();
+				}
 			}
 			EditorGUI.EndDisabledGroup();
 

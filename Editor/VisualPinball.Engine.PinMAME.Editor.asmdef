@@ -2,6 +2,9 @@
 	"name": "VisualPinball.Engine.PinMAME.Editor",
 	"rootNamespace": "VisualPinball.Engine.PinMAME.Editor",
 	"references": [
+		"VisualPinball.Engine",
+		"VisualPinball.Unity",
+		"VisualPinball.Unity.Editor",
 		"VisualPinball.Engine.PinMAME"
 	],
 	"includePlatforms": [ "Editor" ],

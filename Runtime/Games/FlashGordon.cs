@@ -43,9 +43,49 @@ namespace VisualPinball.Engine.PinMAME.Games
 		};
 
 		protected override GamelogicEngineSwitch[] Switches { get; } = {
+			new GamelogicEngineSwitch("01") { Description = "2 Left & Right R.O. Buttons" },
+			new GamelogicEngineSwitch("02") { Description = "3 Shooter Lane R.O. Buttons" },
+			new GamelogicEngineSwitch("03") { Description = "Top Single Drop Target" },
+			new GamelogicEngineSwitch("04") { Description = "Shooter Lane Rollover" },
+			new GamelogicEngineSwitch("05") { Description = "Drop Target 50 Point Reb. (2)" },
+			new GamelogicEngineSwitch("06") { Description = "Credit Button" },
+			new GamelogicEngineSwitch("07") { Description = "Tilt (3)" },
+			new GamelogicEngineSwitch("08") { Description = "Outhole" },
+			new GamelogicEngineSwitch("09") { Description = "Coin III (right)" },
+			new GamelogicEngineSwitch("10") { Description = "Coin I (left)" },
+			new GamelogicEngineSwitch("11") { Description = "Coin II (middle)" },
+			new GamelogicEngineSwitch("12") { Description = "Lower Right Side Target" },
+			new GamelogicEngineSwitch("13") { Description = "Flip Feed Lane (right)" },
+			new GamelogicEngineSwitch("14") { Description = "Flip Feed Lane (left)" },
+			new GamelogicEngineSwitch("15") { Description = "Upper Right Side Target" },
+			new GamelogicEngineSwitch("16") { Description = "Slam (2)" },
+			new GamelogicEngineSwitch("17") { Description = "4 Drop Target A (bottom)" },
+			new GamelogicEngineSwitch("18") { Description = "4 Drop Target B" },
+			new GamelogicEngineSwitch("19") { Description = "4 Drop Target C" },
+			new GamelogicEngineSwitch("20") { Description = "4 Drop Target D (top)" },
+			new GamelogicEngineSwitch("21") { Description = "1 Drop Target (top)" },
+			new GamelogicEngineSwitch("22") { Description = "2 Drop Target (middle)" },
+			new GamelogicEngineSwitch("23") { Description = "3 Drop Target (bottom)" },
+			new GamelogicEngineSwitch("24") { Description = "Top Target" },
+			new GamelogicEngineSwitch("25") { Description = "1st Inline Drop Target" },
+			new GamelogicEngineSwitch("26") { Description = "2nd Inline Drop Target" },
+			new GamelogicEngineSwitch("27") { Description = "3rd Inline Drop Target" },
+			new GamelogicEngineSwitch("28") { Description = "Inline Back Target" },
+			new GamelogicEngineSwitch("29") { Description = "10 Point Rebound (2)" },
+			new GamelogicEngineSwitch("30") { Description = "Saucer" },
+			new GamelogicEngineSwitch("31") { Description = "Right Outlane" },
+			new GamelogicEngineSwitch("32") { Description = "Left Outlane" },
+			new GamelogicEngineSwitch("33") { Description = "Right Spinner" },
+			new GamelogicEngineSwitch("34") { Description = "Left Spinner" },
+			new GamelogicEngineSwitch("35") { Description = "Right Slingshot" },
+			new GamelogicEngineSwitch("36") { Description = "Left Slingshot" },
+			new GamelogicEngineSwitch("37") { Description = "Top Thumper Bumper" },
+			new GamelogicEngineSwitch("39") { Description = "Right Thumper Bumper" },
+			new GamelogicEngineSwitch("40") { Description = "Left Thumper Bumper" },
 		};
 
 		public override GamelogicEngineLamp[] AvailableLamps { get; } = {
+
 		};
 
 		protected override GamelogicEngineCoil[] GameCoils { get; } = {

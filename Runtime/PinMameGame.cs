@@ -15,6 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using VisualPinball.Engine.Game.Engines;
 
@@ -65,7 +66,7 @@ namespace VisualPinball.Engine.PinMAME
 		/// <summary>
 		/// All available coils for that game
 		/// </summary>
-		public GamelogicEngineCoil[] AvailableCoils => Coils.Concat(_coils).ToArray();
+		public GamelogicEngineCoil[] AvailableCoils => Concat(_coils, Coils);
 
 		/// <summary>
 		/// Coils specific to the MPU
@@ -84,5 +85,22 @@ namespace VisualPinball.Engine.PinMAME
 			new GamelogicEngineCoil(CoilFlipperUpperLeft, 36) { Description = "Upper Left Flipper"},
 		};
 
+		protected GamelogicEngineCoil[] Concat(IEnumerable<GamelogicEngineCoil> parent, IEnumerable<GamelogicEngineCoil> children)
+		{
+			var c = parent.ToDictionary(s => s.InternalId, s => s);
+			foreach (var child in children) {
+				c[child.InternalId] = child;
+			}
+			return c.Values.ToArray();
+		}
+
+		protected GamelogicEngineSwitch[] Concat(IEnumerable<GamelogicEngineSwitch> parent, IEnumerable<GamelogicEngineSwitch> children)
+		{
+			var c = parent.ToDictionary(s => s.InternalId, s => s);
+			foreach (var child in children) {
+				c[child.InternalId] = child;
+			}
+			return c.Values.ToArray();
+		}
 	}
 }
