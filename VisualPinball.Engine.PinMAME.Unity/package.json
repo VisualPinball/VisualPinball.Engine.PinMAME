@@ -1,0 +1,29 @@
+{
+  "name": "org.visualpinball.engine.pinmame",
+  "version": "0.0.1-preview.1",
+  "displayName": "Visual Pinball Engine (PinMAME)",
+  "description": "PinMAME support",
+  "keywords": [
+    "Unity",
+    "PinMAME"
+  ],
+  "unity": "2020.3",
+  "unityRelease": "1f1",
+  "dependencies": {
+    "org.visualpinball.engine.unity": "0.0.1-preview.41"
+  },
+  "author": "freezy <freezy@vpdb.io>",
+  "contributors": [
+    "jsm174 <jsm174@gmail.com>"
+  ],
+  "documentationUrl": "https://docs.visualpinball.org/plugins/pinmame/",
+  "changelogUrl": "https://docs.visualpinball.org/CHANGELOG.html",
+  "licensesUrl": "https://github.com/VisualPinball/VisualPinball.Unity.Hdrp/blob/master/LICENSE",
+  "repository": {
+    "url": "https://github.com/VisualPinball/VisualPinball.Engine.PinMAME.git",
+    "type": "git"
+  },
+  "publishConfig": {
+    "registry": "https://registry.visualpinball.org"
+  }
+}

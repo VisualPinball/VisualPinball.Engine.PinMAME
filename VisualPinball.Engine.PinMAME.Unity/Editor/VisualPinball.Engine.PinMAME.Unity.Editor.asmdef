@@ -1,0 +1,19 @@
+{
+	"name": "VisualPinball.Engine.PinMAME.Unity.Editor",
+	"rootNamespace": "VisualPinball.Engine.PinMAME.Unity.Editor",
+	"references": [
+		"VisualPinball.Engine",
+		"VisualPinball.Unity",
+		"VisualPinball.Unity.Editor",
+		"VisualPinball.Engine.PinMAME.Unity"
+	],
+	"includePlatforms": [ "Editor" ],
+	"excludePlatforms": [],
+	"allowUnsafeCode": true,
+	"overrideReferences": false,
+	"precompiledReferences": [],
+	"autoReferenced": true,
+	"defineConstraints": [],
+	"versionDefines": [],
+	"noEngineReferences": false
+}
