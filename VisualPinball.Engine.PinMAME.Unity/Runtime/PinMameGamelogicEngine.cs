@@ -18,7 +18,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using NLog;
-using PinMame;
 using UnityEngine;
 using VisualPinball.Engine.Game.Engines;
 using VisualPinball.Unity;
@@ -40,7 +39,6 @@ namespace VisualPinball.Engine.PinMAME
 
 		[HideInInspector]
 		public string romId = string.Empty;
-		public GameObject dmd;
 
 		public GamelogicEngineSwitch[] AvailableSwitches {
 			get {
@@ -65,6 +63,8 @@ namespace VisualPinball.Engine.PinMAME
 		public event EventHandler<LampEventArgs> OnLampChanged;
 		public event EventHandler<LampsEventArgs> OnLampsChanged;
 		public event EventHandler<LampColorEventArgs> OnLampColorChanged;
+		public event EventHandler<AvailableDisplays> OnDisplaysAvailable;
+		public event EventHandler<DisplayFrameData> OnDisplayFrame;
 
 		[NonSerialized] private Player _player;
 		[NonSerialized] private PinMame.PinMame _pinMame;
@@ -74,19 +74,12 @@ namespace VisualPinball.Engine.PinMAME
 		private Dictionary<int, GamelogicEngineCoil> _coils = new Dictionary<int, GamelogicEngineCoil>();
 		private Dictionary<int, GamelogicEngineLamp> _lamps = new Dictionary<int, GamelogicEngineLamp>();
 
-		private Texture2D _texture;
-		private DmdDimensions _dmdDimensions;
+		private const string DisplayDmd = "dmd";
+
+		private bool _sizeAnnounced;
 
 		private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 		private static readonly Color Tint = new Color(1, 0.18f, 0);
-
-		private readonly Dictionary<byte, Color> _map = new Dictionary<byte, Color> {
-			{0x0, Color.Lerp(Color.black, Tint, 0)},
-			{0x14, Color.Lerp(Color.black, Tint, 0.33f)},
-			{0x21, Color.Lerp(Color.black, Tint, 0.66f)},
-			{0x43, Color.Lerp(Color.black, Tint, 1f)},
-			{0x64, Color.Lerp(Color.black, Tint, 1f)}
-		};
 
 		private void Start()
 		{
@@ -156,23 +149,14 @@ namespace VisualPinball.Engine.PinMAME
 			}
 
 			// dmd
-			if (dmd != null && _pinMame.NeedsDmdUpdate()) {
-				if (_texture == null) {
-					_dmdDimensions = _pinMame.GetDmdDimensions();
-					_texture = new Texture2D(_dmdDimensions.Width, _dmdDimensions.Height);
-					dmd.GetComponent<Renderer>().sharedMaterial.mainTexture = _texture;
+			if (_pinMame.NeedsDmdUpdate()) {
+				if (!_sizeAnnounced) {
+					var dim = _pinMame.GetDmdDimensions();
+					OnDisplaysAvailable?.Invoke(this, new AvailableDisplays(
+						new DisplayConfig(DisplayDmd, DisplayType.Dmd2PinMame, dim.Width, dim.Height)));
+					_sizeAnnounced = true;
 				}
-
-				var frame = _pinMame.GetDmdPixels();
-				if (frame.Length == _dmdDimensions.Width * _dmdDimensions.Height) {
-					for (var y = 0; y < _dmdDimensions.Height; y++) {
-						for (var x = 0; x < _dmdDimensions.Width; x++) {
-							var pixel = frame[y * _dmdDimensions.Width + x];
-							_texture.SetPixel(_dmdDimensions.Width - x, _dmdDimensions.Height - y, _map.ContainsKey(pixel) ? _map[pixel] : Color.magenta);
-						}
-					}
-				}
-				_texture.Apply();
+				OnDisplayFrame?.Invoke(this, new DisplayFrameData(DisplayDmd, _pinMame.GetDmdPixels()));
 			}
 		}
 
@@ -211,4 +195,27 @@ namespace VisualPinball.Engine.PinMAME
 			}
 		}
 	}
+
+	// internal readonly struct DisplayKey : IEquatable<DisplayKey>
+	// {
+	// 	private readonly int _width;
+	// 	private readonly int _height;
+	// 	private readonly int _bitLength;
+	//
+	// 	public DisplayKey(int width, int height, int bitLength)
+	// 	{
+	// 		_width = width;
+	// 		_height = height;
+	// 		_bitLength = bitLength;
+	// 	}
+	//
+	// 	public override bool Equals(object obj) => obj is DisplayKey other && Equals(other);
+	//
+	// 	public bool Equals(DisplayKey other)
+	// 	{
+	// 		return _width == other._width && _height == other._height && _bitLength == other._bitLength;
+	// 	}
+	//
+	// 	public override int GetHashCode() => (_width, _height, _bitLength).GetHashCode();
+	// }
 }
