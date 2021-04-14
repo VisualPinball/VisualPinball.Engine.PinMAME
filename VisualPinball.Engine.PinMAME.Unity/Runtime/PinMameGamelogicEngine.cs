@@ -18,6 +18,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using NLog;
+using PinMame;
 using UnityEngine;
 using VisualPinball.Engine.Game.Engines;
 using VisualPinball.Unity;
@@ -76,6 +77,7 @@ namespace VisualPinball.Engine.PinMAME
 
 		private const string DisplayDmd = "dmd";
 
+		private bool _isRunning;
 		private bool _sizeAnnounced;
 
 		private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
@@ -94,8 +96,60 @@ namespace VisualPinball.Engine.PinMAME
 			}
 
 			_pinMame = PinMame.PinMame.Instance();
-			_pinMame.StartGame(romId, showConsole: true);
+			_pinMame.OnGameStarted += GameStarted;
+			_pinMame.OnGameEnded += GameEnded;
+			_pinMame.OnDisplayUpdate += DisplayUpdated;
+			_pinMame.OnSolenoid += SolenoidChanged;
+			_pinMame.StartGame(romId);
 			_player = player;
+		}
+
+		private void GameStarted(object sender, EventArgs e)
+		{
+			Logger.Info($"[PinMAME] Game started.");
+			_isRunning = true;
+		}
+
+		private void DisplayUpdated(object sender, EventArgs e, int index, IntPtr framePtr, PinMameDisplayLayout displayLayout)
+		{
+			if ((displayLayout.type & PinMameDisplayType.DMD) > 0) {
+				UpdateDmd(index, displayLayout, framePtr);
+			} else {
+				UpdateSegDisp(index, displayLayout, framePtr);
+			}
+		}
+
+		private void UpdateSegDisp(int index, PinMameDisplayLayout displayLayout, IntPtr framePtr)
+		{
+
+		}
+
+
+		private void UpdateDmd(int index, PinMameDisplayLayout displayLayout, IntPtr framePtr)
+		{
+			if (!_sizeAnnounced) {
+				OnDisplaysAvailable?.Invoke(this, new AvailableDisplays(new DisplayConfig(DisplayDmd, displayLayout.width, displayLayout.height)));
+				_sizeAnnounced = true;
+			}
+			OnDisplayFrame?.Invoke(this, new DisplayFrameData(DisplayDmd, GetDisplayType(displayLayout.type), framePtr));
+
+		}
+
+		private void SolenoidChanged(object sender, EventArgs e, int internalId, bool isActive)
+		{
+			if (_coils.ContainsKey(internalId)) {
+				Logger.Info($"[PinMAME] <= coil {_coils[internalId].Id} ({internalId}): {isActive} | {_coils[internalId].Description}");
+				OnCoilChanged?.Invoke(this, new CoilEventArgs(_coils[internalId].Id, isActive));
+
+			} else {
+				Logger.Warn($"[PinMAME] <= coil UNMAPPED {internalId}: {isActive}");
+			}
+		}
+
+		private void GameEnded(object sender, EventArgs e)
+		{
+			Logger.Info($"[PinMAME] Game ended.");
+			_isRunning = false;
 		}
 
 		public void SendInitialSwitches()
@@ -117,23 +171,8 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void Update()
 		{
-			if (_pinMame == null || !_pinMame.IsRunning) {
+			if (_pinMame == null || !_isRunning) {
 				return;
-			}
-
-			// coils
-			var changedCoils = _pinMame.GetChangedSolenoids();
-			for (var i = 0; i < changedCoils.Length; i += 2) {
-				var internalId = changedCoils[i];
-				var val = changedCoils[i + 1];
-
-				if (_coils.ContainsKey(internalId)) {
-					Logger.Info($"[PinMAME] <= coil {_coils[internalId].Id} ({internalId}): {val} | {_coils[internalId].Description}");
-					OnCoilChanged?.Invoke(this, new CoilEventArgs(_coils[internalId].Id, val == 1));
-
-				} else {
-					Logger.Warn($"[PinMAME] <= coil UNMAPPED {internalId}: {val}");
-				}
 			}
 
 			// lamps
@@ -147,19 +186,7 @@ namespace VisualPinball.Engine.PinMAME
 					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[internalId].Id, val));
 				}
 			}
-
-			// dmd
-			if (_pinMame.NeedsDmdUpdate()) {
-				if (!_sizeAnnounced) {
-					var dim = _pinMame.GetDmdDimensions();
-					OnDisplaysAvailable?.Invoke(this, new AvailableDisplays(
-						new DisplayConfig(DisplayDmd, DisplayType.Dmd2PinMame, dim.Width, dim.Height)));
-					_sizeAnnounced = true;
-				}
-				OnDisplayFrame?.Invoke(this, new DisplayFrameData(DisplayDmd, _pinMame.GetDmdPixels()));
-			}
 		}
-
 
 		private void UpdateCaches()
 		{
@@ -182,7 +209,12 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void OnDestroy()
 		{
-			_pinMame?.StopGame();
+			if (_pinMame != null) {
+				_pinMame.StopGame();
+				_pinMame.OnGameStarted -= GameStarted;
+				_pinMame.OnGameEnded -= GameEnded;
+				_pinMame.OnDisplayUpdate -= DisplayUpdated;
+			}
 		}
 
 		public void Switch(string id, bool isClosed)
@@ -194,28 +226,52 @@ namespace VisualPinball.Engine.PinMAME
 				Logger.Error($"[PinMAME] Unknown switch \"{id}\".");
 			}
 		}
-	}
 
-	// internal readonly struct DisplayKey : IEquatable<DisplayKey>
-	// {
-	// 	private readonly int _width;
-	// 	private readonly int _height;
-	// 	private readonly int _bitLength;
-	//
-	// 	public DisplayKey(int width, int height, int bitLength)
-	// 	{
-	// 		_width = width;
-	// 		_height = height;
-	// 		_bitLength = bitLength;
-	// 	}
-	//
-	// 	public override bool Equals(object obj) => obj is DisplayKey other && Equals(other);
-	//
-	// 	public bool Equals(DisplayKey other)
-	// 	{
-	// 		return _width == other._width && _height == other._height && _bitLength == other._bitLength;
-	// 	}
-	//
-	// 	public override int GetHashCode() => (_width, _height, _bitLength).GetHashCode();
-	// }
+		private static DisplayFrameFormat GetDisplayType(PinMameDisplayType dp)
+		{
+			switch (dp) {
+				case PinMameDisplayType.SEG16:
+					break;
+				case PinMameDisplayType.SEG16R:
+					break;
+				case PinMameDisplayType.SEG10:
+					break;
+				case PinMameDisplayType.SEG9:
+					break;
+				case PinMameDisplayType.SEG8:
+					break;
+				case PinMameDisplayType.SEG8D:
+					break;
+				case PinMameDisplayType.SEG7:
+					break;
+				case PinMameDisplayType.SEG87:
+					break;
+				case PinMameDisplayType.SEG87F:
+					break;
+				case PinMameDisplayType.SEG98:
+					break;
+				case PinMameDisplayType.SEG98F:
+					break;
+				case PinMameDisplayType.SEG7S:
+					break;
+				case PinMameDisplayType.SEG7SC:
+					break;
+				case PinMameDisplayType.SEG16S:
+					break;
+				case PinMameDisplayType.DMD:
+					return DisplayFrameFormat.Dmd2PinMame;
+
+				case PinMameDisplayType.VIDEO:
+					break;
+				case PinMameDisplayType.SEG16N:
+					break;
+				case PinMameDisplayType.SEG16D:
+					break;
+				default:
+					throw new ArgumentOutOfRangeException(nameof(dp), dp, null);
+			}
+
+			throw new NotImplementedException("only dmd frames supported for now");
+		}
+	}
 }
