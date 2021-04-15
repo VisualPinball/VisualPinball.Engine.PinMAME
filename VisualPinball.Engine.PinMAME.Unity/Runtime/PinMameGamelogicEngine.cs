@@ -84,6 +84,8 @@ namespace VisualPinball.Engine.PinMAME
 		private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 		private static readonly Color Tint = new Color(1, 0.18f, 0);
 
+		private readonly Queue<Action> _dispatchQueue = new Queue<Action>();
+
 		private void Start()
 		{
 			UpdateCaches();
@@ -96,7 +98,7 @@ namespace VisualPinball.Engine.PinMAME
 				OnLampChanged?.Invoke(this, new LampEventArgs(lamp.Id, 0));
 			}
 
-			_pinMame = PinMame.PinMame.Instance();
+			_pinMame = PinMame.PinMame.Instance(48000, @"C:\Games\Visual Pinball\VPinMAME");
 			_pinMame.OnGameStarted += GameStarted;
 			_pinMame.OnGameEnded += GameEnded;
 			_pinMame.OnDisplayUpdate += DisplayUpdated;
@@ -117,6 +119,31 @@ namespace VisualPinball.Engine.PinMAME
 			_isRunning = true;
 		}
 
+		private void Update()
+		{
+			if (_pinMame == null || !_isRunning) {
+				return;
+			}
+
+			lock (_dispatchQueue) {
+				while (_dispatchQueue.Count > 0) {
+					_dispatchQueue.Dequeue().Invoke();
+				}
+			}
+
+			// lamps
+			var changedLamps = _pinMame.GetChangedLamps();
+			for (var i = 0; i < changedLamps.Length; i += 2) {
+				var internalId = changedLamps[i];
+				var val = changedLamps[i + 1];
+
+				if (_lamps.ContainsKey(internalId)) {
+					//Logger.Info($"[PinMAME] <= lamp {id}: {val}");
+					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[internalId].Id, val));
+				}
+			}
+		}
+
 		private void DisplayUpdated(object sender, EventArgs e, int index, IntPtr framePtr, PinMameDisplayLayout displayLayout)
 		{
 			if ((displayLayout.type & PinMameDisplayType.DMD) > 0) {
@@ -135,7 +162,12 @@ namespace VisualPinball.Engine.PinMAME
 		private void UpdateDmd(int index, PinMameDisplayLayout displayLayout, IntPtr framePtr)
 		{
 			if (!_sizeAnnounced) {
-				OnDisplaysAvailable?.Invoke(this, new AvailableDisplays(new DisplayConfig(DisplayDmd, displayLayout.width, displayLayout.height)));
+				lock (_dispatchQueue) {
+					_dispatchQueue.Enqueue(() =>
+						OnDisplaysAvailable?.Invoke(this, new AvailableDisplays(
+							new DisplayConfig(DisplayDmd, displayLayout.width, displayLayout.height))));
+				}
+
 				_sizeAnnounced = true;
 				_frameBuffer = new byte[displayLayout.width * displayLayout.height];
 			}
@@ -151,25 +183,21 @@ namespace VisualPinball.Engine.PinMAME
 				}
 			}
 
-			OnDisplayFrame?.Invoke(this, new DisplayFrameData(DisplayDmd, GetDisplayType(displayLayout.type), _frameBuffer));
-		}
-
-		private Dictionary<byte, byte> GetMap(PinMameDisplayLayout displayLayout)
-		{
-			if (displayLayout.depth == 2) {
-				return DmdMap2Bit;
+			lock (_dispatchQueue) {
+				_dispatchQueue.Enqueue(() => OnDisplayFrame?.Invoke(this,
+					new DisplayFrameData(DisplayDmd, GetDisplayType(displayLayout.type), _frameBuffer)));
 			}
-
-			return (_pinMame.GetHardwareGen() & (PinMameHardwareGen.SAM | PinMameHardwareGen.SPA)) > 0
-				? DmdMapSam
-				: DmdMapGts;
 		}
 
 		private void SolenoidChanged(object sender, EventArgs e, int internalId, bool isActive)
 		{
 			if (_coils.ContainsKey(internalId)) {
 				Logger.Info($"[PinMAME] <= coil {_coils[internalId].Id} ({internalId}): {isActive} | {_coils[internalId].Description}");
-				OnCoilChanged?.Invoke(this, new CoilEventArgs(_coils[internalId].Id, isActive));
+
+				lock (_dispatchQueue) {
+					_dispatchQueue.Enqueue(() =>
+						OnCoilChanged?.Invoke(this, new CoilEventArgs(_coils[internalId].Id, isActive)));
+				}
 
 			} else {
 				Logger.Warn($"[PinMAME] <= coil UNMAPPED {internalId}: {isActive}");
@@ -195,25 +223,6 @@ namespace VisualPinball.Engine.PinMAME
 				if (_switches.ContainsKey(id)) {
 					Logger.Info($"[PinMAME] => sw {id} ({_switches[id].InternalId}): {true} | {_switches[id].Description}");
 					_pinMame.SetSwitch(_switches[id].InternalId, true);
-				}
-			}
-		}
-
-		private void Update()
-		{
-			if (_pinMame == null || !_isRunning) {
-				return;
-			}
-
-			// lamps
-			var changedLamps = _pinMame.GetChangedLamps();
-			for (var i = 0; i < changedLamps.Length; i += 2) {
-				var internalId = changedLamps[i];
-				var val = changedLamps[i + 1];
-
-				if (_lamps.ContainsKey(internalId)) {
-					//Logger.Info($"[PinMAME] <= lamp {id}: {val}");
-					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[internalId].Id, val));
 				}
 			}
 		}
@@ -255,6 +264,18 @@ namespace VisualPinball.Engine.PinMAME
 			} else {
 				Logger.Error($"[PinMAME] Unknown switch \"{id}\".");
 			}
+		}
+
+
+		private Dictionary<byte, byte> GetMap(PinMameDisplayLayout displayLayout)
+		{
+			if (displayLayout.depth == 2) {
+				return DmdMap2Bit;
+			}
+
+			return (_pinMame.GetHardwareGen() & (PinMameHardwareGen.SAM | PinMameHardwareGen.SPA)) > 0
+				? DmdMapSam
+				: DmdMapGts;
 		}
 
 		private static DisplayFrameFormat GetDisplayType(PinMameDisplayType dp)
