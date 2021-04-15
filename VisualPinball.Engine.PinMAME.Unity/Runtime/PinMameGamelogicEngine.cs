@@ -79,6 +79,7 @@ namespace VisualPinball.Engine.PinMAME
 
 		private bool _isRunning;
 		private bool _sizeAnnounced;
+		private byte[] _frameBuffer;
 
 		private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 		private static readonly Color Tint = new Color(1, 0.18f, 0);
@@ -130,9 +131,32 @@ namespace VisualPinball.Engine.PinMAME
 			if (!_sizeAnnounced) {
 				OnDisplaysAvailable?.Invoke(this, new AvailableDisplays(new DisplayConfig(DisplayDmd, displayLayout.width, displayLayout.height)));
 				_sizeAnnounced = true;
+				_frameBuffer = new byte[displayLayout.width * displayLayout.height];
 			}
-			OnDisplayFrame?.Invoke(this, new DisplayFrameData(DisplayDmd, GetDisplayType(displayLayout.type), framePtr));
 
+			var map = GetMap(displayLayout);
+			unsafe {
+				var ptr = (byte*) framePtr;
+				for (var y = 0; y < displayLayout.height; y++) {
+					for (var x = 0; x < displayLayout.width; x++) {
+						var pos = y * displayLayout.width + x;
+						_frameBuffer[pos] =  map[ptr[pos]];
+					}
+				}
+			}
+
+			OnDisplayFrame?.Invoke(this, new DisplayFrameData(DisplayDmd, GetDisplayType(displayLayout.type), _frameBuffer));
+		}
+
+		private Dictionary<byte, byte> GetMap(PinMameDisplayLayout displayLayout)
+		{
+			if (displayLayout.depth == 2) {
+				return DmdMap2Bit;
+			}
+
+			return (_pinMame.GetHardwareGen() & (PinMameHardwareGen.SAM | PinMameHardwareGen.SPA)) > 0
+				? DmdMapSam
+				: DmdMapGts;
 		}
 
 		private void SolenoidChanged(object sender, EventArgs e, int internalId, bool isActive)
@@ -259,7 +283,7 @@ namespace VisualPinball.Engine.PinMAME
 				case PinMameDisplayType.SEG16S:
 					break;
 				case PinMameDisplayType.DMD:
-					return DisplayFrameFormat.Dmd2PinMame;
+					return DisplayFrameFormat.Dmd2;
 
 				case PinMameDisplayType.VIDEO:
 					break;
@@ -273,5 +297,28 @@ namespace VisualPinball.Engine.PinMAME
 
 			throw new NotImplementedException("only dmd frames supported for now");
 		}
+
+		private static readonly Dictionary<byte, byte> DmdMap2Bit = new Dictionary<byte, byte> {
+			{ 0x00, 0x0 },
+			{ 0x14, 0x0 },
+			{ 0x21, 0x1 },
+			{ 0x43, 0x1 },
+			{ 0x64, 0x4 },
+		};
+
+		private static readonly Dictionary<byte, byte> DmdMapSam = new Dictionary<byte, byte> {
+			{ 0x00, 0x0 }, { 0x14, 0x1 }, { 0x19, 0x2 }, { 0x1E, 0x3 },
+			{ 0x23, 0x4 }, { 0x28, 0x5 }, { 0x2D, 0x6 }, { 0x32, 0x7 },
+			{ 0x37, 0x8 }, { 0x3C, 0x9 }, { 0x41, 0xa }, { 0x46, 0xb },
+			{ 0x4B, 0xc }, { 0x50, 0xd }, { 0x5A, 0xe }, { 0x64, 0xf }
+		};
+
+		private static readonly Dictionary<byte, byte> DmdMapGts = new Dictionary<byte, byte> {
+			{ 0x00, 0x0 }, { 0x1E, 0x1 }, { 0x23, 0x2 }, { 0x28, 0x3 },
+			{ 0x2D, 0x4 }, { 0x32, 0x5 }, { 0x37, 0x6 }, { 0x3C, 0x7 },
+			{ 0x41, 0x8 }, { 0x46, 0x9 }, { 0x4B, 0xa }, { 0x50, 0xb },
+			{ 0x55, 0xc }, { 0x5A, 0xd }, { 0x5F, 0xe }, { 0x64, 0xf }
+		};
+
 	}
 }
