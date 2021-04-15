@@ -101,8 +101,14 @@ namespace VisualPinball.Engine.PinMAME
 			_pinMame.OnGameEnded += GameEnded;
 			_pinMame.OnDisplayUpdate += DisplayUpdated;
 			_pinMame.OnSolenoid += SolenoidChanged;
-			_pinMame.StartGame(romId);
 			_player = player;
+
+			try {
+				_pinMame.StartGame(romId);
+
+			} catch (Exception e) {
+				Logger.Error(e);
+			}
 		}
 
 		private void GameStarted(object sender, EventArgs e)
