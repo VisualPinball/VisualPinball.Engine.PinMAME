@@ -17,6 +17,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
 using NLog;
 using PinMame;
 using UnityEngine;
@@ -75,11 +77,11 @@ namespace VisualPinball.Engine.PinMAME
 		private Dictionary<int, GamelogicEngineCoil> _coils = new Dictionary<int, GamelogicEngineCoil>();
 		private Dictionary<int, GamelogicEngineLamp> _lamps = new Dictionary<int, GamelogicEngineLamp>();
 
-		private const string DisplayDmd = "dmd";
+		private const string DisplayPrefix = "display";
 
 		private bool _isRunning;
-		private bool _sizeAnnounced;
-		private byte[] _frameBuffer;
+		private HashSet<int> _displayAnnounced = new HashSet<int>();
+		private Dictionary<int, byte[]> _frameBuffer = new Dictionary<int, byte[]>();
 
 		private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 		private static readonly Color Tint = new Color(1, 0.18f, 0);
@@ -93,6 +95,8 @@ namespace VisualPinball.Engine.PinMAME
 
 		public void OnInit(Player player, TableApi tableApi, BallManager ballManager)
 		{
+			_frameBuffer.Clear();
+
 			// turn off all lamps
 			foreach (var lamp in _lamps.Values) {
 				OnLampChanged?.Invoke(this, new LampEventArgs(lamp.Id, 0));
@@ -106,6 +110,7 @@ namespace VisualPinball.Engine.PinMAME
 			_player = player;
 
 			try {
+				//_pinMame.StartGame("fh_906h");
 				_pinMame.StartGame(romId);
 
 			} catch (Exception e) {
@@ -153,23 +158,17 @@ namespace VisualPinball.Engine.PinMAME
 			}
 		}
 
-		private void UpdateSegDisp(int index, PinMameDisplayLayout displayLayout, IntPtr framePtr)
-		{
-
-		}
-
-
 		private void UpdateDmd(int index, PinMameDisplayLayout displayLayout, IntPtr framePtr)
 		{
-			if (!_sizeAnnounced) {
+			if (!_displayAnnounced.Contains(index)) {
 				lock (_dispatchQueue) {
 					_dispatchQueue.Enqueue(() =>
 						OnDisplaysAvailable?.Invoke(this, new AvailableDisplays(
-							new DisplayConfig(DisplayDmd, displayLayout.width, displayLayout.height))));
+							new DisplayConfig($"{DisplayPrefix}{index}", displayLayout.width, displayLayout.height))));
 				}
 
-				_sizeAnnounced = true;
-				_frameBuffer = new byte[displayLayout.width * displayLayout.height];
+				_displayAnnounced.Add(index);
+				_frameBuffer[index] = new byte[displayLayout.width * displayLayout.height];
 			}
 
 			var map = GetMap(displayLayout);
@@ -178,15 +177,38 @@ namespace VisualPinball.Engine.PinMAME
 				for (var y = 0; y < displayLayout.height; y++) {
 					for (var x = 0; x < displayLayout.width; x++) {
 						var pos = y * displayLayout.width + x;
-						_frameBuffer[pos] =  map[ptr[pos]];
+						_frameBuffer[index][pos] =  map[ptr[pos]];
 					}
 				}
 			}
 
 			lock (_dispatchQueue) {
 				_dispatchQueue.Enqueue(() => OnDisplayFrame?.Invoke(this,
-					new DisplayFrameData(DisplayDmd, GetDisplayType(displayLayout.type), _frameBuffer)));
+					new DisplayFrameData($"{DisplayPrefix}{index}", GetDisplayType(displayLayout.type), _frameBuffer[index])));
 			}
+		}
+
+		private void UpdateSegDisp(int index, PinMameDisplayLayout displayLayout, IntPtr framePtr)
+		{
+			if (!_displayAnnounced.Contains(index)) {
+				lock (_dispatchQueue) {
+					_dispatchQueue.Enqueue(() =>
+						OnDisplaysAvailable?.Invoke(this, new AvailableDisplays(
+							new DisplayConfig($"{DisplayPrefix}{index}", displayLayout.length, 1))));
+				}
+
+				_displayAnnounced.Add(index);
+				_frameBuffer[index] = new byte[displayLayout.length * 2];
+			}
+
+			Marshal.Copy(framePtr, _frameBuffer[index], 0, displayLayout.length * 2);
+
+			lock (_dispatchQueue) {
+				Logger.Info($"[PinMAME] Seg data ({index}): {BitConverter.ToString(_frameBuffer[index])}" );
+				_dispatchQueue.Enqueue(() => OnDisplayFrame?.Invoke(this,
+					new DisplayFrameData($"{DisplayPrefix}{index}", GetDisplayType(displayLayout.type), _frameBuffer[index])));
+			}
+
 		}
 
 		private void SolenoidChanged(object sender, EventArgs e, int internalId, bool isActive)
@@ -281,48 +303,46 @@ namespace VisualPinball.Engine.PinMAME
 		private static DisplayFrameFormat GetDisplayType(PinMameDisplayType dp)
 		{
 			switch (dp) {
-				case PinMameDisplayType.SEG16:
+				case PinMameDisplayType.SEG16: // 16 segments
+				case PinMameDisplayType.SEG16R: // 16 segments with comma and period reversed
+				case PinMameDisplayType.SEG16N: // 16 segments without commas
+				case PinMameDisplayType.SEG16D: // 16 segments with periods only
+					return DisplayFrameFormat.Segment16;
+
+				case PinMameDisplayType.SEG10: // 9  segments and comma
 					break;
-				case PinMameDisplayType.SEG16R:
+				case PinMameDisplayType.SEG9: // 9  segments
 					break;
-				case PinMameDisplayType.SEG10:
+				case PinMameDisplayType.SEG8: // 7  segments and comma
 					break;
-				case PinMameDisplayType.SEG9:
+				case PinMameDisplayType.SEG8D: // 7  segments and period
 					break;
-				case PinMameDisplayType.SEG8:
+				case PinMameDisplayType.SEG7: // 7  segments
 					break;
-				case PinMameDisplayType.SEG8D:
+				case PinMameDisplayType.SEG87: // 7  segments, comma every three
 					break;
-				case PinMameDisplayType.SEG7:
+				case PinMameDisplayType.SEG87F: // 7  segments, forced comma every three
 					break;
-				case PinMameDisplayType.SEG87:
+				case PinMameDisplayType.SEG98: // 9  segments, comma every three
 					break;
-				case PinMameDisplayType.SEG87F:
+				case PinMameDisplayType.SEG98F: // 9  segments, forced comma every three
 					break;
-				case PinMameDisplayType.SEG98:
+				case PinMameDisplayType.SEG7S: // 7  segments, small
 					break;
-				case PinMameDisplayType.SEG98F:
+				case PinMameDisplayType.SEG7SC: // 7  segments, small, with comma
 					break;
-				case PinMameDisplayType.SEG7S:
-					break;
-				case PinMameDisplayType.SEG7SC:
-					break;
-				case PinMameDisplayType.SEG16S:
+				case PinMameDisplayType.SEG16S: // 16 segments with split top and bottom line
 					break;
 				case PinMameDisplayType.DMD:
 					return DisplayFrameFormat.Dmd2;
 
 				case PinMameDisplayType.VIDEO:
 					break;
-				case PinMameDisplayType.SEG16N:
-					break;
-				case PinMameDisplayType.SEG16D:
-					break;
 				default:
 					throw new ArgumentOutOfRangeException(nameof(dp), dp, null);
 			}
 
-			throw new NotImplementedException("only dmd frames supported for now");
+			throw new NotImplementedException($"Still unsupported segmented display format: {dp}.");
 		}
 
 		private static readonly Dictionary<byte, byte> DmdMap2Bit = new Dictionary<byte, byte> {
