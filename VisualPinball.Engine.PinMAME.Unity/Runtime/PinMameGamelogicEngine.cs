@@ -98,7 +98,7 @@ namespace VisualPinball.Engine.PinMAME
 				OnLampChanged?.Invoke(this, new LampEventArgs(lamp.Id, 0));
 			}
 
-			_pinMame = PinMame.PinMame.Instance(48000, @"C:\Games\Visual Pinball\VPinMAME");
+			_pinMame = PinMame.PinMame.Instance(48000, @"D:\Pinball\Visual Pinball\VPinMAME");
 			_pinMame.OnGameStarted += GameStarted;
 			_pinMame.OnGameEnded += GameEnded;
 			_pinMame.OnDisplayUpdate += DisplayUpdated;
@@ -329,8 +329,8 @@ namespace VisualPinball.Engine.PinMAME
 			{ 0x00, 0x0 },
 			{ 0x14, 0x0 },
 			{ 0x21, 0x1 },
-			{ 0x43, 0x1 },
-			{ 0x64, 0x4 },
+			{ 0x43, 0x2 },
+			{ 0x64, 0x3 },
 		};
 
 		private static readonly Dictionary<byte, byte> DmdMapSam = new Dictionary<byte, byte> {
