@@ -76,7 +76,8 @@ namespace VisualPinball.Engine.PinMAME
 		private Dictionary<int, GamelogicEngineCoil> _coils = new Dictionary<int, GamelogicEngineCoil>();
 		private Dictionary<int, GamelogicEngineLamp> _lamps = new Dictionary<int, GamelogicEngineLamp>();
 
-		private const string DisplayPrefix = "display";
+		private const string DmdPrefix = "dmd";
+		private const string SegDispPrefix = "display";
 
 		private bool _isRunning;
 		private HashSet<int> _displayAnnounced = new HashSet<int>();
@@ -167,7 +168,7 @@ namespace VisualPinball.Engine.PinMAME
 				lock (_dispatchQueue) {
 					_dispatchQueue.Enqueue(() =>
 						OnDisplaysAvailable?.Invoke(this, new AvailableDisplays(
-							new DisplayConfig($"{DisplayPrefix}{index}", displayLayout.width, displayLayout.height))));
+							new DisplayConfig($"{DmdPrefix}{index}", displayLayout.width, displayLayout.height))));
 				}
 
 				_displayAnnounced.Add(index);
@@ -187,7 +188,7 @@ namespace VisualPinball.Engine.PinMAME
 
 			lock (_dispatchQueue) {
 				_dispatchQueue.Enqueue(() => OnDisplayFrame?.Invoke(this,
-					new DisplayFrameData($"{DisplayPrefix}{index}", GetDisplayType(displayLayout.type), _frameBuffer[index])));
+					new DisplayFrameData($"{DmdPrefix}{index}", GetDisplayType(displayLayout.type), _frameBuffer[index])));
 			}
 		}
 
@@ -197,12 +198,12 @@ namespace VisualPinball.Engine.PinMAME
 				lock (_dispatchQueue) {
 					_dispatchQueue.Enqueue(() =>
 						OnDisplaysAvailable?.Invoke(this, new AvailableDisplays(
-							new DisplayConfig($"{DisplayPrefix}{index}", displayLayout.length, 1))));
+							new DisplayConfig($"{SegDispPrefix}{index}", displayLayout.length, 1))));
 				}
 
 				_displayAnnounced.Add(index);
 				_frameBuffer[index] = new byte[displayLayout.length * 2];
-				Logger.Info($"[PinMAME] Display {DisplayPrefix}{index} is of type {displayLayout.type} at {displayLayout.length} wide.");
+				Logger.Info($"[PinMAME] Display {SegDispPrefix}{index} is of type {displayLayout.type} at {displayLayout.length} wide.");
 			}
 
 			Marshal.Copy(framePtr, _frameBuffer[index], 0, displayLayout.length * 2);
@@ -210,7 +211,7 @@ namespace VisualPinball.Engine.PinMAME
 			lock (_dispatchQueue) {
 				//Logger.Info($"[PinMAME] Seg data ({index}): {BitConverter.ToString(_frameBuffer[index])}" );
 				_dispatchQueue.Enqueue(() => OnDisplayFrame?.Invoke(this,
-					new DisplayFrameData($"{DisplayPrefix}{index}", GetDisplayType(displayLayout.type), _frameBuffer[index])));
+					new DisplayFrameData($"{SegDispPrefix}{index}", GetDisplayType(displayLayout.type), _frameBuffer[index])));
 			}
 
 		}
