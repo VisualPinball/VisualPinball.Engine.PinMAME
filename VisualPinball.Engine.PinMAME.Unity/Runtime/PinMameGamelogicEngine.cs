@@ -94,8 +94,6 @@ namespace VisualPinball.Engine.PinMAME
 
 		public void OnInit(Player player, TableApi tableApi, BallManager ballManager)
 		{
-			_frameBuffer.Clear();
-
 			// turn off all lamps
 			foreach (var lamp in _lamps.Values) {
 				OnLampChanged?.Invoke(this, new LampEventArgs(lamp.Id, 0));
@@ -109,8 +107,8 @@ namespace VisualPinball.Engine.PinMAME
 			_player = player;
 
 			try {
-				_pinMame.StartGame("fh_906h");
-				//_pinMame.StartGame(romId);
+				//_pinMame.StartGame("fh_906h");
+				_pinMame.StartGame(romId);
 
 			} catch (Exception e) {
 				Logger.Error(e);
@@ -150,8 +148,9 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void DisplayUpdated(object sender, EventArgs e, int index, IntPtr framePtr, PinMameDisplayLayout displayLayout)
 		{
-			if ((displayLayout.type & PinMameDisplayType.DMD) > 0) {
+			if (displayLayout.IsDmd) {
 				UpdateDmd(index, displayLayout, framePtr);
+
 			} else {
 				UpdateSegDisp(index, displayLayout, framePtr);
 			}
@@ -198,6 +197,7 @@ namespace VisualPinball.Engine.PinMAME
 
 				_displayAnnounced.Add(index);
 				_frameBuffer[index] = new byte[displayLayout.length * 2];
+				Logger.Info($"[PinMAME] Display {DisplayPrefix}{index} is of type {displayLayout.type} at {displayLayout.length} wide.");
 			}
 
 			Marshal.Copy(framePtr, _frameBuffer[index], 0, displayLayout.length * 2);
@@ -269,6 +269,11 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void OnDestroy()
 		{
+			StopGame();
+		}
+
+		public void StopGame()
+		{
 			if (_pinMame != null) {
 				_pinMame.StopGame();
 				_pinMame.OnGameStarted -= GameStarted;
@@ -276,6 +281,8 @@ namespace VisualPinball.Engine.PinMAME
 				_pinMame.OnDisplayUpdated -= DisplayUpdated;
 				_pinMame.OnSolenoidUpdated -= SolenoidUpdated;
 			}
+			_frameBuffer.Clear();
+			_displayAnnounced.Clear();
 		}
 
 		public void Switch(string id, bool isClosed)
@@ -303,36 +310,31 @@ namespace VisualPinball.Engine.PinMAME
 		private static DisplayFrameFormat GetDisplayType(PinMameDisplayType dp)
 		{
 			switch (dp) {
-				case PinMameDisplayType.SEG16: // 16 segments
+				case PinMameDisplayType.SEG16:  // 16 segments
 				case PinMameDisplayType.SEG16R: // 16 segments with comma and period reversed
 				case PinMameDisplayType.SEG16N: // 16 segments without commas
 				case PinMameDisplayType.SEG16D: // 16 segments with periods only
+				case PinMameDisplayType.SEG16S: // 16 segments with split top and bottom line
 					return DisplayFrameFormat.Segment16;
+
+				case PinMameDisplayType.SEG8:   // 7  segments and comma
+				case PinMameDisplayType.SEG8D:  // 7  segments and period
+				case PinMameDisplayType.SEG7:   // 7  segments
+				case PinMameDisplayType.SEG87:  // 7  segments, comma every three
+				case PinMameDisplayType.SEG87F: // 7  segments, forced comma every three
+				case PinMameDisplayType.SEG7S:  // 7  segments, small
+				case PinMameDisplayType.SEG7SC: // 7  segments, small, with comma
+					return DisplayFrameFormat.Segment7;
 
 				case PinMameDisplayType.SEG10: // 9  segments and comma
 					break;
 				case PinMameDisplayType.SEG9: // 9  segments
 					break;
-				case PinMameDisplayType.SEG8: // 7  segments and comma
-					break;
-				case PinMameDisplayType.SEG8D: // 7  segments and period
-					break;
-				case PinMameDisplayType.SEG7: // 7  segments
-					break;
-				case PinMameDisplayType.SEG87: // 7  segments, comma every three
-					break;
-				case PinMameDisplayType.SEG87F: // 7  segments, forced comma every three
-					break;
 				case PinMameDisplayType.SEG98: // 9  segments, comma every three
 					break;
 				case PinMameDisplayType.SEG98F: // 9  segments, forced comma every three
 					break;
-				case PinMameDisplayType.SEG7S: // 7  segments, small
-					break;
-				case PinMameDisplayType.SEG7SC: // 7  segments, small, with comma
-					break;
-				case PinMameDisplayType.SEG16S: // 16 segments with split top and bottom line
-					break;
+
 				case PinMameDisplayType.DMD:
 					return DisplayFrameFormat.Dmd2;
 
@@ -366,6 +368,5 @@ namespace VisualPinball.Engine.PinMAME
 			{ 0x41, 0x8 }, { 0x46, 0x9 }, { 0x4B, 0xa }, { 0x50, 0xb },
 			{ 0x55, 0xc }, { 0x5A, 0xd }, { 0x5F, 0xe }, { 0x64, 0xf }
 		};
-
 	}
 }
