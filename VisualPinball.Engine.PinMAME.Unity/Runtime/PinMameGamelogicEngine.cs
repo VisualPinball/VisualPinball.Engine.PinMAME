@@ -115,6 +115,11 @@ namespace VisualPinball.Engine.PinMAME
 			}
 		}
 
+		public void ProbeDisplays()
+		{
+
+		}
+
 		private void GameStarted(object sender, EventArgs e)
 		{
 			Logger.Info($"[PinMAME] Game started.");
