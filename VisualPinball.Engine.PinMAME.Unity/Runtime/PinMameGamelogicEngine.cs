@@ -18,7 +18,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text;
 using NLog;
 using PinMame;
 using UnityEngine;
@@ -105,13 +104,13 @@ namespace VisualPinball.Engine.PinMAME
 			_pinMame = PinMame.PinMame.Instance(48000, @"D:\Pinball\Visual Pinball\VPinMAME");
 			_pinMame.OnGameStarted += GameStarted;
 			_pinMame.OnGameEnded += GameEnded;
-			_pinMame.OnDisplayUpdate += DisplayUpdated;
-			_pinMame.OnSolenoid += SolenoidChanged;
+			_pinMame.OnDisplayUpdated += DisplayUpdated;
+			_pinMame.OnSolenoidUpdated += SolenoidUpdated;
 			_player = player;
 
 			try {
-				//_pinMame.StartGame("fh_906h");
-				_pinMame.StartGame(romId);
+				_pinMame.StartGame("fh_906h");
+				//_pinMame.StartGame(romId);
 
 			} catch (Exception e) {
 				Logger.Error(e);
@@ -204,14 +203,14 @@ namespace VisualPinball.Engine.PinMAME
 			Marshal.Copy(framePtr, _frameBuffer[index], 0, displayLayout.length * 2);
 
 			lock (_dispatchQueue) {
-				Logger.Info($"[PinMAME] Seg data ({index}): {BitConverter.ToString(_frameBuffer[index])}" );
+				//Logger.Info($"[PinMAME] Seg data ({index}): {BitConverter.ToString(_frameBuffer[index])}" );
 				_dispatchQueue.Enqueue(() => OnDisplayFrame?.Invoke(this,
 					new DisplayFrameData($"{DisplayPrefix}{index}", GetDisplayType(displayLayout.type), _frameBuffer[index])));
 			}
 
 		}
 
-		private void SolenoidChanged(object sender, EventArgs e, int internalId, bool isActive)
+		private void SolenoidUpdated(object sender, EventArgs e, int internalId, bool isActive)
 		{
 			if (_coils.ContainsKey(internalId)) {
 				Logger.Info($"[PinMAME] <= coil {_coils[internalId].Id} ({internalId}): {isActive} | {_coils[internalId].Description}");
@@ -274,7 +273,8 @@ namespace VisualPinball.Engine.PinMAME
 				_pinMame.StopGame();
 				_pinMame.OnGameStarted -= GameStarted;
 				_pinMame.OnGameEnded -= GameEnded;
-				_pinMame.OnDisplayUpdate -= DisplayUpdated;
+				_pinMame.OnDisplayUpdated -= DisplayUpdated;
+				_pinMame.OnSolenoidUpdated -= SolenoidUpdated;
 			}
 		}
 
