@@ -16,7 +16,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="PinMame" Version="0.1.0-preview.19" />
+    <PackageReference Include="PinMame" Version="0.1.0-preview.21" />
     <PackageReference Include="PinMame.Native" Version="3.4.0-preview.193" />
     <PackageReference Include="VisualPinball.Engine" Version="0.0.1-preview.43" />
   </ItemGroup>
