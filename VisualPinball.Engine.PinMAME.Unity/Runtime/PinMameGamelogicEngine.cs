@@ -34,6 +34,9 @@ namespace VisualPinball.Engine.PinMAME
 	{
 		public string Name { get; } = "PinMAME Gamelogic Engine";
 
+		public const string DmdPrefix = "dmd";
+		public const string SegDispPrefix = "display";
+
 		public PinMameGame Game {
 			get => _game;
 			set => _game = value;
@@ -76,9 +79,6 @@ namespace VisualPinball.Engine.PinMAME
 		private Dictionary<int, GamelogicEngineCoil> _coils = new Dictionary<int, GamelogicEngineCoil>();
 		private Dictionary<int, GamelogicEngineLamp> _lamps = new Dictionary<int, GamelogicEngineLamp>();
 
-		private const string DmdPrefix = "dmd";
-		private const string SegDispPrefix = "display";
-
 		private bool _isRunning;
 		private HashSet<int> _displayAnnounced = new HashSet<int>();
 		private Dictionary<int, byte[]> _frameBuffer = new Dictionary<int, byte[]>();
@@ -114,11 +114,6 @@ namespace VisualPinball.Engine.PinMAME
 			} catch (Exception e) {
 				Logger.Error(e);
 			}
-		}
-
-		public void ProbeDisplays()
-		{
-
 		}
 
 		private void GameStarted(object sender, EventArgs e)

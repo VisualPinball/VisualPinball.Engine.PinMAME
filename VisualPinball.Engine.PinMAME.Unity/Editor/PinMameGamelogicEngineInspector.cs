@@ -14,11 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using PinMame;
 using UnityEditor;
 using UnityEngine;
 using VisualPinball.Engine.PinMAME.Games;
 using VisualPinball.Unity;
+using VisualPinball.Unity.Editor;
+using Object = UnityEngine.Object;
 
 namespace VisualPinball.Engine.PinMAME.Editor
 {
@@ -36,6 +43,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		private int _selectedRomIndex;
 
 		private TableAuthoring _tableAuthoring;
+		private PinMame.PinMame _pinMame;
 
 		private PinMameRom Rom => _gle.Game.Roms[_selectedRomIndex];
 
@@ -76,14 +84,6 @@ namespace VisualPinball.Engine.PinMAME.Editor
 
 		public override void OnInspectorGUI()
 		{
-			base.OnInspectorGUI();
-
-			EditorGUILayout.Space();
-			EditorGUILayout.Separator();
-
-			// info label
-			EditorGUILayout.LabelField("Game Name", _gle.romId);
-
 			// game dropdown
 			EditorGUI.BeginChangeCheck();
 			_selectedGameIndex = EditorGUILayout.Popup("Game", _selectedGameIndex, _gameNames);
@@ -108,9 +108,16 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			if (EditorGUI.EndChangeCheck()) {
 				_gle.romId = Rom.Id;
 			}
+
+			// info label
+			EditorGUILayout.LabelField("ROM ID", _gle.romId);
+
 			EditorGUI.EndDisabledGroup();
 
-			EditorGUI.BeginDisabledGroup(!IsGameSet);
+			EditorGUILayout.Space();
+			EditorGUILayout.Separator();
+
+			EditorGUI.BeginDisabledGroup(!IsGameSet || Application.isPlaying);
 			if (GUILayout.Button("Populate Hardware")) {
 				if (EditorUtility.DisplayDialog("PinMAME", "This will clear all linked switches, coils and lamps and re-populate them. You sure you want to do that?", "Yes", "No")) {
 					_tableAuthoring.RepopulateHardware(_gle);
@@ -118,17 +125,102 @@ namespace VisualPinball.Engine.PinMAME.Editor
 					SceneView.RepaintAll();
 				}
 			}
+			if (GUILayout.Button("Create Displays")) {
+				var sceneDisplays = FindObjectsOfType<DisplayAuthoring>();
+				if (sceneDisplays.Length > 0) {
+					if (EditorUtility.DisplayDialog("PinMAME", "This will re-position all your displays, if you have any. You sure you want to do that?", "Yes", "No")) {
+						CreateDisplays(sceneDisplays);
+						SceneView.RepaintAll();
+					}
+				} else {
+					CreateDisplays(sceneDisplays);
+					SceneView.RepaintAll();
+				}
+			}
 			EditorGUI.EndDisabledGroup();
+		}
 
-			// initial switches button
-			EditorGUI.BeginDisabledGroup(!Application.isPlaying);
-			EditorGUILayout.Space();
-			EditorGUILayout.Separator();
-			if (GUILayout.Button("Send initial switches")) {
-				_gle.SendInitialSwitches();
+		private void CreateDisplays(IEnumerable<DisplayAuthoring> sceneDisplays)
+		{
+			// retrieve layouts from pinmame
+			var pinMame = PinMame.PinMame.Instance();
+			var displayLayouts = pinMame.GetAvailableDisplays(_gle.romId);
+
+			// retrieve already existing displays from scene
+			var displayGameObjects = new Dictionary<string, DisplayAuthoring>();
+			foreach (var displays in sceneDisplays) {
+				displayGameObjects[displays.Id] = displays;
+			}
+			var ta = _gle.GetComponentInParent<TableAuthoring>();
+			var tableHeight = 0f;
+			var tableWidth = 1f;
+			if (ta) {
+				tableHeight = ta.Table.GlassHeight * VpxConverter.GlobalScale;
+				tableWidth = ta.Table.Width * VpxConverter.GlobalScale;
 			}
 
-			EditorGUI.EndDisabledGroup();
+			// get total height
+			var numRows = displayLayouts.Values.Select(l => l.top).Max() / 2;
+
+			// get total width
+			var lines = new Dictionary<int, int> { { 0, 0 }};
+			foreach (var layout in displayLayouts.Values) {
+				if (layout.IsDmd) {
+					continue;
+				}
+				lines[layout.top] = lines.ContainsKey(layout.top)
+					? lines[layout.top] + layout.length
+					: layout.length;
+			}
+			var numCols = lines.Values.ToList().Max();
+			var totalWidth = 0f;
+
+			foreach (var index in displayLayouts.Keys) {
+				var layout = displayLayouts[index];
+
+				var left = layout.left / 2;
+				var top = layout.top / 2;
+
+				var id = layout.IsDmd
+					? $"{PinMameGamelogicEngine.DmdPrefix}{index}"
+					: $"{PinMameGamelogicEngine.SegDispPrefix}{index}";
+
+				var go = displayGameObjects.ContainsKey(id)
+					? displayGameObjects[id].gameObject
+					: new GameObject();
+
+				if (layout.IsDmd) {
+					var auth = !displayGameObjects.ContainsKey(id)
+						? go.AddComponent<DmdAuthoring>()
+						: go.GetComponent<DmdAuthoring>();
+					auth.Id = id;
+
+				} else {
+					var auth = !displayGameObjects.ContainsKey(id)
+						? go.AddComponent<SegmentDisplayAuthoring>()
+						: go.GetComponent<SegmentDisplayAuthoring>();
+					auth.Id = id;
+					go.name = $"Segment Display [{index}]";
+
+					auth.NumChars = layout.length;
+					go.transform.localScale = new Vector3(DisplayInspector.GameObjectScale, DisplayInspector.GameObjectScale, DisplayInspector.GameObjectScale);
+					var mesh = go.GetComponent<MeshFilter>().sharedMesh;
+					var charHeight = mesh.bounds.size.y * DisplayInspector.GameObjectScale;
+					var charWidth = mesh.bounds.size.x * DisplayInspector.GameObjectScale / layout.length;
+					totalWidth = charWidth * numCols;
+
+					var globalLeft = (tableWidth - totalWidth) / 2;
+
+					go.transform.localPosition = new Vector3(
+						globalLeft - tableWidth / 2 + charWidth * left + mesh.bounds.size.x / 2 * DisplayInspector.GameObjectScale,
+						tableHeight + (numRows - top) * charHeight,
+						1.1f);
+				}
+			}
+
+
+			var str = string.Join("\n", displayLayouts.Keys.Select(t => $"{t}: {displayLayouts[t]}"));
+			Debug.Log($"OnDisplaysAvailable ({displayLayouts.Count}): displays=\n{str}\n{tableWidth} - {totalWidth}");
 		}
 	}
 }
