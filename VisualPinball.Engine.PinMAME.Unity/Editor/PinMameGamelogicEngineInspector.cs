@@ -193,16 +193,24 @@ namespace VisualPinball.Engine.PinMAME.Editor
 					var auth = !displayGameObjects.ContainsKey(id)
 						? go.AddComponent<DmdAuthoring>()
 						: go.GetComponent<DmdAuthoring>();
+
 					auth.Id = id;
+					auth.Width = layout.width;
+					auth.Height = layout.height;
+
+					go.name = "Dot Matrix Display";
+					go.transform.localScale = new Vector3(DisplayInspector.GameObjectScale, DisplayInspector.GameObjectScale, DisplayInspector.GameObjectScale);
+					go.transform.localPosition = new Vector3(0f, tableHeight, 1.1f);
 
 				} else {
 					var auth = !displayGameObjects.ContainsKey(id)
 						? go.AddComponent<SegmentDisplayAuthoring>()
 						: go.GetComponent<SegmentDisplayAuthoring>();
-					auth.Id = id;
-					go.name = $"Segment Display [{index}]";
 
+					auth.Id = id;
 					auth.NumChars = layout.length;
+
+					go.name = $"Segment Display [{index}]";
 					go.transform.localScale = new Vector3(DisplayInspector.GameObjectScale, DisplayInspector.GameObjectScale, DisplayInspector.GameObjectScale);
 					var mesh = go.GetComponent<MeshFilter>().sharedMesh;
 					var charHeight = mesh.bounds.size.y * DisplayInspector.GameObjectScale;
