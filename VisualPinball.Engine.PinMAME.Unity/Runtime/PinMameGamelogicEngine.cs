@@ -14,6 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+// ReSharper disable CheckNamespace
+// ReSharper disable InconsistentNaming
+// ReSharper disable PossibleNullReferenceException
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -311,13 +315,6 @@ namespace VisualPinball.Engine.PinMAME
 		private static DisplayFrameFormat GetDisplayType(PinMameDisplayType dp)
 		{
 			switch (dp) {
-				case PinMameDisplayType.SEG16:  // 16 segments
-				case PinMameDisplayType.SEG16R: // 16 segments with comma and period reversed
-				case PinMameDisplayType.SEG16N: // 16 segments without commas
-				case PinMameDisplayType.SEG16D: // 16 segments with periods only
-				case PinMameDisplayType.SEG16S: // 16 segments with split top and bottom line
-					return DisplayFrameFormat.Segment16;
-
 				case PinMameDisplayType.SEG8:   // 7  segments and comma
 				case PinMameDisplayType.SEG8D:  // 7  segments and period
 				case PinMameDisplayType.SEG7:   // 7  segments
@@ -328,19 +325,39 @@ namespace VisualPinball.Engine.PinMAME
 					return DisplayFrameFormat.Segment7;
 
 				case PinMameDisplayType.SEG10: // 9  segments and comma
-					break;
 				case PinMameDisplayType.SEG9: // 9  segments
-					break;
 				case PinMameDisplayType.SEG98: // 9  segments, comma every three
-					break;
 				case PinMameDisplayType.SEG98F: // 9  segments, forced comma every three
-					break;
+					return DisplayFrameFormat.Segment9;
+
+				case PinMameDisplayType.SEG16:  // 16 segments
+				case PinMameDisplayType.SEG16R: // 16 segments with comma and period reversed
+				case PinMameDisplayType.SEG16N: // 16 segments without commas
+				case PinMameDisplayType.SEG16D: // 16 segments with periods only
+				case PinMameDisplayType.SEG16S: // 16 segments with split top and bottom line
+					return DisplayFrameFormat.Segment16;
 
 				case PinMameDisplayType.DMD:
 					return DisplayFrameFormat.Dmd2;
 
 				case PinMameDisplayType.VIDEO:
 					break;
+
+				case PinMameDisplayType.SEGALL:
+				case PinMameDisplayType.IMPORT:
+				case PinMameDisplayType.SEGMASK:
+				case PinMameDisplayType.SEGHIBIT:
+				case PinMameDisplayType.SEGREV:
+				case PinMameDisplayType.DMDNOAA:
+				case PinMameDisplayType.NODISP:
+				case PinMameDisplayType.SEG8H:
+				case PinMameDisplayType.SEG7H:
+				case PinMameDisplayType.SEG87H:
+				case PinMameDisplayType.SEG87FH:
+				case PinMameDisplayType.SEG7SH:
+				case PinMameDisplayType.SEG7SCH:
+					throw new ArgumentOutOfRangeException(nameof(dp), dp, null);
+
 				default:
 					throw new ArgumentOutOfRangeException(nameof(dp), dp, null);
 			}

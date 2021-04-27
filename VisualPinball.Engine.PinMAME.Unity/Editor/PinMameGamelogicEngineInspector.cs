@@ -14,18 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-using System;
+// ReSharper disable CheckNamespace
+
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using PinMame;
 using UnityEditor;
 using UnityEngine;
 using VisualPinball.Engine.PinMAME.Games;
 using VisualPinball.Unity;
 using VisualPinball.Unity.Editor;
-using Object = UnityEngine.Object;
 
 namespace VisualPinball.Engine.PinMAME.Editor
 {
@@ -43,7 +40,6 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		private int _selectedRomIndex;
 
 		private TableAuthoring _tableAuthoring;
-		private PinMame.PinMame _pinMame;
 
 		private PinMameRom Rom => _gle.Game.Roms[_selectedRomIndex];
 
@@ -85,21 +81,23 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		public override void OnInspectorGUI()
 		{
 			// game dropdown
-			EditorGUI.BeginChangeCheck();
-			_selectedGameIndex = EditorGUILayout.Popup("Game", _selectedGameIndex, _gameNames);
-			if (EditorGUI.EndChangeCheck()) {
-				_selectedRomIndex = 0;
-				if (_selectedGameIndex > 0) {
-					_gle.Game = _games[_selectedGameIndex - 1];
-					_gle.romId = Rom.Id;
-					_romNames = _gle.Game.Roms.Select(g => g.ToString()).ToArray();
+			_gle.romId = EditorGUILayout.TextField("ROM ID", _gle.romId);
 
-				} else {
-					_gle.Game = null;
-					_gle.romId = string.Empty;
-					_romNames = new string[0];
-				}
-			}
+			// EditorGUI.BeginChangeCheck();
+			// _selectedGameIndex = EditorGUILayout.Popup("Game", _selectedGameIndex, _gameNames);
+			// if (EditorGUI.EndChangeCheck()) {
+			// 	_selectedRomIndex = 0;
+			// 	if (_selectedGameIndex > 0) {
+			// 		_gle.Game = _games[_selectedGameIndex - 1];
+			// 		_gle.romId = Rom.Id;
+			// 		_romNames = _gle.Game.Roms.Select(g => g.ToString()).ToArray();
+			//
+			// 	} else {
+			// 		_gle.Game = null;
+			// 		_gle.romId = string.Empty;
+			// 		_romNames = new string[0];
+			// 	}
+			// }
 
 			// rom dropdown
 			EditorGUI.BeginDisabledGroup(_gle.Game == null);
@@ -191,8 +189,8 @@ namespace VisualPinball.Engine.PinMAME.Editor
 
 				if (layout.IsDmd) {
 					var auth = !displayGameObjects.ContainsKey(id)
-						? go.AddComponent<DmdAuthoring>()
-						: go.GetComponent<DmdAuthoring>();
+						? go.AddComponent<DotMatrixDisplayAuthoring>()
+						: go.GetComponent<DotMatrixDisplayAuthoring>();
 
 					auth.Id = id;
 					auth.Width = layout.width;
