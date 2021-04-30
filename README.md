@@ -8,7 +8,8 @@
 This project contains two root folders:
 
 - `VisualPinball.Engine.PinMAME` wraps the [`pinmame-dotnet`](https://github.com/vpinball/pinmame-dotnet)
-library and extends it with some meta data.
+  library and extends it with some meta data. It's also the project that provides
+  the Unity plugins.
 - `VisualPinball.Engine.PinMAME.Unity` is the Unity UPM package that plugs into
   VPE and implements the gamelogic engine.
 
