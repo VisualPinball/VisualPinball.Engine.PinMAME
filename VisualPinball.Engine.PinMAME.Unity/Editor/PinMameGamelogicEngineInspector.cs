@@ -158,7 +158,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			}
 
 			// get total height
-			var numRows = displayLayouts.Values.Select(l => l.top).Max() / 2;
+			var numRows = displayLayouts.Values.Select(l => l.Top).Max() / 2;
 
 			// get total width
 			var lines = new Dictionary<int, int> { { 0, 0 }};
@@ -166,9 +166,9 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				if (layout.IsDmd) {
 					continue;
 				}
-				lines[layout.top] = lines.ContainsKey(layout.top)
-					? lines[layout.top] + layout.length
-					: layout.length;
+				lines[layout.Top] = lines.ContainsKey(layout.Top)
+					? lines[layout.Top] + layout.Length
+					: layout.Length;
 			}
 			var numCols = lines.Values.ToList().Max();
 			var totalWidth = 0f;
@@ -176,8 +176,8 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			foreach (var index in displayLayouts.Keys) {
 				var layout = displayLayouts[index];
 
-				var left = layout.left / 2;
-				var top = layout.top / 2;
+				var left = layout.Left / 2;
+				var top = layout.Top / 2;
 
 				var id = layout.IsDmd
 					? $"{PinMameGamelogicEngine.DmdPrefix}{index}"
@@ -193,8 +193,8 @@ namespace VisualPinball.Engine.PinMAME.Editor
 						: go.GetComponent<DotMatrixDisplayAuthoring>();
 
 					auth.Id = id;
-					auth.Width = layout.width;
-					auth.Height = layout.height;
+					auth.Width = layout.Width;
+					auth.Height = layout.Height;
 
 					go.name = "Dot Matrix Display";
 					go.transform.localScale = new Vector3(DisplayInspector.GameObjectScale, DisplayInspector.GameObjectScale, DisplayInspector.GameObjectScale);
@@ -206,13 +206,14 @@ namespace VisualPinball.Engine.PinMAME.Editor
 						: go.GetComponent<SegmentDisplayAuthoring>();
 
 					auth.Id = id;
-					auth.NumChars = layout.length;
+					auth.NumChars = layout.Length;
+					//auth.SegmentType = auth.ConvertSegmentType(layout.type);
 
 					go.name = $"Segment Display [{index}]";
 					go.transform.localScale = new Vector3(DisplayInspector.GameObjectScale, DisplayInspector.GameObjectScale, DisplayInspector.GameObjectScale);
 					var mesh = go.GetComponent<MeshFilter>().sharedMesh;
 					var charHeight = mesh.bounds.size.y * DisplayInspector.GameObjectScale;
-					var charWidth = mesh.bounds.size.x * DisplayInspector.GameObjectScale / layout.length;
+					var charWidth = mesh.bounds.size.x * DisplayInspector.GameObjectScale / layout.Length;
 					totalWidth = charWidth * numCols;
 
 					var globalLeft = (tableWidth - totalWidth) / 2;

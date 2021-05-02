@@ -84,8 +84,8 @@ namespace VisualPinball.Engine.PinMAME
 		private Dictionary<int, GamelogicEngineLamp> _lamps = new Dictionary<int, GamelogicEngineLamp>();
 
 		private bool _isRunning;
-		private HashSet<int> _displayAnnounced = new HashSet<int>();
 		private Dictionary<int, byte[]> _frameBuffer = new Dictionary<int, byte[]>();
+		private Dictionary<int, Dictionary<byte, byte>> _dmdLevels = new Dictionary<int, Dictionary<byte, byte>>();
 
 		private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 		private static readonly Color Tint = new Color(1, 0.18f, 0);
@@ -104,11 +104,12 @@ namespace VisualPinball.Engine.PinMAME
 				OnLampChanged?.Invoke(this, new LampEventArgs(lamp.Id, 0));
 			}
 
-			_pinMame = PinMame.PinMame.Instance(48000, @"D:\Pinball\Visual Pinball\VPinMAME");
+			_pinMame = PinMame.PinMame.Instance();
 			_pinMame.OnGameStarted += GameStarted;
 			_pinMame.OnGameEnded += GameEnded;
 			_pinMame.OnDisplayUpdated += DisplayUpdated;
 			_pinMame.OnSolenoidUpdated += SolenoidUpdated;
+			_pinMame.OnDisplayAvailable += OnDisplayAvailable;
 			_player = player;
 
 			try {
@@ -120,7 +121,7 @@ namespace VisualPinball.Engine.PinMAME
 			}
 		}
 
-		private void GameStarted(object sender, EventArgs e)
+		private void GameStarted()
 		{
 			Logger.Info($"[PinMAME] Game started.");
 			_isRunning = true;
@@ -151,7 +152,31 @@ namespace VisualPinball.Engine.PinMAME
 			}
 		}
 
-		private void DisplayUpdated(object sender, EventArgs e, int index, IntPtr framePtr, PinMameDisplayLayout displayLayout)
+		private void OnDisplayAvailable(int index, int displayCount, PinMameDisplayLayout displayLayout)
+		{
+			if (displayLayout.IsDmd) {
+				lock (_dispatchQueue) {
+					_dispatchQueue.Enqueue(() =>
+						OnDisplaysAvailable?.Invoke(this, new AvailableDisplays(
+							new DisplayConfig($"{DmdPrefix}{index}", displayLayout.Width, displayLayout.Height))));
+				}
+
+				_frameBuffer[index] = new byte[displayLayout.Width * displayLayout.Height];
+				_dmdLevels[index] = displayLayout.Levels;
+
+			} else {
+				lock (_dispatchQueue) {
+					_dispatchQueue.Enqueue(() =>
+						OnDisplaysAvailable?.Invoke(this, new AvailableDisplays(
+							new DisplayConfig($"{SegDispPrefix}{index}", displayLayout.Length, 1))));
+				}
+
+				_frameBuffer[index] = new byte[displayLayout.Length * 2];
+				Logger.Info($"[PinMAME] Display {SegDispPrefix}{index} is of type {displayLayout.Type} at {displayLayout.Length} wide.");
+			}
+		}
+
+		private void DisplayUpdated(int index, IntPtr framePtr, PinMameDisplayLayout displayLayout)
 		{
 			if (displayLayout.IsDmd) {
 				UpdateDmd(index, displayLayout, framePtr);
@@ -163,59 +188,34 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void UpdateDmd(int index, PinMameDisplayLayout displayLayout, IntPtr framePtr)
 		{
-			if (!_displayAnnounced.Contains(index)) {
-				lock (_dispatchQueue) {
-					_dispatchQueue.Enqueue(() =>
-						OnDisplaysAvailable?.Invoke(this, new AvailableDisplays(
-							new DisplayConfig($"{DmdPrefix}{index}", displayLayout.width, displayLayout.height))));
-				}
-
-				_displayAnnounced.Add(index);
-				_frameBuffer[index] = new byte[displayLayout.width * displayLayout.height];
-			}
-
-			var map = GetMap(displayLayout);
 			unsafe {
 				var ptr = (byte*) framePtr;
-				for (var y = 0; y < displayLayout.height; y++) {
-					for (var x = 0; x < displayLayout.width; x++) {
-						var pos = y * displayLayout.width + x;
-						_frameBuffer[index][pos] =  map[ptr[pos]];
+				for (var y = 0; y < displayLayout.Height; y++) {
+					for (var x = 0; x < displayLayout.Width; x++) {
+						var pos = y * displayLayout.Width + x;
+						_frameBuffer[index][pos] = _dmdLevels[index][ptr[pos]];
 					}
 				}
 			}
 
 			lock (_dispatchQueue) {
 				_dispatchQueue.Enqueue(() => OnDisplayFrame?.Invoke(this,
-					new DisplayFrameData($"{DmdPrefix}{index}", GetDisplayType(displayLayout.type), _frameBuffer[index])));
+					new DisplayFrameData($"{DmdPrefix}{index}", GetDisplayType(displayLayout.Type), _frameBuffer[index])));
 			}
 		}
 
 		private void UpdateSegDisp(int index, PinMameDisplayLayout displayLayout, IntPtr framePtr)
 		{
-			if (!_displayAnnounced.Contains(index)) {
-				lock (_dispatchQueue) {
-					_dispatchQueue.Enqueue(() =>
-						OnDisplaysAvailable?.Invoke(this, new AvailableDisplays(
-							new DisplayConfig($"{SegDispPrefix}{index}", displayLayout.length, 1))));
-				}
-
-				_displayAnnounced.Add(index);
-				_frameBuffer[index] = new byte[displayLayout.length * 2];
-				Logger.Info($"[PinMAME] Display {SegDispPrefix}{index} is of type {displayLayout.type} at {displayLayout.length} wide.");
-			}
-
-			Marshal.Copy(framePtr, _frameBuffer[index], 0, displayLayout.length * 2);
+			Marshal.Copy(framePtr, _frameBuffer[index], 0, displayLayout.Length * 2);
 
 			lock (_dispatchQueue) {
 				//Logger.Info($"[PinMAME] Seg data ({index}): {BitConverter.ToString(_frameBuffer[index])}" );
 				_dispatchQueue.Enqueue(() => OnDisplayFrame?.Invoke(this,
-					new DisplayFrameData($"{SegDispPrefix}{index}", GetDisplayType(displayLayout.type), _frameBuffer[index])));
+					new DisplayFrameData($"{SegDispPrefix}{index}", GetDisplayType(displayLayout.Type), _frameBuffer[index])));
 			}
-
 		}
 
-		private void SolenoidUpdated(object sender, EventArgs e, int internalId, bool isActive)
+		private void SolenoidUpdated(int internalId, bool isActive)
 		{
 			if (_coils.ContainsKey(internalId)) {
 				Logger.Info($"[PinMAME] <= coil {_coils[internalId].Id} ({internalId}): {isActive} | {_coils[internalId].Description}");
@@ -230,7 +230,7 @@ namespace VisualPinball.Engine.PinMAME
 			}
 		}
 
-		private void GameEnded(object sender, EventArgs e)
+		private void GameEnded()
 		{
 			Logger.Info($"[PinMAME] Game ended.");
 			_isRunning = false;
@@ -287,7 +287,7 @@ namespace VisualPinball.Engine.PinMAME
 				_pinMame.OnSolenoidUpdated -= SolenoidUpdated;
 			}
 			_frameBuffer.Clear();
-			_displayAnnounced.Clear();
+			_dmdLevels.Clear();
 		}
 
 		public void Switch(string id, bool isClosed)
@@ -300,62 +300,50 @@ namespace VisualPinball.Engine.PinMAME
 			}
 		}
 
-
-		private Dictionary<byte, byte> GetMap(PinMameDisplayLayout displayLayout)
-		{
-			if (displayLayout.depth == 2) {
-				return DmdMap2Bit;
-			}
-
-			return (_pinMame.GetHardwareGen() & (PinMameHardwareGen.SAM | PinMameHardwareGen.SPA)) > 0
-				? DmdMapSam
-				: DmdMapGts;
-		}
-
 		private static DisplayFrameFormat GetDisplayType(PinMameDisplayType dp)
 		{
 			switch (dp) {
-				case PinMameDisplayType.SEG8:   // 7  segments and comma
-				case PinMameDisplayType.SEG8D:  // 7  segments and period
-				case PinMameDisplayType.SEG7:   // 7  segments
-				case PinMameDisplayType.SEG87:  // 7  segments, comma every three
-				case PinMameDisplayType.SEG87F: // 7  segments, forced comma every three
-				case PinMameDisplayType.SEG7S:  // 7  segments, small
-				case PinMameDisplayType.SEG7SC: // 7  segments, small, with comma
+				case PinMameDisplayType.Seg8:   // 7  segments and comma
+				case PinMameDisplayType.Seg8D:  // 7  segments and period
+				case PinMameDisplayType.Seg7:   // 7  segments
+				case PinMameDisplayType.Seg87:  // 7  segments, comma every three
+				case PinMameDisplayType.Seg87F: // 7  segments, forced comma every three
+				case PinMameDisplayType.Seg7S:  // 7  segments, small
+				case PinMameDisplayType.Seg7SC: // 7  segments, small, with comma
 					return DisplayFrameFormat.Segment7;
 
-				case PinMameDisplayType.SEG10: // 9  segments and comma
-				case PinMameDisplayType.SEG9: // 9  segments
-				case PinMameDisplayType.SEG98: // 9  segments, comma every three
-				case PinMameDisplayType.SEG98F: // 9  segments, forced comma every three
+				case PinMameDisplayType.Seg10: // 9  segments and comma
+				case PinMameDisplayType.Seg9: // 9  segments
+				case PinMameDisplayType.Seg98: // 9  segments, comma every three
+				case PinMameDisplayType.Seg98F: // 9  segments, forced comma every three
 					return DisplayFrameFormat.Segment9;
 
-				case PinMameDisplayType.SEG16:  // 16 segments
-				case PinMameDisplayType.SEG16R: // 16 segments with comma and period reversed
-				case PinMameDisplayType.SEG16N: // 16 segments without commas
-				case PinMameDisplayType.SEG16D: // 16 segments with periods only
-				case PinMameDisplayType.SEG16S: // 16 segments with split top and bottom line
+				case PinMameDisplayType.Seg16:  // 16 segments
+				case PinMameDisplayType.Seg16R: // 16 segments with comma and period reversed
+				case PinMameDisplayType.Seg16N: // 16 segments without commas
+				case PinMameDisplayType.Seg16D: // 16 segments with periods only
+				case PinMameDisplayType.Seg16S: // 16 segments with split top and bottom line
 					return DisplayFrameFormat.Segment16;
 
-				case PinMameDisplayType.DMD:
+				case PinMameDisplayType.Dmd:
 					return DisplayFrameFormat.Dmd2;
 
-				case PinMameDisplayType.VIDEO:
+				case PinMameDisplayType.Video:
 					break;
 
-				case PinMameDisplayType.SEGALL:
-				case PinMameDisplayType.IMPORT:
-				case PinMameDisplayType.SEGMASK:
-				case PinMameDisplayType.SEGHIBIT:
-				case PinMameDisplayType.SEGREV:
-				case PinMameDisplayType.DMDNOAA:
-				case PinMameDisplayType.NODISP:
-				case PinMameDisplayType.SEG8H:
-				case PinMameDisplayType.SEG7H:
-				case PinMameDisplayType.SEG87H:
-				case PinMameDisplayType.SEG87FH:
-				case PinMameDisplayType.SEG7SH:
-				case PinMameDisplayType.SEG7SCH:
+				case PinMameDisplayType.SegAll:
+				case PinMameDisplayType.Import:
+				case PinMameDisplayType.SegMask:
+				case PinMameDisplayType.SegHiBit:
+				case PinMameDisplayType.SegRev:
+				case PinMameDisplayType.DmdNoAA:
+				case PinMameDisplayType.NoDisp:
+				case PinMameDisplayType.Seg8H:
+				case PinMameDisplayType.Seg7H:
+				case PinMameDisplayType.Seg87H:
+				case PinMameDisplayType.Seg87FH:
+				case PinMameDisplayType.Seg7SH:
+				case PinMameDisplayType.Seg7SCH:
 					throw new ArgumentOutOfRangeException(nameof(dp), dp, null);
 
 				default:
@@ -364,27 +352,5 @@ namespace VisualPinball.Engine.PinMAME
 
 			throw new NotImplementedException($"Still unsupported segmented display format: {dp}.");
 		}
-
-		private static readonly Dictionary<byte, byte> DmdMap2Bit = new Dictionary<byte, byte> {
-			{ 0x00, 0x0 },
-			{ 0x14, 0x0 },
-			{ 0x21, 0x1 },
-			{ 0x43, 0x2 },
-			{ 0x64, 0x3 },
-		};
-
-		private static readonly Dictionary<byte, byte> DmdMapSam = new Dictionary<byte, byte> {
-			{ 0x00, 0x0 }, { 0x14, 0x1 }, { 0x19, 0x2 }, { 0x1E, 0x3 },
-			{ 0x23, 0x4 }, { 0x28, 0x5 }, { 0x2D, 0x6 }, { 0x32, 0x7 },
-			{ 0x37, 0x8 }, { 0x3C, 0x9 }, { 0x41, 0xa }, { 0x46, 0xb },
-			{ 0x4B, 0xc }, { 0x50, 0xd }, { 0x5A, 0xe }, { 0x64, 0xf }
-		};
-
-		private static readonly Dictionary<byte, byte> DmdMapGts = new Dictionary<byte, byte> {
-			{ 0x00, 0x0 }, { 0x1E, 0x1 }, { 0x23, 0x2 }, { 0x28, 0x3 },
-			{ 0x2D, 0x4 }, { 0x32, 0x5 }, { 0x37, 0x6 }, { 0x3C, 0x7 },
-			{ 0x41, 0x8 }, { 0x46, 0x9 }, { 0x4B, 0xa }, { 0x50, 0xb },
-			{ 0x55, 0xc }, { 0x5A, 0xd }, { 0x5F, 0xe }, { 0x64, 0xf }
-		};
 	}
 }
