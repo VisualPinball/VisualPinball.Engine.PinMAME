@@ -300,7 +300,7 @@ namespace VisualPinball.Engine.PinMAME
 			}
 		}
 
-		private static DisplayFrameFormat GetDisplayType(PinMameDisplayType dp)
+		public static DisplayFrameFormat GetDisplayType(PinMameDisplayType dp)
 		{
 			switch (dp) {
 				case PinMameDisplayType.Seg8:   // 7  segments and comma
