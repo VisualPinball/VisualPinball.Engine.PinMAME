@@ -207,7 +207,8 @@ namespace VisualPinball.Engine.PinMAME.Editor
 
 					auth.Id = id;
 					auth.NumChars = layout.Length;
-					//auth.SegmentType = auth.ConvertSegmentType(layout.type);
+					var displayFrameFormat = PinMameGamelogicEngine.GetDisplayType(layout.Type);
+					auth.SegmentType = auth.ConvertSegmentType(displayFrameFormat);
 
 					go.name = $"Segment Display [{index}]";
 					go.transform.localScale = new Vector3(DisplayInspector.GameObjectScale, DisplayInspector.GameObjectScale, DisplayInspector.GameObjectScale);
