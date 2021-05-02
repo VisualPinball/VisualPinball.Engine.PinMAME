@@ -304,21 +304,29 @@ namespace VisualPinball.Engine.PinMAME
 		{
 			switch (dp) {
 				case PinMameDisplayType.Seg8:   // 7  segments and comma
-				case PinMameDisplayType.Seg8D:  // 7  segments and period
-				case PinMameDisplayType.Seg7:   // 7  segments
-				case PinMameDisplayType.Seg87:  // 7  segments, comma every three
-				case PinMameDisplayType.Seg87F: // 7  segments, forced comma every three
-				case PinMameDisplayType.Seg7S:  // 7  segments, small
 				case PinMameDisplayType.Seg7SC: // 7  segments, small, with comma
+					return DisplayFrameFormat.Segment7Comma;
+				case PinMameDisplayType.Seg8D:  // 7  segments and period
+					return DisplayFrameFormat.Segment7Dot;
+				case PinMameDisplayType.Seg7:  // 7  segments
+				case PinMameDisplayType.Seg7S: // 7  segments, small
 					return DisplayFrameFormat.Segment7;
+				case PinMameDisplayType.Seg87:  // 7  segments, comma every three
+					return DisplayFrameFormat.Segment7CommaEvery3;
+				case PinMameDisplayType.Seg87F: // 7  segments, forced comma every three
+					return DisplayFrameFormat.Segment7CommaEvery3Forced;
 
 				case PinMameDisplayType.Seg10: // 9  segments and comma
+					return DisplayFrameFormat.Segment9Comma;
 				case PinMameDisplayType.Seg9: // 9  segments
-				case PinMameDisplayType.Seg98: // 9  segments, comma every three
-				case PinMameDisplayType.Seg98F: // 9  segments, forced comma every three
 					return DisplayFrameFormat.Segment9;
+				case PinMameDisplayType.Seg98: // 9  segments, comma every three
+					return DisplayFrameFormat.Segment9CommaEvery3;
+				case PinMameDisplayType.Seg98F: // 9  segments, forced comma every three
+					return DisplayFrameFormat.Segment9CommaEvery3Forced;
 
 				case PinMameDisplayType.Seg16:  // 16 segments
+					return DisplayFrameFormat.Segment16;
 				case PinMameDisplayType.Seg16R: // 16 segments with comma and period reversed
 				case PinMameDisplayType.Seg16N: // 16 segments without commas
 				case PinMameDisplayType.Seg16D: // 16 segments with periods only

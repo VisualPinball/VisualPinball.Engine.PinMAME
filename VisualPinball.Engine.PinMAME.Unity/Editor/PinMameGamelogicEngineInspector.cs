@@ -81,23 +81,23 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		public override void OnInspectorGUI()
 		{
 			// game dropdown
-			//_gle.romId = EditorGUILayout.TextField("ROM ID", _gle.romId);
+			_gle.romId = EditorGUILayout.TextField("ROM ID", _gle.romId);
 
-			EditorGUI.BeginChangeCheck();
-			_selectedGameIndex = EditorGUILayout.Popup("Game", _selectedGameIndex, _gameNames);
-			if (EditorGUI.EndChangeCheck()) {
-				_selectedRomIndex = 0;
-				if (_selectedGameIndex > 0) {
-					_gle.Game = _games[_selectedGameIndex - 1];
-					_gle.romId = Rom.Id;
-					_romNames = _gle.Game.Roms.Select(g => g.ToString()).ToArray();
-
-				} else {
-					_gle.Game = null;
-					_gle.romId = string.Empty;
-					_romNames = new string[0];
-				}
-			}
+			// EditorGUI.BeginChangeCheck();
+			// _selectedGameIndex = EditorGUILayout.Popup("Game", _selectedGameIndex, _gameNames);
+			// if (EditorGUI.EndChangeCheck()) {
+			// 	_selectedRomIndex = 0;
+			// 	if (_selectedGameIndex > 0) {
+			// 		_gle.Game = _games[_selectedGameIndex - 1];
+			// 		_gle.romId = Rom.Id;
+			// 		_romNames = _gle.Game.Roms.Select(g => g.ToString()).ToArray();
+			//
+			// 	} else {
+			// 		_gle.Game = null;
+			// 		_gle.romId = string.Empty;
+			// 		_romNames = new string[0];
+			// 	}
+			// }
 
 			// rom dropdown
 			EditorGUI.BeginDisabledGroup(_gle.Game == null);
