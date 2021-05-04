@@ -33,6 +33,7 @@ namespace VisualPinball.Engine.PinMAME
 {
 	[Serializable]
 	[DisallowMultipleComponent]
+	[RequireComponent(typeof(AudioSource))]
 	[AddComponentMenu("Visual Pinball/Game Logic Engine/PinMAME")]
 	public class PinMameGamelogicEngine : MonoBehaviour, IGamelogicEngine
 	{
@@ -92,6 +93,8 @@ namespace VisualPinball.Engine.PinMAME
 
 		private readonly Queue<Action> _dispatchQueue = new Queue<Action>();
 
+		private PinMameAudioInfo _audioInfo;
+
 		private void Start()
 		{
 			UpdateCaches();
@@ -110,6 +113,8 @@ namespace VisualPinball.Engine.PinMAME
 			_pinMame.OnDisplayUpdated += DisplayUpdated;
 			_pinMame.OnSolenoidUpdated += SolenoidUpdated;
 			_pinMame.OnDisplayAvailable += OnDisplayAvailable;
+			_pinMame.OnAudioAvailable += OnAudioAvailable;
+			_pinMame.OnAudioUpdated += OnAudioUpdated;
 			_player = player;
 
 			try {
@@ -234,6 +239,23 @@ namespace VisualPinball.Engine.PinMAME
 			}
 		}
 
+		private int OnAudioAvailable(PinMameAudioInfo audioInfo)
+		{
+			Logger.Info("Game audio available: " + audioInfo);
+			return audioInfo.SamplesPerFrame;
+		}
+
+		private int OnAudioUpdated(IntPtr bufferPtr, int samples)
+		{
+			Logger.Info("Got audio sample: " + samples);
+			return _audioInfo.SamplesPerFrame;
+		}
+
+		private void OnAudioFilterRead(float[] data, int channels)
+		{
+			Logger.Info($"WRITE audio sample: {data.Length} ({channels})");
+		}
+
 		private void GameEnded()
 		{
 			Logger.Info($"[PinMAME] Game ended.");
@@ -289,6 +311,9 @@ namespace VisualPinball.Engine.PinMAME
 				_pinMame.OnGameEnded -= GameEnded;
 				_pinMame.OnDisplayUpdated -= DisplayUpdated;
 				_pinMame.OnSolenoidUpdated -= SolenoidUpdated;
+				_pinMame.OnDisplayAvailable -= OnDisplayAvailable;
+				_pinMame.OnAudioAvailable -= OnAudioAvailable;
+				_pinMame.OnAudioUpdated -= OnAudioUpdated;
 			}
 			_frameBuffer.Clear();
 			_dmdLevels.Clear();
