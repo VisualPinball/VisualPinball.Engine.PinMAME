@@ -33,7 +33,7 @@ namespace VisualPinball.Engine.PinMAME
 {
 	[Serializable]
 	[DisallowMultipleComponent]
-	[RequireComponent(typeof(AudioSource))]
+	//[RequireComponent(typeof(AudioSource))]
 	[AddComponentMenu("Visual Pinball/Game Logic Engine/PinMAME")]
 	public class PinMameGamelogicEngine : MonoBehaviour, IGamelogicEngine
 	{
@@ -92,8 +92,17 @@ namespace VisualPinball.Engine.PinMAME
 		private static readonly Color Tint = new Color(1, 0.18f, 0);
 
 		private readonly Queue<Action> _dispatchQueue = new Queue<Action>();
+		private readonly Queue<float[]> _audioQueue = new Queue<float[]>();
 
 		private PinMameAudioInfo _audioInfo;
+		private float[] _lastAudioFrame = {};
+		private int _lastAudioFrameOffset;
+		private int _maximalQueueSize = 100;
+
+		private void Awake()
+		{
+			Logger.Info("Project audio sample rate: " +  AudioSettings.outputSampleRate);
+		}
 
 		private void Start()
 		{
@@ -242,18 +251,65 @@ namespace VisualPinball.Engine.PinMAME
 		private int OnAudioAvailable(PinMameAudioInfo audioInfo)
 		{
 			Logger.Info("Game audio available: " + audioInfo);
-			return audioInfo.SamplesPerFrame;
+
+			_audioInfo = audioInfo;
+			return _audioInfo.SamplesPerFrame;
 		}
 
-		private int OnAudioUpdated(IntPtr bufferPtr, int samples)
+		private int OnAudioUpdated(IntPtr framePtr, int frameSize)
 		{
-			Logger.Info("Got audio sample: " + samples);
+			unsafe {
+				var src = (short*) framePtr;
+				var frame = new float[frameSize * 2];
+				for (var i = 0; i < frameSize; i++) {
+					frame[i * 2] = src[i] * (float)(1.0/32768.0);
+					frame[i * 2 + 1] = frame[i * 2]; // duplicate - assuming input channels = 1, and output channels = 2.
+				}
+				lock (_audioQueue) {
+					if (_audioQueue.Count < _maximalQueueSize) {
+						_audioQueue.Enqueue(frame);
+						Logger.Info($"Queueing audio sample ({frameSize}).");
+
+					} else {
+						Logger.Info($"Skipping audio sample queue because it's full.");
+					}
+				}
+			}
 			return _audioInfo.SamplesPerFrame;
 		}
 
 		private void OnAudioFilterRead(float[] data, int channels)
 		{
-			Logger.Info($"WRITE audio sample: {data.Length} ({channels})");
+			var remaining = data.Length;
+			var lastFrameSize = _lastAudioFrame.Length - _lastAudioFrameOffset;
+			if (remaining >= lastFrameSize) {
+				Buffer.BlockCopy(_lastAudioFrame, _lastAudioFrameOffset, data, 0, lastFrameSize);
+				remaining -= lastFrameSize;
+
+				lock (_audioQueue) {
+					var i = 0;
+					while (remaining > 0 && _audioQueue.Count > 0) {
+						i++;
+						var frame = _audioQueue.Dequeue();
+						if (frame.Length <= remaining) {
+							Buffer.BlockCopy(frame, 0, data, data.Length - remaining, frame.Length);
+							remaining -= frame.Length;
+
+						} else {
+							Buffer.BlockCopy(frame, 0, data, data.Length - remaining, remaining);
+							_lastAudioFrame = frame;
+							_lastAudioFrameOffset = remaining;
+							remaining = 0;
+						}
+					}
+					Logger.Info($"Dequeued {i} audio samples, written {data.Length - remaining}, remaining {remaining}.");
+				}
+
+			} else {
+				Buffer.BlockCopy(_lastAudioFrame, _lastAudioFrameOffset, data, 0, remaining);
+				_lastAudioFrameOffset += remaining;
+				Logger.Info($"No audio de-queue, copied {remaining} from last frame ({_lastAudioFrame.Length - remaining}).");
+			}
 		}
 
 		private void GameEnded()
