@@ -258,28 +258,32 @@ namespace VisualPinball.Engine.PinMAME
 
 		private int OnAudioUpdated(IntPtr framePtr, int frameSize)
 		{
+			var frame = new float[frameSize * 2];
+			var min = 0f;
+			var max = 0f;
+
 			unsafe {
-				var src = (short*) framePtr;
-				var frame = new float[frameSize * 2];
-				var min = 0f;
-				var max = 0f;
+				var src = (short*)framePtr;
 				for (var i = 0; i < frameSize; i++) {
 					frame[i * 2] = src[i] / 32768f;
 					frame[i * 2 + 1] = frame[i * 2]; // duplicate - assuming input channels = 1, and output channels = 2.
 					min = System.Math.Min(min, frame[i * 2]);
 					max = System.Math.Max(max, frame[i * 2]);
 				}
-				lock (_audioQueue) {
-					if (_audioQueue.Count >= _maximalQueueSize) {
-						_audioQueue.Clear();
-						Logger.Error("Clearing full audio frame queue.");
-					}
-					_audioQueue.Enqueue(frame);
-					if (min < -0.1f || max > 0.1f) {
-						Logger.Info($"Queueing audio sample ({frameSize}). [{System.Math.Round(min, 4)} {System.Math.Round(max, 4)}]");
-					}
-				}
 			}
+
+			lock (_audioQueue) {
+				if (_audioQueue.Count >= _maximalQueueSize) {
+					_audioQueue.Clear();
+					Logger.Error("Clearing full audio frame queue.");
+				}
+				_audioQueue.Enqueue(frame);
+			}
+
+			if (min < -0.1f || max > 0.1f) {
+				Logger.Info($"Queueing audio sample ({frameSize}). [{System.Math.Round(min, 4)} {System.Math.Round(max, 4)}]");
+			}
+
 			return _audioInfo.SamplesPerFrame;
 		}
 
@@ -294,9 +298,7 @@ namespace VisualPinball.Engine.PinMAME
 				_lastAudioFrameOffset = 0;
 
 				lock (_audioQueue) {
-					var i = 0;
 					while (remaining > 0 && _audioQueue.Count > 0) {
-						i++;
 						var frame = _audioQueue.Dequeue();
 						if (frame.Length <= remaining) {
 							Buffer.BlockCopy(frame, 0, data, data.Length - remaining, frame.Length);
@@ -308,10 +310,6 @@ namespace VisualPinball.Engine.PinMAME
 							_lastAudioFrameOffset = remaining;
 							remaining = 0;
 						}
-					}
-					if (_audioQueue.Count >= _maximalQueueSize) {
-						_audioQueue.Clear();
-						Logger.Info($"Dequeued {i} audio samples, written {data.Length - remaining}, remaining {remaining}, clearing queue!");
 					}
 				}
 
