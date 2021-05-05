@@ -289,34 +289,33 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void OnAudioFilterRead(float[] data, int channels)
 		{
-			var remaining = data.Length;
+			var dataOffset = 0;
 			var lastFrameSize = _lastAudioFrame.Length - _lastAudioFrameOffset;
-			if (remaining >= lastFrameSize) {
-				Buffer.BlockCopy(_lastAudioFrame, _lastAudioFrameOffset, data, 0, lastFrameSize);
-				remaining -= lastFrameSize;
+			if (data.Length >= lastFrameSize) {
+				Buffer.BlockCopy(_lastAudioFrame, _lastAudioFrameOffset, data, dataOffset, lastFrameSize);
+				dataOffset += lastFrameSize;
 				_lastAudioFrame = new float[0];
 				_lastAudioFrameOffset = 0;
 
 				lock (_audioQueue) {
-					while (remaining > 0 && _audioQueue.Count > 0) {
+					while (dataOffset < data.Length && _audioQueue.Count > 0) {
 						var frame = _audioQueue.Dequeue();
-						if (frame.Length <= remaining) {
-							Buffer.BlockCopy(frame, 0, data, data.Length - remaining, frame.Length);
-							remaining -= frame.Length;
+						if (frame.Length <= data.Length - dataOffset) {
+							Buffer.BlockCopy(frame, 0, data, dataOffset, frame.Length);
+							dataOffset += frame.Length;
 
 						} else {
-							Buffer.BlockCopy(frame, 0, data, data.Length - remaining, remaining);
+							Buffer.BlockCopy(frame, 0, data, dataOffset, data.Length - dataOffset);
 							_lastAudioFrame = frame;
-							_lastAudioFrameOffset = remaining;
-							remaining = 0;
+							_lastAudioFrameOffset = data.Length - dataOffset;
+							dataOffset = data.Length;
 						}
 					}
 				}
 
 			} else {
-				Buffer.BlockCopy(_lastAudioFrame, _lastAudioFrameOffset, data, 0, remaining);
-				_lastAudioFrameOffset += remaining;
-				Logger.Info($"No audio de-queue, copied {remaining} from last frame ({_lastAudioFrame.Length - remaining}).");
+				Buffer.BlockCopy(_lastAudioFrame, _lastAudioFrameOffset, data, 0, data.Length);
+				_lastAudioFrameOffset += data.Length;
 			}
 		}
 
