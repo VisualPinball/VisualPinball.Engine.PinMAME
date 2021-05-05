@@ -261,17 +261,22 @@ namespace VisualPinball.Engine.PinMAME
 			unsafe {
 				var src = (short*) framePtr;
 				var frame = new float[frameSize * 2];
+				var min = 0f;
+				var max = 0f;
 				for (var i = 0; i < frameSize; i++) {
-					frame[i * 2] = src[i] * (float)(1.0/32768.0);
+					frame[i * 2] = src[i] / 32768f;
 					frame[i * 2 + 1] = frame[i * 2]; // duplicate - assuming input channels = 1, and output channels = 2.
+					min = System.Math.Min(min, frame[i * 2]);
+					max = System.Math.Max(max, frame[i * 2]);
 				}
 				lock (_audioQueue) {
-					if (_audioQueue.Count < _maximalQueueSize) {
-						_audioQueue.Enqueue(frame);
-						Logger.Info($"Queueing audio sample ({frameSize}).");
-
-					} else {
-						Logger.Info($"Skipping audio sample queue because it's full.");
+					if (_audioQueue.Count >= _maximalQueueSize) {
+						_audioQueue.Clear();
+						Logger.Error("Clearing full audio frame queue.");
+					}
+					_audioQueue.Enqueue(frame);
+					if (min < -0.1f || max > 0.1f) {
+						Logger.Info($"Queueing audio sample ({frameSize}). [{System.Math.Round(min, 4)} {System.Math.Round(max, 4)}]");
 					}
 				}
 			}
@@ -285,6 +290,8 @@ namespace VisualPinball.Engine.PinMAME
 			if (remaining >= lastFrameSize) {
 				Buffer.BlockCopy(_lastAudioFrame, _lastAudioFrameOffset, data, 0, lastFrameSize);
 				remaining -= lastFrameSize;
+				_lastAudioFrame = new float[0];
+				_lastAudioFrameOffset = 0;
 
 				lock (_audioQueue) {
 					var i = 0;
@@ -302,7 +309,10 @@ namespace VisualPinball.Engine.PinMAME
 							remaining = 0;
 						}
 					}
-					Logger.Info($"Dequeued {i} audio samples, written {data.Length - remaining}, remaining {remaining}.");
+					if (_audioQueue.Count >= _maximalQueueSize) {
+						_audioQueue.Clear();
+						Logger.Info($"Dequeued {i} audio samples, written {data.Length - remaining}, remaining {remaining}, clearing queue!");
+					}
 				}
 
 			} else {
