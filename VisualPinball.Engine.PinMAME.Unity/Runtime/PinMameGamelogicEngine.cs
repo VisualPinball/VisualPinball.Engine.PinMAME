@@ -20,6 +20,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using NLog;
@@ -33,7 +34,7 @@ namespace VisualPinball.Engine.PinMAME
 {
 	[Serializable]
 	[DisallowMultipleComponent]
-	//[RequireComponent(typeof(AudioSource))]
+	[RequireComponent(typeof(AudioSource))]
 	[AddComponentMenu("Visual Pinball/Game Logic Engine/PinMAME")]
 	public class PinMameGamelogicEngine : MonoBehaviour, IGamelogicEngine
 	{
@@ -107,6 +108,9 @@ namespace VisualPinball.Engine.PinMAME
 		private void Start()
 		{
 			UpdateCaches();
+
+			_lastAudioFrame = new float[0];
+			_lastAudioFrameOffset = 0;
 		}
 
 		public void OnInit(Player player, TableApi tableApi, BallManager ballManager)
@@ -259,16 +263,11 @@ namespace VisualPinball.Engine.PinMAME
 		private int OnAudioUpdated(IntPtr framePtr, int frameSize)
 		{
 			var frame = new float[frameSize * 2];
-			var min = 0f;
-			var max = 0f;
-
 			unsafe {
 				var src = (short*)framePtr;
 				for (var i = 0; i < frameSize; i++) {
 					frame[i * 2] = src[i] / 32768f;
 					frame[i * 2 + 1] = frame[i * 2]; // duplicate - assuming input channels = 1, and output channels = 2.
-					min = System.Math.Min(min, frame[i * 2]);
-					max = System.Math.Max(max, frame[i * 2]);
 				}
 			}
 
@@ -280,20 +279,23 @@ namespace VisualPinball.Engine.PinMAME
 				_audioQueue.Enqueue(frame);
 			}
 
-			if (min < -0.1f || max > 0.1f) {
-				Logger.Info($"Queueing audio sample ({frameSize}). [{System.Math.Round(min, 4)} {System.Math.Round(max, 4)}]");
-			}
-
 			return _audioInfo.SamplesPerFrame;
 		}
 
 		private void OnAudioFilterRead(float[] data, int channels)
 		{
+			if (channels != 2) {
+				Logger.Error($"Got {channels} channels, expecting 2.");
+				return;
+			}
+			const int size = sizeof(float);
 			var dataOffset = 0;
 			var lastFrameSize = _lastAudioFrame.Length - _lastAudioFrameOffset;
 			if (data.Length >= lastFrameSize) {
-				Buffer.BlockCopy(_lastAudioFrame, _lastAudioFrameOffset, data, dataOffset, lastFrameSize);
-				dataOffset += lastFrameSize;
+				if (lastFrameSize > 0) {
+					Buffer.BlockCopy(_lastAudioFrame, _lastAudioFrameOffset * size, data, 0, lastFrameSize * size);
+					dataOffset += lastFrameSize;
+				}
 				_lastAudioFrame = new float[0];
 				_lastAudioFrameOffset = 0;
 
@@ -301,11 +303,11 @@ namespace VisualPinball.Engine.PinMAME
 					while (dataOffset < data.Length && _audioQueue.Count > 0) {
 						var frame = _audioQueue.Dequeue();
 						if (frame.Length <= data.Length - dataOffset) {
-							Buffer.BlockCopy(frame, 0, data, dataOffset, frame.Length);
+							Buffer.BlockCopy(frame, 0, data, dataOffset * size, frame.Length * size);
 							dataOffset += frame.Length;
 
 						} else {
-							Buffer.BlockCopy(frame, 0, data, dataOffset, data.Length - dataOffset);
+							Buffer.BlockCopy(frame, 0, data, dataOffset * size, (data.Length - dataOffset) * size);
 							_lastAudioFrame = frame;
 							_lastAudioFrameOffset = data.Length - dataOffset;
 							dataOffset = data.Length;
@@ -314,7 +316,7 @@ namespace VisualPinball.Engine.PinMAME
 				}
 
 			} else {
-				Buffer.BlockCopy(_lastAudioFrame, _lastAudioFrameOffset, data, 0, data.Length);
+				Buffer.BlockCopy(_lastAudioFrame, _lastAudioFrameOffset * size, data, 0, data.Length * size);
 				_lastAudioFrameOffset += data.Length;
 			}
 		}
