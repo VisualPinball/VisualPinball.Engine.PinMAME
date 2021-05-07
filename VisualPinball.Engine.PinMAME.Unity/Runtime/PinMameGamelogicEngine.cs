@@ -95,6 +95,7 @@ namespace VisualPinball.Engine.PinMAME
 		private readonly Queue<Action> _dispatchQueue = new Queue<Action>();
 		private readonly Queue<float[]> _audioQueue = new Queue<float[]>();
 
+		private int _audioFilterChannels;
 		private PinMameAudioInfo _audioInfo;
 		private float[] _lastAudioFrame = {};
 		private int _lastAudioFrameOffset;
@@ -262,12 +263,38 @@ namespace VisualPinball.Engine.PinMAME
 
 		private int OnAudioUpdated(IntPtr framePtr, int frameSize)
 		{
-			var frame = new float[frameSize * 2];
-			unsafe {
-				var src = (short*)framePtr;
-				for (var i = 0; i < frameSize; i++) {
-					frame[i * 2] = src[i] / 32768f;
-					frame[i * 2 + 1] = frame[i * 2]; // duplicate - assuming input channels = 1, and output channels = 2.
+			if (_audioFilterChannels == 0) {
+				// don't know how many channels yet
+				return _audioInfo.SamplesPerFrame;
+			}
+
+			float[] frame;
+			if (_audioFilterChannels == _audioInfo.Channels) { // n channels -> n channels
+				frame = new float[frameSize];
+				unsafe {
+					var src = (short*)framePtr;
+					for (var i = 0; i < frameSize; i++) {
+						frame[i] = src[i] / 32768f;
+					}
+				}
+
+			} else if (_audioFilterChannels > _audioInfo.Channels) { // 1 channel -> 2 channels
+				frame = new float[frameSize * 2];
+				unsafe {
+					var src = (short*)framePtr;
+					for (var i = 0; i < frameSize; i++) {
+						frame[i * 2] = src[i] / 32768f;
+						frame[i * 2 + 1] = frame[i * 2];
+					}
+				}
+
+			} else { // 2 channels -> 1 channel
+				frame = new float[frameSize / 2];
+				unsafe {
+					var src = (short*)framePtr;
+					for (var i = 0; i < frameSize; i += 2) {
+						frame[i] = src[i] / 32768f;
+					}
 				}
 			}
 
@@ -284,10 +311,12 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void OnAudioFilterRead(float[] data, int channels)
 		{
-			if (channels != 2) {
-				Logger.Error($"Got {channels} channels, expecting 2.");
+			if (_audioFilterChannels == 0) {
+				_audioFilterChannels = channels;
+				Logger.Info($"Creating audio on {channels} channels.");
 				return;
 			}
+
 			const int size = sizeof(float);
 			var dataOffset = 0;
 			var lastFrameSize = _lastAudioFrame.Length - _lastAudioFrameOffset;
