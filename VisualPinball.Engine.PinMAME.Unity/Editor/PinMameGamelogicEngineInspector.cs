@@ -207,8 +207,9 @@ namespace VisualPinball.Engine.PinMAME.Editor
 
 					auth.Id = id;
 					auth.NumChars = layout.Length;
-					var displayFrameFormat = PinMameGamelogicEngine.GetDisplayType(layout.Type);
-					auth.SegmentType = auth.ConvertSegmentType(displayFrameFormat);
+					auth.NumSegments = ConvertNumSegments(layout.Type);
+					auth.SeparatorType = ConvertSeparatorType(layout.Type);
+					auth.SeparatorEveryThreeOnly = ConvertSeparatorEveryThree(layout.Type);
 					auth.SegmentTypeName = layout.Type.ToString();
 
 					go.name = $"Segment Display [{index}]";
@@ -226,10 +227,96 @@ namespace VisualPinball.Engine.PinMAME.Editor
 						1.1f);
 				}
 			}
-
-
 			var str = string.Join("\n", displayLayouts.Keys.Select(t => $"{t}: {displayLayouts[t]}"));
 			Debug.Log($"OnDisplaysAvailable ({displayLayouts.Count}): displays=\n{str}\n{tableWidth} - {totalWidth}");
+		}
+
+		private int ConvertSeparatorType(PinMameDisplayType layoutType)
+		{
+			switch (layoutType) {
+
+				case PinMameDisplayType.Seg7S:
+				case PinMameDisplayType.Seg7:
+				case PinMameDisplayType.Seg9:
+				case PinMameDisplayType.Seg16N:
+					return 0;
+
+				case PinMameDisplayType.Seg16D:
+				case PinMameDisplayType.Seg8D:
+					return 1;
+
+				case PinMameDisplayType.Seg7SCH:
+				case PinMameDisplayType.Seg7H:
+				case PinMameDisplayType.Seg7SH:
+				case PinMameDisplayType.Seg7SC:
+				case PinMameDisplayType.Seg8:
+				case PinMameDisplayType.Seg87:
+				case PinMameDisplayType.Seg87F:
+				case PinMameDisplayType.Seg8H:
+				case PinMameDisplayType.Seg87H:
+				case PinMameDisplayType.Seg87FH:
+				case PinMameDisplayType.Seg98:
+				case PinMameDisplayType.Seg98F:
+				case PinMameDisplayType.Seg10:
+				case PinMameDisplayType.Seg16:
+				case PinMameDisplayType.Seg16S:
+				case PinMameDisplayType.Seg16R:
+					return 2;
+
+				default:
+					throw new ArgumentOutOfRangeException(nameof(layoutType), layoutType, "Unknown segment display size");
+			}
+		}
+
+		private static bool ConvertSeparatorEveryThree(PinMameDisplayType layoutType)
+		{
+			switch (layoutType) {
+				case PinMameDisplayType.Seg98F:
+				case PinMameDisplayType.Seg98:
+				case PinMameDisplayType.Seg87F:
+				case PinMameDisplayType.Seg87:
+					return true;
+
+				default:
+					return false;
+			}
+		}
+
+		private static int ConvertNumSegments(PinMameDisplayType layoutType)
+		{
+			switch (layoutType) {
+
+				case PinMameDisplayType.Seg7:
+				case PinMameDisplayType.Seg7S:
+				case PinMameDisplayType.Seg7SC:
+				case PinMameDisplayType.Seg7SCH:
+				case PinMameDisplayType.Seg7H:
+				case PinMameDisplayType.Seg7SH:
+				case PinMameDisplayType.Seg8:
+				case PinMameDisplayType.Seg8D:
+				case PinMameDisplayType.Seg8H:
+				case PinMameDisplayType.Seg87:
+				case PinMameDisplayType.Seg87F:
+				case PinMameDisplayType.Seg87H:
+				case PinMameDisplayType.Seg87FH:
+					return 7;
+
+				case PinMameDisplayType.Seg9:
+				case PinMameDisplayType.Seg10:
+				case PinMameDisplayType.Seg98:
+				case PinMameDisplayType.Seg98F:
+					return 9;
+
+				case PinMameDisplayType.Seg16:
+				case PinMameDisplayType.Seg16R:
+				case PinMameDisplayType.Seg16S:
+				case PinMameDisplayType.Seg16N:
+				case PinMameDisplayType.Seg16D:
+					return 14;
+
+				default:
+					throw new ArgumentOutOfRangeException(nameof(layoutType), layoutType, "Unknown segment display size");
+			}
 		}
 	}
 }
