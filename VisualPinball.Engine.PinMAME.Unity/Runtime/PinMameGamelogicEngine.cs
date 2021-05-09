@@ -21,6 +21,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using NLog;
@@ -28,6 +30,7 @@ using PinMame;
 using UnityEngine;
 using VisualPinball.Engine.Game.Engines;
 using VisualPinball.Unity;
+using Debug = UnityEngine.Debug;
 using Logger = NLog.Logger;
 
 namespace VisualPinball.Engine.PinMAME
@@ -99,7 +102,12 @@ namespace VisualPinball.Engine.PinMAME
 		private PinMameAudioInfo _audioInfo;
 		private float[] _lastAudioFrame = {};
 		private int _lastAudioFrameOffset;
-		private int _maximalQueueSize = 100;
+		private const int _maximalQueueSize = 10;
+
+		private double _audioInputStart;
+		private double _audioOutputStart;
+		private int _audioNumSamplesInput;
+		private int _audioNumSamplesOutput;
 
 		private void Awake()
 		{
@@ -121,7 +129,8 @@ namespace VisualPinball.Engine.PinMAME
 				OnLampChanged?.Invoke(this, new LampEventArgs(lamp.Id, 0));
 			}
 
-			_pinMame = PinMame.PinMame.Instance();
+			Logger.Info($"New PinMAME instance at {(double)AudioSettings.outputSampleRate / 1000}kHz");
+			_pinMame = PinMame.PinMame.Instance(AudioSettings.outputSampleRate);
 			_pinMame.OnGameStarted += GameStarted;
 			_pinMame.OnGameEnded += GameEnded;
 			_pinMame.OnDisplayUpdated += DisplayUpdated;
@@ -268,6 +277,15 @@ namespace VisualPinball.Engine.PinMAME
 				return _audioInfo.SamplesPerFrame;
 			}
 
+			_audioNumSamplesInput += frameSize;
+			if (_audioNumSamplesInput > 100000) {
+				var delta = AudioSettings.dspTime - _audioInputStart;
+				var queueMs = System.Math.Round(_audioQueue.Count * (double)_audioInfo.SamplesPerFrame / _audioInfo.SampleRate * 1000);
+				Debug.Log($"INPUT: {System.Math.Round(_audioNumSamplesInput / delta)} - {_audioQueue.Count} in queue ({queueMs}ms)");
+				_audioInputStart = AudioSettings.dspTime;
+				_audioNumSamplesInput = 0;
+			}
+
 			float[] frame;
 			if (_audioFilterChannels == _audioInfo.Channels) { // n channels -> n channels
 				frame = new float[frameSize];
@@ -311,11 +329,25 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void OnAudioFilterRead(float[] data, int channels)
 		{
+			_audioNumSamplesOutput += data.Length / channels;
+			if (_audioNumSamplesOutput > 100000) {
+				var delta = AudioSettings.dspTime - _audioOutputStart;
+				Debug.Log($"OUTPUT: {System.Math.Round(_audioNumSamplesOutput / delta)}");
+				_audioOutputStart = AudioSettings.dspTime;
+				_audioNumSamplesOutput = 0;
+			}
+
 			if (_audioFilterChannels == 0) {
 				_audioFilterChannels = channels;
 				Logger.Info($"Creating audio on {channels} channels.");
 				return;
 			}
+
+			if (_audioQueue.Count == 0) {
+				Logger.Error("Filtering audio but nothing to de-queue.");
+				return;
+			}
+
 
 			const int size = sizeof(float);
 			var dataOffset = 0;

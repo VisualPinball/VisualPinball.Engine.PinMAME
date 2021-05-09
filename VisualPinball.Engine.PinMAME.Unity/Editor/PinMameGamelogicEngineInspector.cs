@@ -143,7 +143,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		private void CreateDisplays(IEnumerable<DisplayAuthoring> sceneDisplays)
 		{
 			// retrieve layouts from pinmame
-			var pinMame = PinMame.PinMame.Instance();
+			var pinMame = PinMame.PinMame.Instance(AudioSettings.outputSampleRate);
 			var displayLayouts = pinMame.GetAvailableDisplays(_gle.romId);
 
 			// retrieve already existing displays from scene
