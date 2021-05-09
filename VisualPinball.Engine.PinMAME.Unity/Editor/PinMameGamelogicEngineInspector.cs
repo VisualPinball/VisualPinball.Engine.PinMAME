@@ -16,8 +16,10 @@
 
 // ReSharper disable CheckNamespace
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using PinMame;
 using UnityEditor;
 using UnityEngine;
 using VisualPinball.Engine.PinMAME.Games;
@@ -178,7 +180,6 @@ namespace VisualPinball.Engine.PinMAME.Editor
 
 				var left = layout.Left / 2;
 				var top = layout.Top / 2;
-
 				var id = layout.IsDmd
 					? $"{PinMameGamelogicEngine.DmdPrefix}{index}"
 					: $"{PinMameGamelogicEngine.SegDispPrefix}{index}";
@@ -231,7 +232,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			Debug.Log($"OnDisplaysAvailable ({displayLayouts.Count}): displays=\n{str}\n{tableWidth} - {totalWidth}");
 		}
 
-		private int ConvertSeparatorType(PinMameDisplayType layoutType)
+		private static int ConvertSeparatorType(PinMameDisplayType layoutType)
 		{
 			switch (layoutType) {
 
@@ -239,6 +240,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				case PinMameDisplayType.Seg7:
 				case PinMameDisplayType.Seg9:
 				case PinMameDisplayType.Seg16N:
+				case PinMameDisplayType.Seg7 | PinMameDisplayType.NoDisp:
 					return 0;
 
 				case PinMameDisplayType.Seg16D:
@@ -271,6 +273,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		private static bool ConvertSeparatorEveryThree(PinMameDisplayType layoutType)
 		{
 			switch (layoutType) {
+
 				case PinMameDisplayType.Seg98F:
 				case PinMameDisplayType.Seg98:
 				case PinMameDisplayType.Seg87F:
@@ -299,6 +302,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				case PinMameDisplayType.Seg87F:
 				case PinMameDisplayType.Seg87H:
 				case PinMameDisplayType.Seg87FH:
+				case PinMameDisplayType.Seg7 | PinMameDisplayType.NoDisp:
 					return 7;
 
 				case PinMameDisplayType.Seg9:
