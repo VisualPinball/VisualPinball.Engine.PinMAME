@@ -200,7 +200,7 @@ namespace VisualPinball.Engine.PinMAME
 
 			lock (_dispatchQueue) {
 				_dispatchQueue.Enqueue(() => OnDisplayFrame?.Invoke(this,
-					new DisplayFrameData($"{DmdPrefix}{index}", GetDisplayType(displayLayout.Type), _frameBuffer[index])));
+					new DisplayFrameData($"{DmdPrefix}{index}", GetDisplayFrameFormat(displayLayout), _frameBuffer[index])));
 			}
 		}
 
@@ -211,7 +211,7 @@ namespace VisualPinball.Engine.PinMAME
 			lock (_dispatchQueue) {
 				//Logger.Info($"[PinMAME] Seg data ({index}): {BitConverter.ToString(_frameBuffer[index])}" );
 				_dispatchQueue.Enqueue(() => OnDisplayFrame?.Invoke(this,
-					new DisplayFrameData($"{SegDispPrefix}{index}", GetDisplayType(displayLayout.Type), _frameBuffer[index])));
+					new DisplayFrameData($"{SegDispPrefix}{index}", GetDisplayFrameFormat(displayLayout), _frameBuffer[index])));
 			}
 		}
 
@@ -300,41 +300,37 @@ namespace VisualPinball.Engine.PinMAME
 			}
 		}
 
-		public static DisplayFrameFormat GetDisplayType(PinMameDisplayType dp)
+		public static DisplayFrameFormat GetDisplayFrameFormat(PinMameDisplayLayout layout)
 		{
-			switch (dp) {
+			if (layout.IsDmd) {
+				return layout.Depth == 4 ? DisplayFrameFormat.Dmd4 : DisplayFrameFormat.Dmd2;
+			}
+
+			switch (layout.Type) {
 				case PinMameDisplayType.Seg8:   // 7  segments and comma
 				case PinMameDisplayType.Seg7SC: // 7  segments, small, with comma
-					return DisplayFrameFormat.Segment7Comma;
 				case PinMameDisplayType.Seg8D:  // 7  segments and period
-					return DisplayFrameFormat.Segment7Dot;
 				case PinMameDisplayType.Seg7:  // 7  segments
 				case PinMameDisplayType.Seg7S: // 7  segments, small
-					return DisplayFrameFormat.Segment7;
 				case PinMameDisplayType.Seg87:  // 7  segments, comma every three
-					return DisplayFrameFormat.Segment7CommaEvery3;
 				case PinMameDisplayType.Seg87F: // 7  segments, forced comma every three
-					return DisplayFrameFormat.Segment7CommaEvery3Forced;
-
 				case PinMameDisplayType.Seg10: // 9  segments and comma
-					return DisplayFrameFormat.Segment9Comma;
 				case PinMameDisplayType.Seg9: // 9  segments
-					return DisplayFrameFormat.Segment9;
 				case PinMameDisplayType.Seg98: // 9  segments, comma every three
-					return DisplayFrameFormat.Segment9CommaEvery3;
 				case PinMameDisplayType.Seg98F: // 9  segments, forced comma every three
-					return DisplayFrameFormat.Segment9CommaEvery3Forced;
-
 				case PinMameDisplayType.Seg16:  // 16 segments
-					return DisplayFrameFormat.Segment16;
 				case PinMameDisplayType.Seg16R: // 16 segments with comma and period reversed
 				case PinMameDisplayType.Seg16N: // 16 segments without commas
 				case PinMameDisplayType.Seg16D: // 16 segments with periods only
 				case PinMameDisplayType.Seg16S: // 16 segments with split top and bottom line
-					return DisplayFrameFormat.Segment16;
-
-				case PinMameDisplayType.Dmd:
-					return DisplayFrameFormat.Dmd2;
+				case PinMameDisplayType.Seg8H:
+				case PinMameDisplayType.Seg7H:
+				case PinMameDisplayType.Seg87H:
+				case PinMameDisplayType.Seg87FH:
+				case PinMameDisplayType.Seg7SH:
+				case PinMameDisplayType.Seg7SCH:
+				case PinMameDisplayType.Seg7 | PinMameDisplayType.NoDisp:
+					return DisplayFrameFormat.Segment;
 
 				case PinMameDisplayType.Video:
 					break;
@@ -346,19 +342,13 @@ namespace VisualPinball.Engine.PinMAME
 				case PinMameDisplayType.SegRev:
 				case PinMameDisplayType.DmdNoAA:
 				case PinMameDisplayType.NoDisp:
-				case PinMameDisplayType.Seg8H:
-				case PinMameDisplayType.Seg7H:
-				case PinMameDisplayType.Seg87H:
-				case PinMameDisplayType.Seg87FH:
-				case PinMameDisplayType.Seg7SH:
-				case PinMameDisplayType.Seg7SCH:
-					throw new ArgumentOutOfRangeException(nameof(dp), dp, null);
+					throw new ArgumentOutOfRangeException(nameof(layout), layout, null);
 
 				default:
-					throw new ArgumentOutOfRangeException(nameof(dp), dp, null);
+					throw new ArgumentOutOfRangeException(nameof(layout), layout, null);
 			}
 
-			throw new NotImplementedException($"Still unsupported segmented display format: {dp}.");
+			throw new NotImplementedException($"Still unsupported segmented display format: {layout}.");
 		}
 	}
 }
