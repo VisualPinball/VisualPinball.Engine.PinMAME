@@ -102,22 +102,22 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			// }
 
 			// rom dropdown
-			EditorGUI.BeginDisabledGroup(_gle.Game == null);
-			EditorGUI.BeginChangeCheck();
-			_selectedRomIndex = EditorGUILayout.Popup("ROM", _selectedRomIndex, _romNames);
-			if (EditorGUI.EndChangeCheck()) {
-				_gle.romId = Rom.Id;
-			}
+			// EditorGUI.BeginDisabledGroup(_gle.Game == null);
+			// EditorGUI.BeginChangeCheck();
+			// _selectedRomIndex = EditorGUILayout.Popup("ROM", _selectedRomIndex, _romNames);
+			// if (EditorGUI.EndChangeCheck()) {
+			// 	_gle.romId = Rom.Id;
+			// }
+			//
+			// // info label
+			// EditorGUILayout.LabelField("ROM ID", _gle.romId);
 
-			// info label
-			EditorGUILayout.LabelField("ROM ID", _gle.romId);
-
-			EditorGUI.EndDisabledGroup();
+			//EditorGUI.EndDisabledGroup();
 
 			EditorGUILayout.Space();
 			EditorGUILayout.Separator();
 
-			EditorGUI.BeginDisabledGroup(!IsGameSet || Application.isPlaying);
+			//EditorGUI.BeginDisabledGroup(!IsGameSet || Application.isPlaying);
 			if (GUILayout.Button("Populate Hardware")) {
 				if (EditorUtility.DisplayDialog("PinMAME", "This will clear all linked switches, coils and lamps and re-populate them. You sure you want to do that?", "Yes", "No")) {
 					_tableAuthoring.RepopulateHardware(_gle);
@@ -137,7 +137,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 					SceneView.RepaintAll();
 				}
 			}
-			EditorGUI.EndDisabledGroup();
+			//EditorGUI.EndDisabledGroup();
 		}
 
 		private void CreateDisplays(IEnumerable<DisplayAuthoring> sceneDisplays)
@@ -241,6 +241,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				case PinMameDisplayType.Seg9:
 				case PinMameDisplayType.Seg16N:
 				case PinMameDisplayType.Seg7 | PinMameDisplayType.NoDisp:
+				case PinMameDisplayType.Seg16S:
 					return 0;
 
 				case PinMameDisplayType.Seg16D:
@@ -261,7 +262,6 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				case PinMameDisplayType.Seg98F:
 				case PinMameDisplayType.Seg10:
 				case PinMameDisplayType.Seg16:
-				case PinMameDisplayType.Seg16S:
 				case PinMameDisplayType.Seg16R:
 					return 2;
 
@@ -313,10 +313,12 @@ namespace VisualPinball.Engine.PinMAME.Editor
 
 				case PinMameDisplayType.Seg16:
 				case PinMameDisplayType.Seg16R:
-				case PinMameDisplayType.Seg16S:
 				case PinMameDisplayType.Seg16N:
 				case PinMameDisplayType.Seg16D:
 					return 14;
+
+				case PinMameDisplayType.Seg16S:
+					return 16;
 
 				default:
 					throw new ArgumentOutOfRangeException(nameof(layoutType), layoutType, "Unknown segment display size");
