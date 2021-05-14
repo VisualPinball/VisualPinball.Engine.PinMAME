@@ -193,6 +193,10 @@ namespace VisualPinball.Engine.PinMAME
 				for (var y = 0; y < displayLayout.Height; y++) {
 					for (var x = 0; x < displayLayout.Width; x++) {
 						var pos = y * displayLayout.Width + x;
+						if (!_dmdLevels[index].ContainsKey(ptr[pos])) {
+							Logger.Error($"Display {index}: Provided levels ({BitConverter.ToString(_dmdLevels[index].Keys.ToArray())}) don't contain level {BitConverter.ToString(new[] {ptr[pos]})}.");
+							_dmdLevels[index][ptr[pos]] = 0x0;
+						}
 						_frameBuffer[index][pos] = _dmdLevels[index][ptr[pos]];
 					}
 				}
