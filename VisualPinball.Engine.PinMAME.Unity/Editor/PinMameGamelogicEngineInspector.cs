@@ -83,36 +83,36 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		public override void OnInspectorGUI()
 		{
 			// game dropdown
-			_gle.romId = EditorGUILayout.TextField("ROM ID", _gle.romId);
+			//_gle.romId = EditorGUILayout.TextField("ROM ID", _gle.romId);
 
-			// EditorGUI.BeginChangeCheck();
-			// _selectedGameIndex = EditorGUILayout.Popup("Game", _selectedGameIndex, _gameNames);
-			// if (EditorGUI.EndChangeCheck()) {
-			// 	_selectedRomIndex = 0;
-			// 	if (_selectedGameIndex > 0) {
-			// 		_gle.Game = _games[_selectedGameIndex - 1];
-			// 		_gle.romId = Rom.Id;
-			// 		_romNames = _gle.Game.Roms.Select(g => g.ToString()).ToArray();
-			//
-			// 	} else {
-			// 		_gle.Game = null;
-			// 		_gle.romId = string.Empty;
-			// 		_romNames = new string[0];
-			// 	}
-			// }
+			EditorGUI.BeginChangeCheck();
+			_selectedGameIndex = EditorGUILayout.Popup("Game", _selectedGameIndex, _gameNames);
+			if (EditorGUI.EndChangeCheck()) {
+				_selectedRomIndex = 0;
+				if (_selectedGameIndex > 0) {
+					_gle.Game = _games[_selectedGameIndex - 1];
+					_gle.romId = Rom.Id;
+					_romNames = _gle.Game.Roms.Select(g => g.ToString()).ToArray();
 
-			// rom dropdown
-			// EditorGUI.BeginDisabledGroup(_gle.Game == null);
-			// EditorGUI.BeginChangeCheck();
-			// _selectedRomIndex = EditorGUILayout.Popup("ROM", _selectedRomIndex, _romNames);
-			// if (EditorGUI.EndChangeCheck()) {
-			// 	_gle.romId = Rom.Id;
-			// }
-			//
-			// // info label
-			// EditorGUILayout.LabelField("ROM ID", _gle.romId);
+				} else {
+					_gle.Game = null;
+					_gle.romId = string.Empty;
+					_romNames = new string[0];
+				}
+			}
 
-			//EditorGUI.EndDisabledGroup();
+			//rom dropdown
+			EditorGUI.BeginDisabledGroup(_gle.Game == null);
+			EditorGUI.BeginChangeCheck();
+			_selectedRomIndex = EditorGUILayout.Popup("ROM", _selectedRomIndex, _romNames);
+			if (EditorGUI.EndChangeCheck()) {
+				_gle.romId = Rom.Id;
+			}
+
+			// info label
+			EditorGUILayout.LabelField("ROM ID", _gle.romId);
+
+			EditorGUI.EndDisabledGroup();
 
 			EditorGUILayout.Space();
 			EditorGUILayout.Separator();
@@ -227,9 +227,16 @@ namespace VisualPinball.Engine.PinMAME.Editor
 						tableHeight + (numRows - top) * charHeight,
 						1.1f);
 				}
+
+				displayGameObjects.Remove(id);
 			}
 			var str = string.Join("\n", displayLayouts.Keys.Select(t => $"{t}: {displayLayouts[t]}"));
 			Debug.Log($"OnDisplaysAvailable ({displayLayouts.Count}): displays=\n{str}\n{tableWidth} - {totalWidth}");
+
+			// remove non-updated game objects.
+			foreach (var displayAuthoring in displayGameObjects.Values) {
+				DestroyImmediate(displayAuthoring.gameObject);
+			}
 		}
 
 		private static int ConvertSeparatorType(PinMameDisplayType layoutType)
