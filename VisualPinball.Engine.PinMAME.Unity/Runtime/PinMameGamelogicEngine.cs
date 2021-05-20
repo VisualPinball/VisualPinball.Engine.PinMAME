@@ -156,8 +156,7 @@ namespace VisualPinball.Engine.PinMAME
 			Logger.Info($"[PinMAME] Game started.");
 			_isRunning = true;
 
-			_pinMame.SetSwitch(22, true);
-			_pinMame.SetSwitch(24, true);
+			SendInitialSwitches();
 		}
 
 		private void Update()
