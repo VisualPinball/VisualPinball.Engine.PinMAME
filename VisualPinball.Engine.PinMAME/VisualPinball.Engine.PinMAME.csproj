@@ -16,9 +16,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="PinMame" Version="0.1.0-preview.38" />
-    <PackageReference Include="PinMame.Native" Version="3.4.0-preview.232" />
-    <PackageReference Include="VisualPinball.Engine" Version="0.0.1-preview.44" />
+    <PackageReference Include="PinMame" Version="0.1.0-preview.39" />
+    <PackageReference Include="PinMame.Native" Version="3.4.0-preview.236" />
+    <PackageReference Include="VisualPinball.Engine" Version="0.0.1-preview.45" />
   </ItemGroup>
 
   <Target Name="PluginsDeploy" AfterTargets="Build">
