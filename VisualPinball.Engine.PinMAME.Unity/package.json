@@ -8,9 +8,9 @@
     "PinMAME"
   ],
   "unity": "2020.3",
-  "unityRelease": "1f1",
+  "unityRelease": "11f1",
   "dependencies": {
-    "org.visualpinball.engine.unity": "0.0.1-preview.41"
+    "org.visualpinball.engine.unity": "0.0.1-preview.48"
   },
   "author": "freezy <freezy@vpdb.io>",
   "contributors": [
