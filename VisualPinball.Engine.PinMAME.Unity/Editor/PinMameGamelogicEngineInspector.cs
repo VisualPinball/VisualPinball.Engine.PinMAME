@@ -50,6 +50,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			_gle = (PinMameGamelogicEngine) target;
 			_games = new PinMameGame[] {
 				new AttackFromMars(),
+				new CreatureFromTheBlackLagoon(),
 				new MedievalMadness(),
 				new Terminator2(),
 				new FlashGordon(),
