@@ -172,14 +172,10 @@ namespace VisualPinball.Engine.PinMAME
 			}
 
 			// lamps
-			var changedLamps = _pinMame.GetChangedLamps();
-			for (var i = 0; i < changedLamps.Length; i += 2) {
-				var internalId = changedLamps[i];
-				var val = changedLamps[i + 1];
-
-				if (_lamps.ContainsKey(internalId)) {
-					//Logger.Info($"[PinMAME] <= lamp {id}: {val}");
-					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[internalId].Id, val));
+			foreach (var changedLamp in _pinMame.GetChangedLamps()) {
+				if (_lamps.ContainsKey(changedLamp.Id)) {
+					//Logger.Info($"[PinMAME] <= lamp {changedLamp.Id}: {changedLamp.Value}");
+					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[changedLamp.Id].Id, changedLamp.Value));
 				}
 			}
 		}
