@@ -344,7 +344,7 @@ namespace VisualPinball.Engine.PinMAME
 			}
 
 			if (_audioQueue.Count == 0) {
-				Logger.Error("Filtering audio but nothing to de-queue.");
+				Logger.Info("Filtering audio but nothing to de-queue.");
 				return;
 			}
 
