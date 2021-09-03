@@ -131,8 +131,8 @@ namespace VisualPinball.Engine.PinMAME
 
 			Logger.Info($"New PinMAME instance at {(double)AudioSettings.outputSampleRate / 1000}kHz");
 			_pinMame = PinMame.PinMame.Instance(AudioSettings.outputSampleRate);
-			_pinMame.SetHandleKeyboard(false);
-			
+			//_pinMame.SetHandleKeyboard(false);
+
 			_pinMame.OnGameStarted += GameStarted;
 			_pinMame.OnGameEnded += GameEnded;
 			_pinMame.OnDisplayUpdated += DisplayUpdated;
