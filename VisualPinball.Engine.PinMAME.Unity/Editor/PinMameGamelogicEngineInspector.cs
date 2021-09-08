@@ -22,6 +22,8 @@ using System.Linq;
 using PinMame;
 using UnityEditor;
 using UnityEngine;
+using VisualPinball.Engine.Common;
+using VisualPinball.Engine.Game.Engines;
 using VisualPinball.Engine.PinMAME.Games;
 using VisualPinball.Unity;
 using VisualPinball.Unity.Editor;
@@ -36,7 +38,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		private PinMameGamelogicEngine _gle;
 		private PinMameGame[] _games;
 		private string[] _gameNames;
-		private string[] _romNames = new string[0];
+		private string[] _romNames = Array.Empty<string>();
 
 		private int _selectedGameIndex;
 		private int _selectedRomIndex;
@@ -99,7 +101,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				} else {
 					_gle.Game = null;
 					_gle.romId = string.Empty;
-					_romNames = new string[0];
+					_romNames = Array.Empty<string>();
 				}
 			}
 

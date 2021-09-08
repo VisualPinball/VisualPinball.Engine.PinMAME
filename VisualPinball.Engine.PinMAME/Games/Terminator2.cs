@@ -18,7 +18,6 @@ using System;
 using VisualPinball.Engine.Common;
 using VisualPinball.Engine.Game.Engines;
 using VisualPinball.Engine.PinMAME.MPUs;
-using VisualPinball.Engine.VPT.Trough;
 
 namespace VisualPinball.Engine.PinMAME.Games
 {
@@ -180,12 +179,12 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineCoil("01") { Description = "Ball Popper" },
 			new GamelogicEngineCoil("02") { Description = "Gun Kicker" },
 			new GamelogicEngineCoil("03") { Description = "Outhole" },
-			new GamelogicEngineCoil("04") { Description = "Trough", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = Trough.EjectCoilId },
+			new GamelogicEngineCoil("04") { Description = "Trough", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "eject_coil" },
 			new GamelogicEngineCoil("05") { Description = "Right Sling" },
 			new GamelogicEngineCoil("06") { Description = "Left Sling" },
 			new GamelogicEngineCoil("07") { Description = "Knocker" },
 			new GamelogicEngineCoil("08") { Description = "Kickback" },
-			new GamelogicEngineCoil("09") { Description = "Plunger", PlayfieldItemHint = "Plunger" },
+			new GamelogicEngineCoil("09") { Description = "Plunger", DeviceHint = "Plunger" },
 			new GamelogicEngineCoil("10") { Description = "Top Lock" },
 			new GamelogicEngineCoil("11") { Description = "Gun Motor" },
 			new GamelogicEngineCoil("12") { Description = "Knock Down" },
@@ -206,8 +205,8 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineCoil("27") { Description = "Right Popper" },
 			new GamelogicEngineCoil("28") { Description = "Flashlamps Drop Target" },
 
-			new GamelogicEngineCoil(CoilFlipperLowerRight, 46) { Description = "Lower Right Flipper", PlayfieldItemHint = "^RightFlipper$"},
-			new GamelogicEngineCoil(CoilFlipperLowerLeft, 48) { Description = "Lower Left Flipper", PlayfieldItemHint = "^LeftFlipper$"},
+			new GamelogicEngineCoil(CoilFlipperLowerRight, 46) { Description = "Lower Right Flipper", DeviceHint = "^RightFlipper$"},
+			new GamelogicEngineCoil(CoilFlipperLowerLeft, 48) { Description = "Lower Left Flipper", DeviceHint = "^LeftFlipper$"},
 
 			new GamelogicEngineCoil(CoilFlipperUpperRight, 34) { IsUnused = true },
 			new GamelogicEngineCoil(CoilFlipperUpperLeft, 36) { IsUnused = true },

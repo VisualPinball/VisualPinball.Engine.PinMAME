@@ -79,8 +79,8 @@ namespace VisualPinball.Engine.PinMAME
 		/// These coils are common to all games.
 		/// </summary>
 		private readonly GamelogicEngineCoil[] _coils = {
-			new GamelogicEngineCoil(CoilFlipperLowerRight, 46) { Description = "Lower Right Flipper", PlayfieldItemHint = "^(RightFlipper|RFlipper|FlipperRight|FlipperR)$"},
-			new GamelogicEngineCoil(CoilFlipperLowerLeft, 48) { Description = "Lower Left Flipper", PlayfieldItemHint = "^(LeftFlipper|LFlipper|FlipperLeft|FlipperL)$"},
+			new GamelogicEngineCoil(CoilFlipperLowerRight, 46) { Description = "Lower Right Flipper", DeviceHint = "^(RightFlipper|RFlipper|FlipperRight|FlipperR)$"},
+			new GamelogicEngineCoil(CoilFlipperLowerLeft, 48) { Description = "Lower Left Flipper", DeviceHint = "^(LeftFlipper|LFlipper|FlipperLeft|FlipperL)$"},
 			new GamelogicEngineCoil(CoilFlipperUpperRight, 34) { Description = "Upper Right Flipper"},
 			new GamelogicEngineCoil(CoilFlipperUpperLeft, 36) { Description = "Upper Left Flipper"},
 		};

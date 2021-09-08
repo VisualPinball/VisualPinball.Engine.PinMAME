@@ -45,7 +45,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 
 		protected override GamelogicEngineSwitch[] Switches { get; } = {
 			new GamelogicEngineSwitch("11") { Description = "Launch Ball", InputActionHint = InputConstants.ActionPlunger },
-			
+
 			new GamelogicEngineSwitch("13") { Description = "Start Button", InputActionHint = InputConstants.ActionStartGame },
 			new GamelogicEngineSwitch("14") { Description = "Plumb Bolt Tilt" },
 
@@ -78,7 +78,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineSwitch("46") { Description = "Center Motor Bank" },
 			new GamelogicEngineSwitch("47") { Description = "Right Motor Bank" },
 			new GamelogicEngineSwitch("48") { Description = "Right Top Lane" },
-			
+
 			new GamelogicEngineSwitch("51") { Description = "Left Slingshot (Kicker)" },
 			new GamelogicEngineSwitch("52") { Description = "Right Slingshot (Kicker)" },
 			new GamelogicEngineSwitch("53") { Description = "Left Jet Bumper" },
@@ -182,7 +182,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 
 		protected override GamelogicEngineCoil[] GameCoils { get; } = {
 			new GamelogicEngineCoil("01", 1) { Description = "Auto Plunger", DeviceHint = "Plunger", DeviceItemHint = Plunger.FireCoilId },
-			new GamelogicEngineCoil("02", 2) { Description = "Trough Eject", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = Trough.EjectCoilId },
+			new GamelogicEngineCoil("02", 2) { Description = "Trough Eject", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "eject_coil" },
 			new GamelogicEngineCoil("03", 3) { Description = "Left Popper" },
 			new GamelogicEngineCoil("04", 4) { Description = "Right Popper" },
 			new GamelogicEngineCoil("05", 5) { Description = "Left Alien Low" },
@@ -212,7 +212,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineCoil("33") { Description = "Right Gate" },
 			new GamelogicEngineCoil("34") { Description = "Left Gate" },
 			new GamelogicEngineCoil("35") { Description = "Diverter Power" },
-			new GamelogicEngineCoil("36") { Description = "Diverter Hold", MainCoilIdOfHoldCoil = "35" },
+			new GamelogicEngineCoil("36") { Description = "Diverter Hold" },
 			new GamelogicEngineCoil("37") { Description = "L.E.D. Clock", IsLamp = true },
 			new GamelogicEngineCoil("38") { Description = "L.E.D. Data", IsLamp = true },
 			new GamelogicEngineCoil("39") { Description = "Strobe Light", IsLamp = true },
