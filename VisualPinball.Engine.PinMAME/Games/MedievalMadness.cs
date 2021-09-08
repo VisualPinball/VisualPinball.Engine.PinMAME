@@ -19,7 +19,6 @@ using VisualPinball.Engine.Common;
 using VisualPinball.Engine.Game.Engines;
 using VisualPinball.Engine.PinMAME.MPUs;
 using VisualPinball.Engine.VPT.Plunger;
-using VisualPinball.Engine.VPT.Trough;
 
 namespace VisualPinball.Engine.PinMAME.Games
 {
@@ -178,11 +177,11 @@ namespace VisualPinball.Engine.PinMAME.Games
 
 		protected override GamelogicEngineCoil[] GameCoils { get; } = {
 			new GamelogicEngineCoil("01", 1) { Description = "Auto Plunger", DeviceHint = "Plunger", DeviceItemHint = Plunger.FireCoilId },
-			new GamelogicEngineCoil("02", 2) { Description = "Trough Eject", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = Trough.EjectCoilId },
+			new GamelogicEngineCoil("02", 2) { Description = "Trough Eject", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "eject_coil" },
 			new GamelogicEngineCoil("03", 3) { Description = "Left Popper" },
 			new GamelogicEngineCoil("04", 4) { Description = "Castle" },
-			new GamelogicEngineCoil("05", 5) { Description = "Castle Gate" },
-			new GamelogicEngineCoil("06", 6) { Description = "Castle Gate (hold)", MainCoilIdOfHoldCoil = "05" },
+			new GamelogicEngineCoil("05", 5) { Description = "Castle Gate (Power)" },
+			new GamelogicEngineCoil("06", 6) { Description = "Castle Gate (Hold)" },
 			new GamelogicEngineCoil("07", 7) { Description = "Knocker" },
 			new GamelogicEngineCoil("08", 8) { Description = "Catapult" },
 			new GamelogicEngineCoil("09", 9) { Description = "Right Eject" },
@@ -191,8 +190,8 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineCoil("12") { Description = "Left Jet Bumper" },
 			new GamelogicEngineCoil("13") { Description = "Bottom Jet Bumper" },
 			new GamelogicEngineCoil("14") { Description = "Right Jet Bumper" },
-			new GamelogicEngineCoil("15") { Description = "Tower Diverter" },
-			new GamelogicEngineCoil("16") { Description = "Tower Diverter (hold)", MainCoilIdOfHoldCoil = "15" },
+			new GamelogicEngineCoil("15") { Description = "Tower Diverter (Power)" },
+			new GamelogicEngineCoil("16") { Description = "Tower Diverter (Hold)" },
 			new GamelogicEngineCoil("17") { Description = "Left Side Low Flashers", IsLamp = true },
 			new GamelogicEngineCoil("18") { Description = "Left Ramp Flashers", IsLamp = true },
 			new GamelogicEngineCoil("19") { Description = "Left Side High Flashers", IsLamp = true },
@@ -209,10 +208,10 @@ namespace VisualPinball.Engine.PinMAME.Games
 			// new GamelogicEngineCoil("30") { Description = "Lower Right Flipper (hold)", MainCoilIdOfHoldCoil = "29" },
 			// new GamelogicEngineCoil("31", 48) { Description = "Lower Left Flipper (power)", PlayfieldItemHint = "^(LeftFlipper|LFlipper|FlipperLeft|FlipperL)$" },
 			// new GamelogicEngineCoil("32") { Description = "Lower Left Flipper (hold)", MainCoilIdOfHoldCoil = "31" },
-			new GamelogicEngineCoil("33") { Description = "Left Troll" },
-			new GamelogicEngineCoil("34") { Description = "Left Troll (hold)", MainCoilIdOfHoldCoil = "33" },
-			new GamelogicEngineCoil("35") { Description = "Right Troll" },
-			new GamelogicEngineCoil("36") { Description = "Right Troll (hold)", MainCoilIdOfHoldCoil = "35" },
+			new GamelogicEngineCoil("33") { Description = "Left Troll (Power)" },
+			new GamelogicEngineCoil("34") { Description = "Left Troll (Hold)" },
+			new GamelogicEngineCoil("35") { Description = "Right Troll (Power)" },
+			new GamelogicEngineCoil("36") { Description = "Right Troll (Hold)" },
 			new GamelogicEngineCoil("37") { Description = "Drawbridge Motor" },
 		};
 	}
