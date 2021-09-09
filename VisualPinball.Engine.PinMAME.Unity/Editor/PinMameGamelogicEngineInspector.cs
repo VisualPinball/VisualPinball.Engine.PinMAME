@@ -156,7 +156,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				displayGameObjects[displays.Id] = displays;
 			}
 			var ta = _gle.GetComponentInParent<TableAuthoring>();
-			var pa = _gle.GetComponentInParent<PlayfieldAuthoring>();
+			var pa = _gle.GetComponentInChildren<PlayfieldAuthoring>();
 			var tableHeight = 0f;
 			var tableWidth = 1f;
 			if (ta) {
