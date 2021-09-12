@@ -181,7 +181,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 		};
 
 		protected override GamelogicEngineCoil[] GameCoils { get; } = {
-			new GamelogicEngineCoil("01", 1) { Description = "Auto Plunger", DeviceHint = "Plunger", DeviceItemHint = Plunger.FireCoilId },
+			new GamelogicEngineCoil("01", 1) { Description = "Auto Plunger", DeviceHint = "Plunger", DeviceItemHint = "c_autofire" },
 			new GamelogicEngineCoil("02", 2) { Description = "Trough Eject", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "eject_coil" },
 			new GamelogicEngineCoil("03", 3) { Description = "Left Popper" },
 			new GamelogicEngineCoil("04", 4) { Description = "Right Popper" },
