@@ -20,9 +20,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using NLog;
@@ -30,7 +27,6 @@ using PinMame;
 using UnityEngine;
 using VisualPinball.Engine.Game.Engines;
 using VisualPinball.Unity;
-using Debug = UnityEngine.Debug;
 using Logger = NLog.Logger;
 
 namespace VisualPinball.Engine.PinMAME
@@ -57,7 +53,7 @@ namespace VisualPinball.Engine.PinMAME
 		public GamelogicEngineSwitch[] AvailableSwitches {
 			get {
 				UpdateCaches();
-				return _game?.AvailableSwitches ?? new GamelogicEngineSwitch[0];
+				return _game?.AvailableSwitches ?? Array.Empty<GamelogicEngineSwitch>();
 			}
 		}
 		public GamelogicEngineCoil[] AvailableCoils {
@@ -118,7 +114,7 @@ namespace VisualPinball.Engine.PinMAME
 		{
 			UpdateCaches();
 
-			_lastAudioFrame = new float[0];
+			_lastAudioFrame = Array.Empty<float>();
 			_lastAudioFrameOffset = 0;
 		}
 
@@ -357,7 +353,7 @@ namespace VisualPinball.Engine.PinMAME
 					Buffer.BlockCopy(_lastAudioFrame, _lastAudioFrameOffset * size, data, 0, lastFrameSize * size);
 					dataOffset += lastFrameSize;
 				}
-				_lastAudioFrame = new float[0];
+				_lastAudioFrame = Array.Empty<float>();
 				_lastAudioFrameOffset = 0;
 
 				lock (_audioQueue) {

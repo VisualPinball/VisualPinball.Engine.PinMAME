@@ -22,8 +22,6 @@ using System.Linq;
 using PinMame;
 using UnityEditor;
 using UnityEngine;
-using VisualPinball.Engine.Common;
-using VisualPinball.Engine.Game.Engines;
 using VisualPinball.Engine.PinMAME.Games;
 using VisualPinball.Unity;
 using VisualPinball.Unity.Editor;
@@ -43,7 +41,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		private int _selectedGameIndex;
 		private int _selectedRomIndex;
 
-		private TableAuthoring _tableAuthoring;
+		private TableComponent _tableComponent;
 
 		private PinMameRom Rom => _gle.Game.Roms[_selectedRomIndex];
 
@@ -62,7 +60,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				.ToArray();
 
 			if (_gle != null) {
-				_tableAuthoring = _gle.gameObject.GetComponentInParent<TableAuthoring>();
+				_tableComponent = _gle.gameObject.GetComponentInParent<TableComponent>();
 			}
 
 			if (IsGameSet) {
@@ -124,13 +122,13 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			//EditorGUI.BeginDisabledGroup(!IsGameSet || Application.isPlaying);
 			if (GUILayout.Button("Populate Hardware")) {
 				if (EditorUtility.DisplayDialog("PinMAME", "This will clear all linked switches, coils and lamps and re-populate them. You sure you want to do that?", "Yes", "No")) {
-					_tableAuthoring.RepopulateHardware(_gle);
+					_tableComponent.RepopulateHardware(_gle);
 					TableSelector.Instance.TableUpdated();
 					SceneView.RepaintAll();
 				}
 			}
 			if (GUILayout.Button("Create Displays")) {
-				var sceneDisplays = FindObjectsOfType<DisplayAuthoring>();
+				var sceneDisplays = FindObjectsOfType<DisplayComponent>();
 				if (sceneDisplays.Length > 0) {
 					if (EditorUtility.DisplayDialog("PinMAME", "This will re-position all your displays, if you have any. You sure you want to do that?", "Yes", "No")) {
 						CreateDisplays(sceneDisplays);
@@ -144,24 +142,24 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			//EditorGUI.EndDisabledGroup();
 		}
 
-		private void CreateDisplays(IEnumerable<DisplayAuthoring> sceneDisplays)
+		private void CreateDisplays(IEnumerable<DisplayComponent> sceneDisplays)
 		{
 			// retrieve layouts from pinmame
 			var pinMame = PinMame.PinMame.Instance(AudioSettings.outputSampleRate);
 			var displayLayouts = pinMame.GetAvailableDisplays(_gle.romId);
 
 			// retrieve already existing displays from scene
-			var displayGameObjects = new Dictionary<string, DisplayAuthoring>();
+			var displayGameObjects = new Dictionary<string, DisplayComponent>();
 			foreach (var displays in sceneDisplays) {
 				displayGameObjects[displays.Id] = displays;
 			}
-			var ta = _gle.GetComponentInParent<TableAuthoring>();
-			var pa = _gle.GetComponentInChildren<PlayfieldAuthoring>();
+			var ta = _gle.GetComponentInParent<TableComponent>();
+			var pa = _gle.GetComponentInChildren<PlayfieldComponent>();
 			var tableHeight = 0f;
 			var tableWidth = 1f;
 			if (ta) {
-				tableHeight = pa.GlassHeight * PlayfieldAuthoring.GlobalScale;
-				tableWidth = pa.Width * PlayfieldAuthoring.GlobalScale;
+				tableHeight = pa.GlassHeight * PlayfieldComponent.GlobalScale;
+				tableWidth = pa.Width * PlayfieldComponent.GlobalScale;
 			}
 
 			// get total height
@@ -195,8 +193,8 @@ namespace VisualPinball.Engine.PinMAME.Editor
 
 				if (layout.IsDmd) {
 					var auth = !displayGameObjects.ContainsKey(id)
-						? go.AddComponent<DotMatrixDisplayAuthoring>()
-						: go.GetComponent<DotMatrixDisplayAuthoring>();
+						? go.AddComponent<DotMatrixDisplayComponent>()
+						: go.GetComponent<DotMatrixDisplayComponent>();
 
 					auth.Id = id;
 					auth.Width = layout.Width;
@@ -208,8 +206,8 @@ namespace VisualPinball.Engine.PinMAME.Editor
 
 				} else {
 					var auth = !displayGameObjects.ContainsKey(id)
-						? go.AddComponent<SegmentDisplayAuthoring>()
-						: go.GetComponent<SegmentDisplayAuthoring>();
+						? go.AddComponent<SegmentDisplayComponent>()
+						: go.GetComponent<SegmentDisplayComponent>();
 
 					auth.Id = id;
 					auth.NumChars = layout.Length;
