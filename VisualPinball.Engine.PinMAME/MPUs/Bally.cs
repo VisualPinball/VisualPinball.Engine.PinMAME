@@ -38,7 +38,7 @@ namespace VisualPinball.Engine.PinMAME.MPUs
 			new GamelogicEngineSwitch(SwCpuDiagnose, -6) {Description = "CPU Diagnose"},
 			new GamelogicEngineSwitch(SwSoundDiagnose, -5) {Description = "Sound Diagnose"},
 			new GamelogicEngineSwitch(SwBallRollTilt, 2) {Description = "Ball Roll Tilt"},
-			new GamelogicEngineSwitch(SwStartButton, 06) {Description = "Start Button", InputActionHint = InputConstants.ActionStartGame, InputMapHint = InputConstants.MapCabinetSwitches },
+			new GamelogicEngineSwitch(SwStartButton, 6) {Description = "Start Button", InputActionHint = InputConstants.ActionStartGame, InputMapHint = InputConstants.MapCabinetSwitches },
 			new GamelogicEngineSwitch(SwTilt, 7) {Description = "Tilt" },
 			new GamelogicEngineSwitch(SwSlamTilt, 16) {Description = "Slam Tilt", InputActionHint = InputConstants.ActionSlamTilt, InputMapHint = InputConstants.MapCabinetSwitches },
 			new GamelogicEngineSwitch(SwCoin1, 11) {Description = "Coin Button 1", InputActionHint = InputConstants.ActionInsertCoin1, InputMapHint = InputConstants.MapCabinetSwitches },
