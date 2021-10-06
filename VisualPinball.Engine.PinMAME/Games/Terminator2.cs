@@ -24,11 +24,11 @@ namespace VisualPinball.Engine.PinMAME.Games
 	[Serializable]
 	public class Terminator2 : Wpc
 	{
-		public override string Name { get; } = "Terminator 2: Judgment Day";
-		public override string Id { get; } = "t2";
-		public override int Year { get; } = 1991;
-		public override string Manufacturer { get; } = "Williams";
-		public override int IpdbId { get; } = 2524;
+		public override string Name => "Terminator 2: Judgment Day";
+		public override string Id => "t2";
+		public override int Year => 1991;
+		public override string Manufacturer => "Williams";
+		public override int IpdbId => 2524;
 		public override PinMameRom[] Roms { get; } = {
 			new PinMameRom("t2_l2", "L-2"),
 			new PinMameRom("t2_l3", "L-3"),
@@ -172,7 +172,13 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineLamp("85") { Description = "Drop Target" },
 			new GamelogicEngineLamp("86") { Description = "Top Lane Left" },
 			new GamelogicEngineLamp("87") { Description = "Top Lane Center" },
-			new GamelogicEngineLamp("88") { Description = "Top Lane Right" }
+			new GamelogicEngineLamp("88") { Description = "Top Lane Right" },
+
+			new GamelogicEngineLamp("0") { Description = "GI: Top Insert", Source = LampSource.GI },
+			new GamelogicEngineLamp("1") { Description = "GI: Bottom Insert", Source = LampSource.GI },
+			new GamelogicEngineLamp("2") { Description = "GI: Right Playfield", Source = LampSource.GI },
+			new GamelogicEngineLamp("3") { Description = "GI: CPU String", Source = LampSource.GI },
+			new GamelogicEngineLamp("4") { Description = "GI: Left Playfield", Source = LampSource.GI },
 		};
 
 		protected override GamelogicEngineCoil[] GameCoils { get; } = {
