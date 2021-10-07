@@ -42,10 +42,7 @@ namespace VisualPinball.Engine.PinMAME
 		public const string DmdPrefix = "dmd";
 		public const string SegDispPrefix = "display";
 
-		public PinMameGame Game {
-			get => _game;
-			set => _game = value;
-		}
+		public PinMameGame Game { get => _game; set => _game = value; }
 
 		[HideInInspector]
 		public string romId = string.Empty;
@@ -174,6 +171,16 @@ namespace VisualPinball.Engine.PinMAME
 					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[changedLamp.Id].Id, changedLamp.Value));
 				}
 			}
+
+			// gi
+			foreach (var changedGi in _pinMame.GetChangedGIs()) {
+				if (_lamps.ContainsKey(changedGi.Id)) {
+					Logger.Info($"[PinMAME] <= gi {changedGi.Id}: {changedGi.Value}");
+					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[changedGi.Id].Id, changedGi.Value, LampSource.GI));
+				} else {
+					Debug.Log($"No GI {changedGi.Id} found.");
+				}
+			}
 		}
 
 		private void OnDisplayAvailable(int index, int displayCount, PinMameDisplayLayout displayLayout)
@@ -277,7 +284,7 @@ namespace VisualPinball.Engine.PinMAME
 			if (_audioNumSamplesInput > 100000) {
 				var delta = AudioSettings.dspTime - _audioInputStart;
 				var queueMs = System.Math.Round(_audioQueue.Count * (double)_audioInfo.SamplesPerFrame / _audioInfo.SampleRate * 1000);
-				Debug.Log($"INPUT: {System.Math.Round(_audioNumSamplesInput / delta)} - {_audioQueue.Count} in queue ({queueMs}ms)");
+				//Debug.Log($"INPUT: {System.Math.Round(_audioNumSamplesInput / delta)} - {_audioQueue.Count} in queue ({queueMs}ms)");
 				_audioInputStart = AudioSettings.dspTime;
 				_audioNumSamplesInput = 0;
 			}
@@ -328,7 +335,7 @@ namespace VisualPinball.Engine.PinMAME
 			_audioNumSamplesOutput += data.Length / channels;
 			if (_audioNumSamplesOutput > 100000) {
 				var delta = AudioSettings.dspTime - _audioOutputStart;
-				Debug.Log($"OUTPUT: {System.Math.Round(_audioNumSamplesOutput / delta)}");
+				//Debug.Log($"OUTPUT: {System.Math.Round(_audioNumSamplesOutput / delta)}");
 				_audioOutputStart = AudioSettings.dspTime;
 				_audioNumSamplesOutput = 0;
 			}
