@@ -174,11 +174,11 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineLamp("87") { Description = "Top Lane Center" },
 			new GamelogicEngineLamp("88") { Description = "Top Lane Right" },
 
-			new GamelogicEngineLamp("0") { Description = "GI: Top Insert", Source = LampSource.GI },
-			new GamelogicEngineLamp("1") { Description = "GI: Bottom Insert", Source = LampSource.GI },
-			new GamelogicEngineLamp("2") { Description = "GI: Right Playfield", Source = LampSource.GI },
-			new GamelogicEngineLamp("3") { Description = "GI: CPU String", Source = LampSource.GI },
-			new GamelogicEngineLamp("4") { Description = "GI: Left Playfield", Source = LampSource.GI },
+			new GamelogicEngineLamp("0") { Description = "GI: Top Insert", Source = LampSource.GI, FadingSteps = 8 },
+			new GamelogicEngineLamp("1") { Description = "GI: Bottom Insert", Source = LampSource.GI, FadingSteps = 8 },
+			new GamelogicEngineLamp("2") { Description = "GI: Right Playfield", Source = LampSource.GI, FadingSteps = 8 },
+			new GamelogicEngineLamp("3") { Description = "GI: CPU String", Source = LampSource.GI, FadingSteps = 8 },
+			new GamelogicEngineLamp("4") { Description = "GI: Left Playfield", Source = LampSource.GI, FadingSteps = 8 },
 		};
 
 		protected override GamelogicEngineCoil[] GameCoils { get; } = {
