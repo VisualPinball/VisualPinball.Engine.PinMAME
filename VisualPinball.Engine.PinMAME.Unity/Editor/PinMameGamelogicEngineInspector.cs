@@ -54,6 +54,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				new MedievalMadness(),
 				new Terminator2(),
 				new FlashGordon(),
+				new StarTrekEnterprise(),
 			};
 			_gameNames = new[] {"-- none --"}
 				.Concat(_games.Select(g => g.Name))
