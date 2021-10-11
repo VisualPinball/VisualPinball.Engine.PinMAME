@@ -46,10 +46,10 @@ namespace VisualPinball.Engine.PinMAME.Games
 		protected override GamelogicEngineSwitch[] Switches { get; } = {
 			new GamelogicEngineSwitch("13") { Description = "Start Button", InputActionHint = InputConstants.ActionStartGame },
 			new GamelogicEngineSwitch("14") { Description = "Plumb Bob Tilt" },
-			new GamelogicEngineSwitch("15") { Description = "Trough Left", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "2" },
-			new GamelogicEngineSwitch("16") { Description = "Trough Center", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "3" },
-			new GamelogicEngineSwitch("17") { Description = "Trough Right", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "4" },
-			new GamelogicEngineSwitch("18") { Description = "Outhole", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "1" },
+			new GamelogicEngineSwitch("15") { Description = "Trough Left", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "3" },
+			new GamelogicEngineSwitch("16") { Description = "Trough Center", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "2" },
+			new GamelogicEngineSwitch("17") { Description = "Trough Right", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "1" },
+			new GamelogicEngineSwitch("18") { Description = "Outhole", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "drain_switch" },
 
 			//new GamelogicEngineSwitch("21") { Description = "Slam Tilt" },
 			new GamelogicEngineSwitch("22") { Description = "Coin Door Closed", NormallyClosed = true, InputActionHint = InputConstants.ActionCoinDoorOpenClose },
@@ -184,7 +184,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 		protected override GamelogicEngineCoil[] GameCoils { get; } = {
 			new GamelogicEngineCoil("01") { Description = "Ball Popper" },
 			new GamelogicEngineCoil("02") { Description = "Gun Kicker" },
-			new GamelogicEngineCoil("03") { Description = "Outhole" },
+			new GamelogicEngineCoil("03") { Description = "Outhole", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "entry_coil" },
 			new GamelogicEngineCoil("04") { Description = "Trough", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "eject_coil" },
 			new GamelogicEngineCoil("05") { Description = "Right Sling" },
 			new GamelogicEngineCoil("06") { Description = "Left Sling" },
