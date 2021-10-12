@@ -18,7 +18,6 @@ using System;
 using VisualPinball.Engine.Common;
 using VisualPinball.Engine.Game.Engines;
 using VisualPinball.Engine.PinMAME.MPUs;
-using VisualPinball.Engine.VPT.Plunger;
 
 namespace VisualPinball.Engine.PinMAME.Games
 {
