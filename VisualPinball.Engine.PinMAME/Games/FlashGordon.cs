@@ -25,11 +25,11 @@ namespace VisualPinball.Engine.PinMAME.Games
 	[Serializable]
 	public class FlashGordon : Bally
 	{
-		public override string Name { get; } = "Flash Gordon";
-		public override string Id { get; } = "fg";
-		public override int Year { get; } = 1980;
-		public override string Manufacturer { get; } = "Bally";
-		public override int IpdbId { get; } = 874;
+		public override string Name => "Flash Gordon";
+		public override string Id => "fg";
+		public override int Year => 1980;
+		public override string Manufacturer => "Bally";
+		public override int IpdbId => 874;
 
 		public override PinMameRom[] Roms { get; } = {
 			new PinMameRom("flashgdn"),
