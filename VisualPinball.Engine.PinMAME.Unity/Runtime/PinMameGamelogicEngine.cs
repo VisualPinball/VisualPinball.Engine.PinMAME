@@ -66,6 +66,8 @@ namespace VisualPinball.Engine.PinMAME
 			}
 		}
 
+		public GamelogicEngineWire[] AvailableWires => _game?.AvailableWires ?? Array.Empty<GamelogicEngineWire>();
+
 		public event EventHandler<CoilEventArgs> OnCoilChanged;
 		public event EventHandler<LampEventArgs> OnLampChanged;
 		public event EventHandler<LampsEventArgs> OnLampsChanged;

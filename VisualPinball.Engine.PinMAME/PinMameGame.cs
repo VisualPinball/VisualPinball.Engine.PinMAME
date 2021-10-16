@@ -75,6 +75,13 @@ namespace VisualPinball.Engine.PinMAME
 
 		public abstract GamelogicEngineLamp[] AvailableLamps { get; }
 
+		public GamelogicEngineWire[] AvailableWires { get; } = {
+			new GamelogicEngineWire(SwFlipperLowerLeft, CoilFlipperLowerLeft, DestinationType.Coil, "Lower Left Flipper"),
+			new GamelogicEngineWire(SwFlipperLowerRight, CoilFlipperLowerRight, DestinationType.Coil, "Lower Right Flipper"),
+			new GamelogicEngineWire(SwFlipperUpperLeft, CoilFlipperUpperLeft, DestinationType.Coil, "Upper Left Flipper"),
+			new GamelogicEngineWire(SwFlipperUpperRight, CoilFlipperUpperRight, DestinationType.Coil, "Upper Right Flipper"),
+		};
+
 		/// <summary>
 		/// These coils are common to all games.
 		/// </summary>
