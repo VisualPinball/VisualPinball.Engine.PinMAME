@@ -209,7 +209,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineCoil("25") { Description = "Targets Flashlamps", IsLamp = true, DeviceHint = "^F1?25$" },
 			new GamelogicEngineCoil("26") { Description = "Left Popper Flashlamps", IsLamp = true, DeviceHint = "^F1?26$" },
 			new GamelogicEngineCoil("27") { Description = "Right Popper Flashlamps", IsLamp = true, DeviceHint = "^F1?27$" },
-			new GamelogicEngineCoil("28") { Description = "Flashlamps Drop Target" },
+			new GamelogicEngineCoil("28") { Description = "Flashlamps Drop Target", IsLamp = true, DeviceHint = "^F1?28$" },
 
 			new GamelogicEngineCoil(CoilFlipperLowerRight, 46) { Description = "Lower Right Flipper", DeviceHint = "^RightFlipper$"},
 			new GamelogicEngineCoil(CoilFlipperLowerLeft, 48) { Description = "Lower Left Flipper", DeviceHint = "^LeftFlipper$"},
