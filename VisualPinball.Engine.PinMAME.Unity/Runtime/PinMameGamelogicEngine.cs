@@ -395,10 +395,10 @@ namespace VisualPinball.Engine.PinMAME
 
 		public void SendInitialSwitches()
 		{
-			var switches = _player.SwitchStatusesClosed;
+			var switches = _player.SwitchStatuses;
 			Logger.Info("[PinMAME] Sending initial switch statuses...");
 			foreach (var id in switches.Keys) {
-				var isClosed = switches[id];
+				var isClosed = switches[id].IsSwitchClosed;
 				// skip open switches
 				if (!isClosed) {
 					continue;
