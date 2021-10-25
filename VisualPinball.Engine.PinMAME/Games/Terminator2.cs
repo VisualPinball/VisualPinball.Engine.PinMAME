@@ -193,7 +193,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineCoil("09") { Description = "Plunger", DeviceHint = "Plunger" },
 			new GamelogicEngineCoil("10") { Description = "Top Lock" },
 			new GamelogicEngineCoil("11") { Description = "Gun Motor" },
-			new GamelogicEngineCoil("12") { Description = "Knock Down" },
+			new GamelogicEngineCoil("12") { Description = "Knock Down", DeviceHint = "^sw77$" },
 			new GamelogicEngineCoil("13") { Description = "Left Jet" },
 			new GamelogicEngineCoil("14") { Description = "Right Jet" },
 			new GamelogicEngineCoil("15") { Description = "Bottom Jet" },
