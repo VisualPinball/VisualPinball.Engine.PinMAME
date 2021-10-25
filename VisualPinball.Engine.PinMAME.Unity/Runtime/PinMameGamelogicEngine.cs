@@ -126,19 +126,22 @@ namespace VisualPinball.Engine.PinMAME
 
 			Logger.Info($"New PinMAME instance at {(double)AudioSettings.outputSampleRate / 1000}kHz");
 			_pinMame = PinMame.PinMame.Instance(AudioSettings.outputSampleRate);
-			//_pinMame.SetHandleKeyboard(false);
+
+			_pinMame.SetHandleKeyboard(false);
+			_pinMame.SetHandleMechanics(false);
 
 			_pinMame.OnGameStarted += GameStarted;
 			_pinMame.OnGameEnded += GameEnded;
-			_pinMame.OnDisplayUpdated += DisplayUpdated;
-			_pinMame.OnSolenoidUpdated += SolenoidUpdated;
 			_pinMame.OnDisplayAvailable += OnDisplayAvailable;
+			_pinMame.OnDisplayUpdated += OnDisplayUpdated;
 			_pinMame.OnAudioAvailable += OnAudioAvailable;
 			_pinMame.OnAudioUpdated += OnAudioUpdated;
+			_pinMame.OnMechAvailable += OnMechAvailable;
+			_pinMame.OnMechUpdated += OnMechUpdated;
+			_pinMame.OnSolenoidUpdated += OnSolenoidUpdated;
 			_player = player;
 
 			try {
-				//_pinMame.StartGame("fh_906h");
 				_pinMame.StartGame(romId);
 
 			} catch (Exception e) {
@@ -209,7 +212,7 @@ namespace VisualPinball.Engine.PinMAME
 			}
 		}
 
-		private void DisplayUpdated(int index, IntPtr framePtr, PinMameDisplayLayout displayLayout)
+		private void OnDisplayUpdated(int index, IntPtr framePtr, PinMameDisplayLayout displayLayout)
 		{
 			if (displayLayout.IsDmd) {
 				UpdateDmd(index, displayLayout, framePtr);
@@ -249,21 +252,6 @@ namespace VisualPinball.Engine.PinMAME
 				//Logger.Info($"[PinMAME] Seg data ({index}): {BitConverter.ToString(_frameBuffer[index])}" );
 				_dispatchQueue.Enqueue(() => OnDisplayFrame?.Invoke(this,
 					new DisplayFrameData($"{SegDispPrefix}{index}", GetDisplayFrameFormat(displayLayout), _frameBuffer[index])));
-			}
-		}
-
-		private void SolenoidUpdated(int internalId, bool isActive)
-		{
-			if (_coils.ContainsKey(internalId)) {
-				Logger.Info($"[PinMAME] <= coil {_coils[internalId].Id} ({internalId}): {isActive} | {_coils[internalId].Description}");
-
-				lock (_dispatchQueue) {
-					_dispatchQueue.Enqueue(() =>
-						OnCoilChanged?.Invoke(this, new CoilEventArgs(_coils[internalId].Id, isActive)));
-				}
-
-			} else {
-				Logger.Warn($"[PinMAME] <= coil UNMAPPED {internalId}: {isActive}");
 			}
 		}
 
@@ -387,6 +375,35 @@ namespace VisualPinball.Engine.PinMAME
 			}
 		}
 
+		private void OnMechAvailable(int mechNo, PinMame.PinMameMechInfo mechInfo)
+		{
+			Logger.Info($"[PinMAME] <= mech available: mechNo={mechNo}, mechInfo={mechInfo}");
+		}
+
+		private void OnMechUpdated(int mechNo, PinMame.PinMameMechInfo mechInfo)
+		{
+			Logger.Info($"[PinMAME] <= mech updated: mechNo={mechNo}, mechInfo={mechInfo}");
+		}
+
+		private void OnSolenoidUpdated(int internalId, bool isActive)
+		{
+			if (_coils.ContainsKey(internalId))
+			{
+				Logger.Info($"[PinMAME] <= coil {_coils[internalId].Id} ({internalId}): {isActive} | {_coils[internalId].Description}");
+
+				lock (_dispatchQueue)
+				{
+					_dispatchQueue.Enqueue(() =>
+						OnCoilChanged?.Invoke(this, new CoilEventArgs(_coils[internalId].Id, isActive)));
+				}
+
+			}
+			else
+			{
+				Logger.Warn($"[PinMAME] <= coil UNMAPPED {internalId}: {isActive}");
+			}
+		}
+
 		private void GameEnded()
 		{
 			Logger.Info($"[PinMAME] Game ended.");
@@ -440,11 +457,14 @@ namespace VisualPinball.Engine.PinMAME
 				_pinMame.StopGame();
 				_pinMame.OnGameStarted -= GameStarted;
 				_pinMame.OnGameEnded -= GameEnded;
-				_pinMame.OnDisplayUpdated -= DisplayUpdated;
-				_pinMame.OnSolenoidUpdated -= SolenoidUpdated;
 				_pinMame.OnDisplayAvailable -= OnDisplayAvailable;
+				_pinMame.OnDisplayUpdated -= OnDisplayUpdated;
 				_pinMame.OnAudioAvailable -= OnAudioAvailable;
 				_pinMame.OnAudioUpdated -= OnAudioUpdated;
+				_pinMame.OnMechAvailable -= OnMechAvailable;
+				_pinMame.OnMechUpdated -= OnMechUpdated;
+				_pinMame.OnSolenoidUpdated -= OnSolenoidUpdated;
+
 			}
 			_frameBuffer.Clear();
 			_dmdLevels.Clear();
