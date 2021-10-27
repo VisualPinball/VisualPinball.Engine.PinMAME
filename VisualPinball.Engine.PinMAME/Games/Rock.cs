@@ -119,7 +119,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineCoil("05", 5) { Description = "Five Pos. Bank Reset", DeviceHint = "^5PosBank\\s*" },
 			new GamelogicEngineCoil("06", 6) { Description = "Four Pos. Bank Reset", DeviceHint = "^4PosBank\\s*" },
 			new GamelogicEngineCoil("08", 8) { Description = "Knocker Assembly" },
-			new GamelogicEngineCoil("09", 8) { Description = "Outhole", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "eject_coil" },
+			new GamelogicEngineCoil("09", 9) { Description = "Outhole", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "eject_coil" },
 		};
 	}
 }

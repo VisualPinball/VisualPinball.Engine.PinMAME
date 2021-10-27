@@ -30,7 +30,7 @@ namespace VisualPinball.Engine.PinMAME.MPUs
 		protected abstract GamelogicEngineSwitch[] Switches { get; }
 
 		private readonly GamelogicEngineSwitch[] _switches = {
-			new GamelogicEngineSwitch(SwSelfTest, 7) {Description = "Self Test",  InputActionHint = InputConstants.ActionCoinDoorAdvance },
+			new GamelogicEngineSwitch(SwSelfTest, 7) {Description = "Self Test",  InputActionHint = InputConstants.ActionSelfTest },
 			new GamelogicEngineSwitch(SwStartButton, 47) {Description = "Start Button", InputActionHint = InputConstants.ActionStartGame, InputMapHint = InputConstants.MapCabinetSwitches },
 			new GamelogicEngineSwitch(SwTilt, 57) {Description = "Tilt" },
 			new GamelogicEngineSwitch(SwSlamTilt, -1) {Description = "Slam Tilt", InputActionHint = InputConstants.ActionSlamTilt, InputMapHint = InputConstants.MapCabinetSwitches },
