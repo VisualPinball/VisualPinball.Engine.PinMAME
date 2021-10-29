@@ -45,9 +45,15 @@ namespace VisualPinball.Engine.PinMAME.Editor
 
 		private PinMameRom Rom => _gle.Game.Roms[_selectedRomIndex];
 
+		private bool _toggleStartup = true;
+
+		private SerializedProperty _disableMechsProperty;
+		private SerializedProperty _solenoidDelayProperty;
+
 		private void OnEnable()
 		{
 			_gle = (PinMameGamelogicEngine) target;
+
 			_games = new PinMameGame[] {
 				new AttackFromMars(),
 				new CreatureFromTheBlackLagoon(),
@@ -82,6 +88,9 @@ namespace VisualPinball.Engine.PinMAME.Editor
 					}
 				}
 			}
+
+			_solenoidDelayProperty = serializedObject.FindProperty(nameof(_gle.SolenoidDelay));
+			_disableMechsProperty = serializedObject.FindProperty(nameof(_gle.DisableMechs));
 		}
 
 		public override void OnInspectorGUI()
@@ -117,6 +126,45 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			EditorGUILayout.LabelField("ROM ID", _gle.romId);
 
 			EditorGUI.EndDisabledGroup();
+
+			GUILayout.BeginVertical();
+
+			if (_toggleStartup = EditorGUILayout.BeginFoldoutHeaderGroup(_toggleStartup, "Startup"))
+			{
+				EditorGUI.indentLevel++;
+
+				EditorGUI.BeginChangeCheck();
+
+				EditorGUILayout.PropertyField(_disableMechsProperty, new GUIContent("Disable Mechs"));
+
+				if (EditorGUI.EndChangeCheck())
+				{
+					serializedObject.ApplyModifiedProperties();
+				}
+
+				EditorGUI.BeginChangeCheck();
+
+				var cellRect = EditorGUILayout.GetControlRect();
+
+				var labelRect = cellRect;
+				labelRect.x += labelRect.width - 20;
+				labelRect.width = 20;
+
+				var fieldRect = cellRect;
+				fieldRect.width -= 25;
+
+				EditorGUI.PropertyField(fieldRect, _solenoidDelayProperty, new GUIContent("Solenoid Delay"));
+				GUI.Label(labelRect, "ms");
+
+				if (EditorGUI.EndChangeCheck())
+				{
+					serializedObject.ApplyModifiedProperties();
+				}
+
+				EditorGUI.indentLevel--;
+			}
+
+			GUILayout.EndVertical();
 
 			EditorGUILayout.Space();
 			EditorGUILayout.Separator();

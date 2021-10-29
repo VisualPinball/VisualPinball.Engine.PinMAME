@@ -47,6 +47,13 @@ namespace VisualPinball.Engine.PinMAME
 		[HideInInspector]
 		public string romId = string.Empty;
 
+		[Tooltip("Disable built in mechs")]
+		public bool DisableMechs = true;
+
+		[Min(0f)]
+		[Tooltip("Delay after startup to listen for solenoid events.")]
+		public float SolenoidDelay = 0;
+	
 		public GamelogicEngineSwitch[] AvailableSwitches {
 			get {
 				UpdateCaches();
@@ -104,6 +111,9 @@ namespace VisualPinball.Engine.PinMAME
 		private int _audioNumSamplesInput;
 		private int _audioNumSamplesOutput;
 
+		public bool _solenoidsEnabled;
+		public long _solenoidDelayStart;
+
 		private void Awake()
 		{
 			Logger.Info("Project audio sample rate: " +  AudioSettings.outputSampleRate);
@@ -130,8 +140,8 @@ namespace VisualPinball.Engine.PinMAME
 			_pinMame.SetHandleKeyboard(false);
 			_pinMame.SetHandleMechanics(false);
 
-			_pinMame.OnGameStarted += GameStarted;
-			_pinMame.OnGameEnded += GameEnded;
+			_pinMame.OnGameStarted += OnGameStarted;
+			_pinMame.OnGameEnded += OnGameEnded;
 			_pinMame.OnDisplayAvailable += OnDisplayAvailable;
 			_pinMame.OnDisplayUpdated += OnDisplayUpdated;
 			_pinMame.OnAudioAvailable += OnAudioAvailable;
@@ -141,6 +151,8 @@ namespace VisualPinball.Engine.PinMAME
 			_pinMame.OnSolenoidUpdated += OnSolenoidUpdated;
 			_player = player;
 
+			_solenoidsEnabled = SolenoidDelay == 0;
+
 			try {
 				_pinMame.StartGame(romId);
 
@@ -149,12 +161,24 @@ namespace VisualPinball.Engine.PinMAME
 			}
 		}
 
-		private void GameStarted()
+		private void OnGameStarted()
 		{
 			Logger.Info($"[PinMAME] Game started.");
 			_isRunning = true;
 
+			if (DisableMechs)
+			{
+				for (int id = 0; id < 10; id++)
+				{
+					Logger.Info($"Disabling mech {id}");
+
+					_pinMame.SetMech(id, null);
+				}
+			}
+
 			SendInitialSwitches();
+
+			_solenoidDelayStart = DateTimeOffset.Now.ToUnixTimeMilliseconds();
 		}
 
 		private void Update()
@@ -389,14 +413,30 @@ namespace VisualPinball.Engine.PinMAME
 		{
 			if (_coils.ContainsKey(internalId))
 			{
-				Logger.Info($"[PinMAME] <= coil {_coils[internalId].Id} ({internalId}): {isActive} | {_coils[internalId].Description}");
-
-				lock (_dispatchQueue)
+				if (!_solenoidsEnabled)
 				{
-					_dispatchQueue.Enqueue(() =>
-						OnCoilChanged?.Invoke(this, new CoilEventArgs(_coils[internalId].Id, isActive)));
+					_solenoidsEnabled = (DateTimeOffset.Now.ToUnixTimeMilliseconds() - _solenoidDelayStart) >= SolenoidDelay;
+
+					if (_solenoidsEnabled)
+					{
+						Logger.Info($"Solenoids enabled, {SolenoidDelay}ms passed");
+					}
 				}
 
+				if (_solenoidsEnabled)
+				{
+					Logger.Info($"[PinMAME] <= coil {_coils[internalId].Id} ({internalId}): {isActive} | {_coils[internalId].Description}");
+
+					lock (_dispatchQueue)
+					{
+						_dispatchQueue.Enqueue(() =>
+							OnCoilChanged?.Invoke(this, new CoilEventArgs(_coils[internalId].Id, isActive)));
+					}
+				}
+				else
+				{
+					Logger.Info($"[PinMAME] <= solenoids disabled, coil {_coils[internalId].Id} ({internalId}): {isActive} | {_coils[internalId].Description}");
+				}
 			}
 			else
 			{
@@ -404,7 +444,7 @@ namespace VisualPinball.Engine.PinMAME
 			}
 		}
 
-		private void GameEnded()
+		private void OnGameEnded()
 		{
 			Logger.Info($"[PinMAME] Game ended.");
 			_isRunning = false;
@@ -455,8 +495,8 @@ namespace VisualPinball.Engine.PinMAME
 		{
 			if (_pinMame != null) {
 				_pinMame.StopGame();
-				_pinMame.OnGameStarted -= GameStarted;
-				_pinMame.OnGameEnded -= GameEnded;
+				_pinMame.OnGameStarted -= OnGameStarted;
+				_pinMame.OnGameEnded -= OnGameEnded;
 				_pinMame.OnDisplayAvailable -= OnDisplayAvailable;
 				_pinMame.OnDisplayUpdated -= OnDisplayUpdated;
 				_pinMame.OnAudioAvailable -= OnAudioAvailable;
