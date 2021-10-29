@@ -171,7 +171,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 
 			EditorGUILayout.EndFoldoutHeaderGroup();
 
-			if (_toggleDebug = EditorGUILayout.BeginFoldoutHeaderGroup(_toggleStartup, "Debug"))
+			if (_toggleDebug = EditorGUILayout.BeginFoldoutHeaderGroup(_toggleDebug, "Debug"))
 			{
 				EditorGUI.indentLevel++;
 
