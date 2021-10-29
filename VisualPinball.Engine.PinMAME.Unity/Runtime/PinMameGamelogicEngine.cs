@@ -53,7 +53,10 @@ namespace VisualPinball.Engine.PinMAME
 		[Min(0f)]
 		[Tooltip("Delay after startup to listen for solenoid events.")]
 		public float SolenoidDelay = 0;
-	
+
+		[Tooltip("Disable audio")]
+		public bool DisableAudio = false;
+
 		public GamelogicEngineSwitch[] AvailableSwitches {
 			get {
 				UpdateCaches();
@@ -138,14 +141,18 @@ namespace VisualPinball.Engine.PinMAME
 			_pinMame = PinMame.PinMame.Instance(AudioSettings.outputSampleRate);
 
 			_pinMame.SetHandleKeyboard(false);
-			_pinMame.SetHandleMechanics(false);
+			_pinMame.SetHandleMechanics(DisableMechs ? 0 : 1);
 
 			_pinMame.OnGameStarted += OnGameStarted;
 			_pinMame.OnGameEnded += OnGameEnded;
 			_pinMame.OnDisplayAvailable += OnDisplayAvailable;
 			_pinMame.OnDisplayUpdated += OnDisplayUpdated;
-			_pinMame.OnAudioAvailable += OnAudioAvailable;
-			_pinMame.OnAudioUpdated += OnAudioUpdated;
+
+			if (!DisableAudio) {
+				_pinMame.OnAudioAvailable += OnAudioAvailable;
+				_pinMame.OnAudioUpdated += OnAudioUpdated;
+			}
+
 			_pinMame.OnMechAvailable += OnMechAvailable;
 			_pinMame.OnMechUpdated += OnMechUpdated;
 			_pinMame.OnSolenoidUpdated += OnSolenoidUpdated;
@@ -165,16 +172,6 @@ namespace VisualPinball.Engine.PinMAME
 		{
 			Logger.Info($"[PinMAME] Game started.");
 			_isRunning = true;
-
-			if (DisableMechs)
-			{
-				for (int id = 0; id < 10; id++)
-				{
-					Logger.Info($"Disabling mech {id}");
-
-					_pinMame.SetMech(id, null);
-				}
-			}
 
 			SendInitialSwitches();
 
@@ -499,8 +496,13 @@ namespace VisualPinball.Engine.PinMAME
 				_pinMame.OnGameEnded -= OnGameEnded;
 				_pinMame.OnDisplayAvailable -= OnDisplayAvailable;
 				_pinMame.OnDisplayUpdated -= OnDisplayUpdated;
-				_pinMame.OnAudioAvailable -= OnAudioAvailable;
-				_pinMame.OnAudioUpdated -= OnAudioUpdated;
+
+				if (!DisableAudio)
+				{
+					_pinMame.OnAudioAvailable -= OnAudioAvailable;
+					_pinMame.OnAudioUpdated -= OnAudioUpdated;
+				}
+
 				_pinMame.OnMechAvailable -= OnMechAvailable;
 				_pinMame.OnMechUpdated -= OnMechUpdated;
 				_pinMame.OnSolenoidUpdated -= OnSolenoidUpdated;

@@ -50,6 +50,10 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		private SerializedProperty _disableMechsProperty;
 		private SerializedProperty _solenoidDelayProperty;
 
+		private bool _toggleDebug = true;
+
+		private SerializedProperty _disableAudioProperty;
+
 		private void OnEnable()
 		{
 			_gle = (PinMameGamelogicEngine) target;
@@ -91,6 +95,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 
 			_solenoidDelayProperty = serializedObject.FindProperty(nameof(_gle.SolenoidDelay));
 			_disableMechsProperty = serializedObject.FindProperty(nameof(_gle.DisableMechs));
+			_disableAudioProperty = serializedObject.FindProperty(nameof(_gle.DisableAudio));
 		}
 
 		public override void OnInspectorGUI()
@@ -163,6 +168,26 @@ namespace VisualPinball.Engine.PinMAME.Editor
 
 				EditorGUI.indentLevel--;
 			}
+
+			EditorGUILayout.EndFoldoutHeaderGroup();
+
+			if (_toggleDebug = EditorGUILayout.BeginFoldoutHeaderGroup(_toggleStartup, "Debug"))
+			{
+				EditorGUI.indentLevel++;
+
+				EditorGUI.BeginChangeCheck();
+
+				EditorGUILayout.PropertyField(_disableAudioProperty, new GUIContent("Disable Audio"));
+
+				if (EditorGUI.EndChangeCheck())
+				{
+					serializedObject.ApplyModifiedProperties();
+				}
+
+				EditorGUI.indentLevel--;
+			}
+
+			EditorGUILayout.EndFoldoutHeaderGroup();
 
 			GUILayout.EndVertical();
 
