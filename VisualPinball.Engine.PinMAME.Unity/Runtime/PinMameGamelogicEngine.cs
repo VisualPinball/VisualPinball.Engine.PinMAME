@@ -47,7 +47,7 @@ namespace VisualPinball.Engine.PinMAME
 		[HideInInspector]
 		public string romId = string.Empty;
 
-		[Tooltip("Disable built in mechs")]
+		[Tooltip("Disable built-in mechs")]
 		public bool DisableMechs = true;
 
 		[Min(0f)]
@@ -94,6 +94,7 @@ namespace VisualPinball.Engine.PinMAME
 		private Dictionary<int, GamelogicEngineLamp> _lamps = new Dictionary<int, GamelogicEngineLamp>();
 
 		private bool _isRunning;
+		private int _numMechs;
 		private Dictionary<int, byte[]> _frameBuffer = new Dictionary<int, byte[]>();
 		private Dictionary<int, Dictionary<byte, byte>> _dmdLevels = new Dictionary<int, Dictionary<byte, byte>>();
 
@@ -116,6 +117,7 @@ namespace VisualPinball.Engine.PinMAME
 
 		public bool _solenoidsEnabled;
 		public long _solenoidDelayStart;
+		private Dictionary<int, PinMameMechComponent> _registeredMechs = new();
 
 		private void Awake()
 		{
@@ -166,6 +168,13 @@ namespace VisualPinball.Engine.PinMAME
 			} catch (Exception e) {
 				Logger.Error(e);
 			}
+		}
+
+		public void RegisterMech(PinMameMechComponent mechComponent)
+		{
+			var id = _numMechs++;
+			_registeredMechs[id] = mechComponent;
+			_pinMame.SetMech(id, mechComponent.Config);
 		}
 
 		private void OnGameStarted()
@@ -396,14 +405,19 @@ namespace VisualPinball.Engine.PinMAME
 			}
 		}
 
-		private void OnMechAvailable(int mechNo, PinMame.PinMameMechInfo mechInfo)
+		private void OnMechAvailable(int mechNo, PinMameMechInfo mechInfo)
 		{
 			Logger.Info($"[PinMAME] <= mech available: mechNo={mechNo}, mechInfo={mechInfo}");
 		}
 
-		private void OnMechUpdated(int mechNo, PinMame.PinMameMechInfo mechInfo)
+		private void OnMechUpdated(int mechNo, PinMameMechInfo mechInfo)
 		{
-			Logger.Info($"[PinMAME] <= mech updated: mechNo={mechNo}, mechInfo={mechInfo}");
+			if (_registeredMechs.ContainsKey(mechNo)) {
+				_registeredMechs[mechNo].OnMechUpdate(mechInfo);
+
+			} else {
+				Logger.Info($"[PinMAME] <= mech updated: mechNo={mechNo}, mechInfo={mechInfo}");
+			}
 		}
 
 		private void OnSolenoidUpdated(int internalId, bool isActive)
