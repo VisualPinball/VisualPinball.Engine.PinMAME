@@ -413,7 +413,8 @@ namespace VisualPinball.Engine.PinMAME
 		private void OnMechUpdated(int mechNo, PinMameMechInfo mechInfo)
 		{
 			if (_registeredMechs.ContainsKey(mechNo)) {
-				_registeredMechs[mechNo].OnMechUpdate(mechInfo);
+				Logger.Info($"[PinMAME] <= mech updated: mechNo={mechNo}, mechInfo={mechInfo}");
+				_registeredMechs[mechNo].UpdateMech(mechInfo);
 
 			} else {
 				Logger.Info($"[PinMAME] <= mech updated: mechNo={mechNo}, mechInfo={mechInfo}");

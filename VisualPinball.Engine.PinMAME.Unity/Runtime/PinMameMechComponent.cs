@@ -20,11 +20,13 @@ using System;
 using NLog;
 using PinMame;
 using UnityEngine;
+using VisualPinball.Unity;
 using Logger = NLog.Logger;
 
 namespace VisualPinball.Engine.PinMAME
 {
-	public class PinMameMechComponent : MonoBehaviour
+	[AddComponentMenu("Visual Pinball/PinMAME/Custom Mech")]
+	public class PinMameMechComponent : MonoBehaviour, IMechHandler
 	{
 		#region Data
 
@@ -62,39 +64,41 @@ namespace VisualPinball.Engine.PinMAME
 
 		[Min(0)]
 		[Tooltip("The amount of time in milliseconds required to reach full speed.")]
-		public float Acceleration;
+		public int Acceleration;
 
 		[Min(0)]
 		[Tooltip("Retardation factor. One means same as acceleration, 0.5 half as fast, etc.")]
-		public float Retardation;
+		public int Retardation;
 
 		#endregion
 
 		#region Access
+
+		public event EventHandler<MechEventArgs> OnMechUpdate;
 
 		public PinMameMechConfig Config
 		{
 			get {
 				var type = 0u;
 				type |= Type switch {
-					PinMameMechType.OneSolenoid => (uint)PinMameMechFlag.ONESOL,
-					PinMameMechType.OneDirectionalSolenoid => (uint)PinMameMechFlag.ONEDIRSOL,
-					PinMameMechType.TwoDirectionalSolenoids => (uint)PinMameMechFlag.TWODIRSOL,
-					PinMameMechType.TwoStepperSolenoids => (uint)PinMameMechFlag.TWOSTEPSOL,
-					PinMameMechType.FourStepperSolenoids => (uint)PinMameMechFlag.FOURSTEPSOL,
+					PinMameMechType.OneSolenoid => (uint)PinMameMechFlag.OneSol,
+					PinMameMechType.OneDirectionalSolenoid => (uint)PinMameMechFlag.OneDirSol,
+					PinMameMechType.TwoDirectionalSolenoids => (uint)PinMameMechFlag.TwoDirSol,
+					PinMameMechType.TwoStepperSolenoids => (uint)PinMameMechFlag.TwoStepSol,
+					PinMameMechType.FourStepperSolenoids => (uint)PinMameMechFlag.FourStepSol,
 					_ => throw new ArgumentOutOfRangeException()
 				};
 
 				type |= Repeat switch {
-					PinMameRepeat.Circle => (uint)PinMameMechFlag.CIRCLE,
-					PinMameRepeat.Reverse => (uint)PinMameMechFlag.REVERSE,
-					PinMameRepeat.StopAtEnd => (uint)PinMameMechFlag.STOPEND,
+					PinMameRepeat.Circle => (uint)PinMameMechFlag.Circle,
+					PinMameRepeat.Reverse => (uint)PinMameMechFlag.Reverse,
+					PinMameRepeat.StopAtEnd => (uint)PinMameMechFlag.StopEnd,
 					_ => throw new ArgumentOutOfRangeException()
 				};
 
-				type |= LinearMovement ? (uint)PinMameMechFlag.LINEAR : (uint)PinMameMechFlag.NONLINEAR;
-				type |= FastUpdates ? (uint)PinMameMechFlag.FAST : (uint)PinMameMechFlag.SLOW;
-				//type |= ResultByLength ? (uint)PinMameMechFlag.LENGTHSW : (uint)PinMameMechFlag.STEPSW;
+				type |= LinearMovement ? (uint)PinMameMechFlag.Linear : (uint)PinMameMechFlag.NonLinear;
+				type |= FastUpdates ? (uint)PinMameMechFlag.Fast : (uint)PinMameMechFlag.Slow;
+				type |= ResultByLength ? (uint)PinMameMechFlag.LengthSw : (uint)PinMameMechFlag.StepSw;
 
 				var mechConfig = new PinMameMechConfig(
 					type,
@@ -102,7 +106,9 @@ namespace VisualPinball.Engine.PinMAME
 					Solenoid2,
 					Length,
 					Steps,
-					0
+					0,
+					Acceleration,
+					Retardation
 				);
 
 				foreach(var mark in Marks) {
@@ -111,10 +117,10 @@ namespace VisualPinball.Engine.PinMAME
 							mechConfig.AddSwitch(new PinMameMechSwitchConfig(mark.SwitchId, mark.StepBeginning, mark.StepEnd));
 							break;
 						case PinMameMechSwitchMarkType.PulseSwitch:
-							mechConfig.AddSwitch(new PinMameMechSwitchConfig(mark.SwitchId, mark.StepBeginning, mark.StepPulseDuration, true));
+							mechConfig.AddSwitch(new PinMameMechSwitchConfig(mark.SwitchId, mark.StepBeginning, mark.StepPulseDuration, 1));
 							break;
 						case PinMameMechSwitchMarkType.PulseSwitchNew:
-							// todo in pinmame-dotnet
+							mechConfig.AddSwitch(new PinMameMechSwitchConfig(mark.SwitchId, mark.StepBeginning, mark.StepEnd, mark.StepPulseDuration));
 							break;
 						default:
 							throw new ArgumentOutOfRangeException();
@@ -141,12 +147,14 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void Start()
 		{
-			_gle.RegisterMech(this);
+			if (_gle) {
+				_gle.RegisterMech(this);
+			}
 		}
 
-		public void OnMechUpdate(PinMameMechInfo data)
+		public void UpdateMech(PinMameMechInfo data)
 		{
-			Logger.Info($"[PinMAME] <= mech updated: gameobject={name}, mechInfo={data}");
+			OnMechUpdate?.Invoke(this, new MechEventArgs(data.Speed, data.Pos));
 		}
 
 		#endregion
