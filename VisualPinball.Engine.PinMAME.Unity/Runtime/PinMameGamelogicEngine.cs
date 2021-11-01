@@ -138,10 +138,10 @@ namespace VisualPinball.Engine.PinMAME
 			}
 
 			Logger.Info($"New PinMAME instance at {(double)AudioSettings.outputSampleRate / 1000}kHz");
-			_pinMame = PinMame.PinMame.Instance(AudioSettings.outputSampleRate);
+			_pinMame = PinMame.PinMame.Instance(PinMameAudioFormat.AudioFormatFloat, AudioSettings.outputSampleRate);
 
 			_pinMame.SetHandleKeyboard(false);
-			_pinMame.SetHandleMechanics(DisableMechs ? 0 : 1);
+			_pinMame.SetHandleMechanics(DisableMechs ? 0 : 0xFF);
 
 			_pinMame.OnGameStarted += OnGameStarted;
 			_pinMame.OnGameEnded += OnGameEnded;
@@ -304,18 +304,18 @@ namespace VisualPinball.Engine.PinMAME
 			if (_audioFilterChannels == _audioInfo.Channels) { // n channels -> n channels
 				frame = new float[frameSize];
 				unsafe {
-					var src = (short*)framePtr;
+					var src = (float*)framePtr;
 					for (var i = 0; i < frameSize; i++) {
-						frame[i] = src[i] / 32768f;
+						frame[i] = src[i];
 					}
 				}
 
 			} else if (_audioFilterChannels > _audioInfo.Channels) { // 1 channel -> 2 channels
 				frame = new float[frameSize * 2];
 				unsafe {
-					var src = (short*)framePtr;
+					var src = (float*)framePtr;
 					for (var i = 0; i < frameSize; i++) {
-						frame[i * 2] = src[i] / 32768f;
+						frame[i * 2] = src[i];
 						frame[i * 2 + 1] = frame[i * 2];
 					}
 				}
@@ -323,9 +323,9 @@ namespace VisualPinball.Engine.PinMAME
 			} else { // 2 channels -> 1 channel
 				frame = new float[frameSize / 2];
 				unsafe {
-					var src = (short*)framePtr;
+					var src = (float*)framePtr;
 					for (var i = 0; i < frameSize; i += 2) {
-						frame[i] = src[i] / 32768f;
+						frame[i] = src[i];
 					}
 				}
 			}
