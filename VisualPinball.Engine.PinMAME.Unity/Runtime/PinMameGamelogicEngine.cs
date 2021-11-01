@@ -162,6 +162,10 @@ namespace VisualPinball.Engine.PinMAME
 
 			_solenoidsEnabled = SolenoidDelay == 0;
 
+			foreach (var (id, mech) in _registeredMechs) {
+				_pinMame.SetMech(id, mech.Config);
+			}
+
 			try {
 				_pinMame.StartGame(romId);
 
@@ -174,7 +178,6 @@ namespace VisualPinball.Engine.PinMAME
 		{
 			var id = _numMechs++;
 			_registeredMechs[id] = mechComponent;
-			_pinMame.SetMech(id, mechComponent.Config);
 		}
 
 		private void OnGameStarted()

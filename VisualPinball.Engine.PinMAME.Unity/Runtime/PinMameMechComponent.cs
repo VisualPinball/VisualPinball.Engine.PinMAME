@@ -143,10 +143,6 @@ namespace VisualPinball.Engine.PinMAME
 		private void Awake()
 		{
 			_gle = GetComponentInParent<PinMameGamelogicEngine>();
-		}
-
-		private void Start()
-		{
 			if (_gle) {
 				_gle.RegisterMech(this);
 			}
