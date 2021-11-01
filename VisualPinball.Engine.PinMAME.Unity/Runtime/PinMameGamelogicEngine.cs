@@ -55,7 +55,7 @@ namespace VisualPinball.Engine.PinMAME
 		public float SolenoidDelay = 0;
 
 		[Tooltip("Disable audio")]
-		public bool DisableAudio = false;
+		public bool DisableAudio;
 
 		public GamelogicEngineSwitch[] AvailableSwitches {
 			get {
@@ -162,10 +162,6 @@ namespace VisualPinball.Engine.PinMAME
 
 			_solenoidsEnabled = SolenoidDelay == 0;
 
-			foreach (var (id, mech) in _registeredMechs) {
-				_pinMame.SetMech(id, mech.Config);
-			}
-
 			try {
 				_pinMame.StartGame(romId);
 
@@ -186,6 +182,10 @@ namespace VisualPinball.Engine.PinMAME
 			_isRunning = true;
 
 			SendInitialSwitches();
+
+			foreach (var (id, mech) in _registeredMechs) {
+				_pinMame.SetMech(id, mech.Config);
+			}
 
 			_solenoidDelayStart = DateTimeOffset.Now.ToUnixTimeMilliseconds();
 		}
@@ -213,7 +213,7 @@ namespace VisualPinball.Engine.PinMAME
 			// gi
 			foreach (var changedGi in _pinMame.GetChangedGIs()) {
 				if (_lamps.ContainsKey(changedGi.Id)) {
-					Logger.Info($"[PinMAME] <= gi {changedGi.Id}: {changedGi.Value}");
+					//Logger.Info($"[PinMAME] <= gi {changedGi.Id}: {changedGi.Value}");
 					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[changedGi.Id].Id, changedGi.Value, LampSource.GI));
 				} else {
 					Debug.Log($"No GI {changedGi.Id} found.");
@@ -370,7 +370,9 @@ namespace VisualPinball.Engine.PinMAME
 			}
 
 			if (_audioQueue.Count == 0) {
-				Logger.Info("Filtering audio but nothing to de-queue.");
+				if (!DisableAudio) {
+					Logger.Info("Filtering audio but nothing to de-queue.");
+				}
 				return;
 			}
 
@@ -416,8 +418,9 @@ namespace VisualPinball.Engine.PinMAME
 		private void OnMechUpdated(int mechNo, PinMameMechInfo mechInfo)
 		{
 			if (_registeredMechs.ContainsKey(mechNo)) {
-				Logger.Info($"[PinMAME] <= mech updated: mechNo={mechNo}, mechInfo={mechInfo}");
-				_registeredMechs[mechNo].UpdateMech(mechInfo);
+				lock (_dispatchQueue) {
+					_dispatchQueue.Enqueue(() => _registeredMechs[mechNo].UpdateMech(mechInfo));
+				}
 
 			} else {
 				Logger.Info($"[PinMAME] <= mech updated: mechNo={mechNo}, mechInfo={mechInfo}");
