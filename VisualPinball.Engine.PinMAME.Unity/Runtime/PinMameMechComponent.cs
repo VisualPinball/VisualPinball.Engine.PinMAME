@@ -165,14 +165,26 @@ namespace VisualPinball.Engine.PinMAME
 				switch (Type)
 				{
 					case PinMameMechType.OneSolenoid:
+						return new[] { new GamelogicEngineCoil(_solenoid1) { Description = "Motor Power" } };
 					case PinMameMechType.OneDirectionalSolenoid:
-						return new[] { new GamelogicEngineCoil(_solenoid1) { Description = "Mech Solenoid" } };
+						return new[] {
+							new GamelogicEngineCoil(_solenoid1) { Description = "Motor Power" },
+							new GamelogicEngineCoil(_solenoid2) { Description = "Motor Direction" },
+						};
 					case PinMameMechType.TwoDirectionalSolenoids:
+						return new[] {
+							new GamelogicEngineCoil(_solenoid1) { Description = "Motor Clockwise" },
+							new GamelogicEngineCoil(_solenoid2) { Description = "Motor Counter-Clockwise" },
+						};
+
 					case PinMameMechType.TwoStepperSolenoids:
+						return new[] {
+							new GamelogicEngineCoil(_solenoid1) { Description = "Stepper 1" },
+							new GamelogicEngineCoil(_solenoid2) { Description = "Stepper 2" },
+						};
 					case PinMameMechType.FourStepperSolenoids:
 						return new[] {
-							new GamelogicEngineCoil(_solenoid1) { Description = "Mech Solenoid 1" },
-							new GamelogicEngineCoil(_solenoid2) { Description = "Mech Solenoid 2" },
+							new GamelogicEngineCoil(_solenoid1) { Description = "First Stepper" },
 						};
 					default:
 						throw new ArgumentOutOfRangeException();
