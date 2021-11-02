@@ -29,18 +29,12 @@ using Logger = NLog.Logger;
 namespace VisualPinball.Engine.PinMAME
 {
 	[AddComponentMenu("Visual Pinball/PinMAME/PinMAME Mech Handler")]
-	public class PinMameMechComponent : MonoBehaviour, IMechHandler, ISwitchDeviceComponent, ISerializationCallbackReceiver
+	public class PinMameMechComponent : MonoBehaviour, IMechHandler, ISwitchDeviceComponent, ICoilDeviceComponent, ISerializationCallbackReceiver
 	{
 		#region Data
 
 		[Tooltip("This defines how the mech is controlled.")]
 		public PinMameMechType Type = PinMameMechType.OneDirectionalSolenoid;
-
-		[Tooltip("The first solenoid handled by the mech.")]
-		public int Solenoid1;
-
-		[Tooltip("The second solenoid handled by the mech.")]
-		public int Solenoid2;
 
 		[Tooltip("How the mech behaves when the end of the range of motion is reached.")]
 		public PinMameRepeat Repeat;
@@ -71,6 +65,7 @@ namespace VisualPinball.Engine.PinMAME
 		[Tooltip("The amount of time in milliseconds required to reach full speed.")]
 		public int Acceleration;
 
+		[Unit("times acceleration")]
 		[Min(0)]
 		[Tooltip("Retardation factor. One means same as acceleration, 0.5 half as fast, etc.")]
 		public int Retardation;
@@ -79,9 +74,12 @@ namespace VisualPinball.Engine.PinMAME
 
 		#region Access
 
+		[SerializeField] private string _solenoid1;
+		[SerializeField] private string _solenoid2;
+
 		public event EventHandler<MechEventArgs> OnMechUpdate;
 
-		public PinMameMechConfig Config(List<SwitchMapping> switchMappings)
+		public PinMameMechConfig Config(List<SwitchMapping> switchMappings, List<CoilMapping> coilMappings)
 		{
 			var type = 0u;
 			type |= Type switch {
@@ -104,10 +102,13 @@ namespace VisualPinball.Engine.PinMAME
 			type |= FastUpdates ? (uint)PinMameMechFlag.Fast : (uint)PinMameMechFlag.Slow;
 			type |= ResultByLength ? (uint)PinMameMechFlag.LengthSw : (uint)PinMameMechFlag.StepSw;
 
+			var coilMapping1 = coilMappings.FirstOrDefault(cm => ReferenceEquals(cm.Device, this) && cm.DeviceItem == _solenoid1);
+			var coilMapping2 = coilMappings.FirstOrDefault(cm => ReferenceEquals(cm.Device, this) && cm.DeviceItem == _solenoid2);
+
 			var mechConfig = new PinMameMechConfig(
 				type,
-				Solenoid1,
-				Solenoid2,
+				coilMapping1?.InternalId ?? 0,
+				coilMapping2?.InternalId ?? 0,
 				Length,
 				Steps,
 				0,
@@ -118,14 +119,27 @@ namespace VisualPinball.Engine.PinMAME
 			foreach (var mark in Marks) {
 				var switchMapping = switchMappings.FirstOrDefault(sm => ReferenceEquals(sm.Device, this) && sm.DeviceItem == mark.SwitchId);
 				if (switchMapping == null) {
-					Logger.Error($"Switch \"{mark.Description}\" for mech {name} is not mapped in the switch manager, ignoring.");
+					Logger.Error($"Switch \"{mark.Name}\" for mech {name} is not mapped in the switch manager, ignoring.");
 					continue;
 				}
-				mechConfig.AddSwitch(new PinMameMechSwitchConfig(switchMapping.InternalId, mark.StepBeginning, mark.StepEnd, mark.Pulse));
+
+				switch (mark.Type) {
+					case MechMarkSwitchType.EnableBetween:
+						mechConfig.AddSwitch(new PinMameMechSwitchConfig(switchMapping.InternalId, mark.StepBeginning, mark.StepEnd));
+						break;
+
+					case MechMarkSwitchType.AlwaysPulse:
+						mechConfig.AddSwitch(new PinMameMechSwitchConfig(switchMapping.InternalId, -mark.PulseFreq, mark.PulseDuration));
+						break;
+
+					case MechMarkSwitchType.PulseBetween:
+						mechConfig.AddSwitch(new PinMameMechSwitchConfig(switchMapping.InternalId, mark.StepBeginning, mark.StepEnd, mark.PulseFreq));
+						break;
+					default:
+						throw new ArgumentOutOfRangeException();
+				}
 			}
-
 			return mechConfig;
-
 		}
 
 		private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
@@ -139,6 +153,32 @@ namespace VisualPinball.Engine.PinMAME
 		public SwitchDefault SwitchDefault => SwitchDefault.NormallyOpen;
 
 		IEnumerable<GamelogicEngineSwitch> IDeviceComponent<GamelogicEngineSwitch>.AvailableDeviceItems => AvailableSwitches;
+
+		IEnumerable<IGamelogicEngineDeviceItem> IDeviceComponent<IGamelogicEngineDeviceItem>.AvailableDeviceItems => AvailableCoils;
+
+		public IEnumerable<IGamelogicEngineDeviceItem> AvailableWireDestinations => AvailableCoils;
+
+		IEnumerable<GamelogicEngineCoil> IDeviceComponent<GamelogicEngineCoil>.AvailableDeviceItems => AvailableCoils;
+
+		public IEnumerable<GamelogicEngineCoil> AvailableCoils {
+			get {
+				switch (Type)
+				{
+					case PinMameMechType.OneSolenoid:
+					case PinMameMechType.OneDirectionalSolenoid:
+						return new[] { new GamelogicEngineCoil(_solenoid1) { Description = "Mech Solenoid" } };
+					case PinMameMechType.TwoDirectionalSolenoids:
+					case PinMameMechType.TwoStepperSolenoids:
+					case PinMameMechType.FourStepperSolenoids:
+						return new[] {
+							new GamelogicEngineCoil(_solenoid1) { Description = "Mech Solenoid 1" },
+							new GamelogicEngineCoil(_solenoid2) { Description = "Mech Solenoid 2" },
+						};
+					default:
+						throw new ArgumentOutOfRangeException();
+				}
+			}
+		}
 
 		#endregion
 
@@ -167,6 +207,14 @@ namespace VisualPinball.Engine.PinMAME
 		{
 			#if UNITY_EDITOR
 
+			if (string.IsNullOrEmpty(_solenoid1)) {
+				_solenoid1 = GenerateCoilId();
+			}
+			if (string.IsNullOrEmpty(_solenoid2) || _solenoid1 == _solenoid2) {
+				_solenoid2 = GenerateCoilId();
+			}
+
+
 			var switchIds = new HashSet<string>();
 			foreach (var mark in Marks) {
 				if (!mark.HasId || switchIds.Contains(mark.SwitchId)) {
@@ -180,6 +228,8 @@ namespace VisualPinball.Engine.PinMAME
 		public void OnAfterDeserialize()
 		{
 		}
+
+		private string GenerateCoilId() => $"coil_{Guid.NewGuid().ToString()[..8]}";
 
 		#endregion
 	}
