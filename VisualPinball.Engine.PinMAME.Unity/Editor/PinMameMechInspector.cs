@@ -70,7 +70,7 @@ namespace VisualPinball.Unity.Editor
 			PropertyField(_resultByLengthProperty);
 			PropertyField(_accelerationProperty);
 			PropertyField(_retardationProperty);
-			PropertyField(_marksProperty);
+			PropertyField(_marksProperty, "Switches");
 
 			base.OnInspectorGUI();
 
