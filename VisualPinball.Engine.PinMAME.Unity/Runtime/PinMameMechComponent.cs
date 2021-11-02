@@ -17,16 +17,19 @@
 // ReSharper disable InconsistentNaming
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using NLog;
 using PinMame;
 using UnityEngine;
+using VisualPinball.Engine.Game.Engines;
 using VisualPinball.Unity;
 using Logger = NLog.Logger;
 
 namespace VisualPinball.Engine.PinMAME
 {
 	[AddComponentMenu("Visual Pinball/PinMAME/PinMAME Mech Handler")]
-	public class PinMameMechComponent : MonoBehaviour, IMechHandler
+	public class PinMameMechComponent : MonoBehaviour, IMechHandler, ISwitchDeviceComponent, ISerializationCallbackReceiver
 	{
 		#region Data
 
@@ -61,7 +64,7 @@ namespace VisualPinball.Engine.PinMAME
 		public int Steps;
 
 		[Tooltip("Define your switch marks here.")]
-		public PinMameMechSwitchMark[] Marks;
+		public MechMark[] Marks;
 
 		[Unit("ms")]
 		[Min(0)]
@@ -78,63 +81,64 @@ namespace VisualPinball.Engine.PinMAME
 
 		public event EventHandler<MechEventArgs> OnMechUpdate;
 
-		public PinMameMechConfig Config
+		public PinMameMechConfig Config(List<SwitchMapping> switchMappings)
 		{
-			get {
-				var type = 0u;
-				type |= Type switch {
-					PinMameMechType.OneSolenoid => (uint)PinMameMechFlag.OneSol,
-					PinMameMechType.OneDirectionalSolenoid => (uint)PinMameMechFlag.OneDirSol,
-					PinMameMechType.TwoDirectionalSolenoids => (uint)PinMameMechFlag.TwoDirSol,
-					PinMameMechType.TwoStepperSolenoids => (uint)PinMameMechFlag.TwoStepSol,
-					PinMameMechType.FourStepperSolenoids => (uint)PinMameMechFlag.FourStepSol,
-					_ => throw new ArgumentOutOfRangeException()
-				};
+			var type = 0u;
+			type |= Type switch {
+				PinMameMechType.OneSolenoid => (uint)PinMameMechFlag.OneSol,
+				PinMameMechType.OneDirectionalSolenoid => (uint)PinMameMechFlag.OneDirSol,
+				PinMameMechType.TwoDirectionalSolenoids => (uint)PinMameMechFlag.TwoDirSol,
+				PinMameMechType.TwoStepperSolenoids => (uint)PinMameMechFlag.TwoStepSol,
+				PinMameMechType.FourStepperSolenoids => (uint)PinMameMechFlag.FourStepSol,
+				_ => throw new ArgumentOutOfRangeException()
+			};
 
-				type |= Repeat switch {
-					PinMameRepeat.Circle => (uint)PinMameMechFlag.Circle,
-					PinMameRepeat.Reverse => (uint)PinMameMechFlag.Reverse,
-					PinMameRepeat.StopAtEnd => (uint)PinMameMechFlag.StopEnd,
-					_ => throw new ArgumentOutOfRangeException()
-				};
+			type |= Repeat switch {
+				PinMameRepeat.Circle => (uint)PinMameMechFlag.Circle,
+				PinMameRepeat.Reverse => (uint)PinMameMechFlag.Reverse,
+				PinMameRepeat.StopAtEnd => (uint)PinMameMechFlag.StopEnd,
+				_ => throw new ArgumentOutOfRangeException()
+			};
 
-				type |= LinearMovement ? (uint)PinMameMechFlag.Linear : (uint)PinMameMechFlag.NonLinear;
-				type |= FastUpdates ? (uint)PinMameMechFlag.Fast : (uint)PinMameMechFlag.Slow;
-				type |= ResultByLength ? (uint)PinMameMechFlag.LengthSw : (uint)PinMameMechFlag.StepSw;
+			type |= LinearMovement ? (uint)PinMameMechFlag.Linear : (uint)PinMameMechFlag.NonLinear;
+			type |= FastUpdates ? (uint)PinMameMechFlag.Fast : (uint)PinMameMechFlag.Slow;
+			type |= ResultByLength ? (uint)PinMameMechFlag.LengthSw : (uint)PinMameMechFlag.StepSw;
 
-				var mechConfig = new PinMameMechConfig(
-					type,
-					Solenoid1,
-					Solenoid2,
-					Length,
-					Steps,
-					0,
-					Acceleration,
-					Retardation
-				);
+			var mechConfig = new PinMameMechConfig(
+				type,
+				Solenoid1,
+				Solenoid2,
+				Length,
+				Steps,
+				0,
+				Acceleration,
+				Retardation
+			);
 
-				foreach(var mark in Marks) {
-					switch (mark.Type) {
-						case PinMameMechSwitchMarkType.Switch:
-							mechConfig.AddSwitch(new PinMameMechSwitchConfig(mark.SwitchId, mark.StepBeginning, mark.StepEnd));
-							break;
-						case PinMameMechSwitchMarkType.PulseSwitch:
-							mechConfig.AddSwitch(new PinMameMechSwitchConfig(mark.SwitchId, mark.StepBeginning, mark.StepPulseDuration, 1));
-							break;
-						case PinMameMechSwitchMarkType.PulseSwitchNew:
-							mechConfig.AddSwitch(new PinMameMechSwitchConfig(mark.SwitchId, mark.StepBeginning, mark.StepEnd, mark.StepPulseDuration));
-							break;
-						default:
-							throw new ArgumentOutOfRangeException();
-					}
+			foreach (var mark in Marks) {
+				var switchMapping = switchMappings.FirstOrDefault(sm => sm.Device == this && sm.DeviceItem == mark.SwitchId);
+				if (switchMapping == null) {
+					Logger.Error($"Switch \"{mark.Description}\" for mech {name} is not mapped in the switch manager, ignoring.");
+					continue;
 				}
-
-				return mechConfig;
+				mechConfig.AddSwitch(new PinMameMechSwitchConfig(switchMapping.InternalId, mark.StepBeginning, mark.StepEnd, mark.Pulse));
 			}
+
+			return mechConfig;
 
 		}
 
 		private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+
+		#endregion
+
+		#region Wiring
+
+		public IEnumerable<GamelogicEngineSwitch> AvailableSwitches => Marks.Select(m => m.Switch);
+
+		public SwitchDefault SwitchDefault => SwitchDefault.NormallyOpen;
+
+		IEnumerable<GamelogicEngineSwitch> IDeviceComponent<GamelogicEngineSwitch>.AvailableDeviceItems => AvailableSwitches;
 
 		#endregion
 
@@ -157,6 +161,27 @@ namespace VisualPinball.Engine.PinMAME
 
 		#endregion
 
+		#region ISerializationCallbackReceiver
+
+		public void OnBeforeSerialize()
+		{
+			#if UNITY_EDITOR
+
+			var switchIds = new HashSet<string>();
+			foreach (var mark in Marks) {
+				if (!mark.HasId || switchIds.Contains(mark.SwitchId)) {
+					mark.GenerateId();
+				}
+				switchIds.Add(mark.SwitchId);
+			}
+			#endif
+		}
+
+		public void OnAfterDeserialize()
+		{
+		}
+
+		#endregion
 	}
 
 	[Serializable]
