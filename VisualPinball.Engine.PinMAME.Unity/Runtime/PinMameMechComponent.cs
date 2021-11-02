@@ -51,6 +51,7 @@ namespace VisualPinball.Engine.PinMAME
 		[Tooltip("if you want the result to be based on the length, as opposed to the number of steps.")]
 		public bool ResultByLength;
 
+		[Unit("ms")]
 		[Min(0)]
 		[Tooltip("Amount of time, in milliseconds, that the specified solenoids must be enabled for, to move a single step in the progression from the start to end position. ")]
 		public int Length;
@@ -62,6 +63,7 @@ namespace VisualPinball.Engine.PinMAME
 		[Tooltip("Define your switch marks here.")]
 		public PinMameMechSwitchMark[] Marks;
 
+		[Unit("ms")]
 		[Min(0)]
 		[Tooltip("The amount of time in milliseconds required to reach full speed.")]
 		public int Acceleration;
