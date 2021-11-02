@@ -118,6 +118,7 @@ namespace VisualPinball.Engine.PinMAME
 		public bool _solenoidsEnabled;
 		public long _solenoidDelayStart;
 		private Dictionary<int, PinMameMechComponent> _registeredMechs = new();
+		private HashSet<int> _mechSwitches = new();
 
 		private void Awake()
 		{
@@ -182,10 +183,7 @@ namespace VisualPinball.Engine.PinMAME
 			_isRunning = true;
 
 			SendInitialSwitches();
-
-			foreach (var (id, mech) in _registeredMechs) {
-				_pinMame.SetMech(id, mech.Config);
-			}
+			SendMechs();
 
 			_solenoidDelayStart = DateTimeOffset.Now.ToUnixTimeMilliseconds();
 		}
@@ -478,9 +476,20 @@ namespace VisualPinball.Engine.PinMAME
 				if (!isClosed) {
 					continue;
 				}
-				if (_switches.ContainsKey(id)) {
+				if (_switches.ContainsKey(id) && !_mechSwitches.Contains(_switches[id].InternalId)) {
 					Logger.Info($"[PinMAME] => sw {id} ({_switches[id].InternalId}): {true} | {_switches[id].Description}");
 					_pinMame.SetSwitch(_switches[id].InternalId, true);
+				}
+			}
+		}
+
+		private void SendMechs()
+		{
+			foreach (var (id, mech) in _registeredMechs) {
+				var mechConfig = mech.Config(_player.SwitchMapping);
+				_pinMame.SetMech(id, mechConfig);
+				foreach (var c in mechConfig.SwitchList) {
+					_mechSwitches.Add(c.SwNo);
 				}
 			}
 		}
@@ -536,6 +545,10 @@ namespace VisualPinball.Engine.PinMAME
 		public void Switch(string id, bool isClosed)
 		{
 			if (_switches.ContainsKey(id)) {
+				if (_mechSwitches.Contains(_switches[id].InternalId)) {
+					// mech switches are triggered internally by pinmame.
+					return;
+				}
 				Logger.Info($"[PinMAME] => sw {id} ({_switches[id].InternalId}): {isClosed} | {_switches[id].Description}");
 				_pinMame.SetSwitch(_switches[id].InternalId, isClosed);
 			} else {
