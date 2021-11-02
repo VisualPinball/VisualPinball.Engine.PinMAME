@@ -66,19 +66,24 @@ namespace VisualPinball.Unity.Editor
 			OnPreInspectorGUI();
 
 			PropertyField(_typeProperty);
-			PropertyField(_solenoid1Property);
+			if (_typeProperty.enumValueIndex == (int)PinMameMechType.OneDirectionalSolenoid) {
+				PropertyField(_solenoid1Property, "Solenoid");
+
+			} else {
+				PropertyField(_solenoid1Property);
+			}
 			if (_typeProperty.enumValueIndex > (int)PinMameMechType.OneDirectionalSolenoid && _typeProperty.enumValueIndex != (int)PinMameMechType.FourStepperSolenoids) {
 				PropertyField(_solenoid2Property);
 			}
 			PropertyField(_repeatProperty);
+			PropertyField(_lengthProperty);
+			PropertyField(_stepsProperty);
 			PropertyField(_linearMovementProperty);
 			PropertyField(_fastUpdatesProperty);
 			PropertyField(_resultByLengthProperty);
-			PropertyField(_lengthProperty);
-			PropertyField(_stepsProperty);
-			PropertyField(_marksProperty);
 			PropertyField(_accelerationProperty);
 			PropertyField(_retardationProperty);
+			PropertyField(_marksProperty);
 
 			base.OnInspectorGUI();
 
