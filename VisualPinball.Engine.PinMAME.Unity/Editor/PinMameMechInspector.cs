@@ -27,8 +27,6 @@ namespace VisualPinball.Unity.Editor
 	public class PinMameMechInspector : ItemInspector
 	{
 		private SerializedProperty _typeProperty;
-		private SerializedProperty _solenoid1Property;
-		private SerializedProperty _solenoid2Property;
 		private SerializedProperty _repeatProperty;
 		private SerializedProperty _linearMovementProperty;
 		private SerializedProperty _fastUpdatesProperty;
@@ -46,8 +44,6 @@ namespace VisualPinball.Unity.Editor
 			base.OnEnable();
 
 			_typeProperty = serializedObject.FindProperty(nameof(PinMameMechComponent.Type));
-			_solenoid1Property = serializedObject.FindProperty(nameof(PinMameMechComponent.Solenoid1));
-			_solenoid2Property = serializedObject.FindProperty(nameof(PinMameMechComponent.Solenoid2));
 			_repeatProperty = serializedObject.FindProperty(nameof(PinMameMechComponent.Repeat));
 			_linearMovementProperty = serializedObject.FindProperty(nameof(PinMameMechComponent.LinearMovement));
 			_fastUpdatesProperty = serializedObject.FindProperty(nameof(PinMameMechComponent.FastUpdates));
@@ -66,15 +62,6 @@ namespace VisualPinball.Unity.Editor
 			OnPreInspectorGUI();
 
 			PropertyField(_typeProperty);
-			if (_typeProperty.enumValueIndex == (int)PinMameMechType.OneDirectionalSolenoid) {
-				PropertyField(_solenoid1Property, "Solenoid");
-
-			} else {
-				PropertyField(_solenoid1Property);
-			}
-			if (_typeProperty.enumValueIndex > (int)PinMameMechType.OneDirectionalSolenoid && _typeProperty.enumValueIndex != (int)PinMameMechType.FourStepperSolenoids) {
-				PropertyField(_solenoid2Property);
-			}
 			PropertyField(_repeatProperty);
 			PropertyField(_lengthProperty);
 			PropertyField(_stepsProperty);

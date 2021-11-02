@@ -174,6 +174,10 @@ namespace VisualPinball.Engine.PinMAME
 		public void RegisterMech(PinMameMechComponent mechComponent)
 		{
 			var id = _numMechs++;
+			if (id > _pinMame.GetMaxMechs()) {
+				Logger.Error($"PinMAME only supports up to {_pinMame.GetMaxMechs()} custom mechs, ignoring {mechComponent.name}.");
+				return;
+			}
 			_registeredMechs[id] = mechComponent;
 		}
 
@@ -486,7 +490,7 @@ namespace VisualPinball.Engine.PinMAME
 		private void SendMechs()
 		{
 			foreach (var (id, mech) in _registeredMechs) {
-				var mechConfig = mech.Config(_player.SwitchMapping);
+				var mechConfig = mech.Config(_player.SwitchMapping, _player.CoilMapping);
 				_pinMame.SetMech(id, mechConfig);
 				foreach (var c in mechConfig.SwitchList) {
 					_mechSwitches.Add(c.SwNo);
