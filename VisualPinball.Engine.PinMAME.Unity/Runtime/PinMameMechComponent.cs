@@ -34,7 +34,7 @@ namespace VisualPinball.Engine.PinMAME
 		#region Data
 
 		[Tooltip("This defines how the mech is controlled.")]
-		public PinMameMechType Type;
+		public PinMameMechType Type = PinMameMechType.OneDirectionalSolenoid;
 
 		[Tooltip("The first solenoid handled by the mech.")]
 		public int Solenoid1;
@@ -57,14 +57,14 @@ namespace VisualPinball.Engine.PinMAME
 		[Unit("ms")]
 		[Min(0)]
 		[Tooltip("Amount of time, in milliseconds, that the specified solenoids must be enabled for, to move a single step in the progression from the start to end position. ")]
-		public int Length;
+		public int Length = 200;
 
 		[Min(0)]
 		[Tooltip("The total number of steps from the start to the end position.")]
-		public int Steps;
+		public int Steps = 200;
 
 		[Tooltip("Define your switch marks here.")]
-		public MechMark[] Marks;
+		public MechMark[] Marks = {};
 
 		[Unit("ms")]
 		[Min(0)]
@@ -116,7 +116,7 @@ namespace VisualPinball.Engine.PinMAME
 			);
 
 			foreach (var mark in Marks) {
-				var switchMapping = switchMappings.FirstOrDefault(sm => sm.Device == this && sm.DeviceItem == mark.SwitchId);
+				var switchMapping = switchMappings.FirstOrDefault(sm => ReferenceEquals(sm.Device, this) && sm.DeviceItem == mark.SwitchId);
 				if (switchMapping == null) {
 					Logger.Error($"Switch \"{mark.Description}\" for mech {name} is not mapped in the switch manager, ignoring.");
 					continue;
@@ -182,22 +182,5 @@ namespace VisualPinball.Engine.PinMAME
 		}
 
 		#endregion
-	}
-
-	[Serializable]
-	public class PinMameMechSwitchMark
-	{
-		public string Description;
-		public int SwitchId;
-		public PinMameMechSwitchMarkType Type;
-
-		public int StepBeginning;
-		public int StepEnd;
-		public int StepPulseDuration;
-	}
-
-	public enum PinMameMechSwitchMarkType
-	{
-		Switch, PulseSwitch, PulseSwitchNew
 	}
 }
