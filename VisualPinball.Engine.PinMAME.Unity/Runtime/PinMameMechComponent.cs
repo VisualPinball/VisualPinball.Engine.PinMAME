@@ -28,7 +28,7 @@ using Logger = NLog.Logger;
 
 namespace VisualPinball.Engine.PinMAME
 {
-	[AddComponentMenu("Visual Pinball/PinMAME/PinMAME Mech Handler")]
+	[AddComponentMenu("Visual Pinball/Mechs/PinMAME Mech Handler")]
 	public class PinMameMechComponent : MonoBehaviour, IMechHandler, ISwitchDeviceComponent, ICoilDeviceComponent, ISerializationCallbackReceiver
 	{
 		#region Data
