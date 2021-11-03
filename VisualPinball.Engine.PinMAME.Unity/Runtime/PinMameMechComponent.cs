@@ -201,9 +201,14 @@ namespace VisualPinball.Engine.PinMAME
 		private void Awake()
 		{
 			_gle = GetComponentInParent<PinMameGamelogicEngine>();
-			if (_gle) {
+			if (_gle && enabled) {
 				_gle.RegisterMech(this);
 			}
+		}
+
+		private void Start()
+		{
+			// show disable checkbox in editor
 		}
 
 		public void UpdateMech(PinMameMechInfo data)
