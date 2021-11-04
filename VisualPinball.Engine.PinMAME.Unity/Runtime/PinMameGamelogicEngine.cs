@@ -33,8 +33,8 @@ namespace VisualPinball.Engine.PinMAME
 {
 	[Serializable]
 	[DisallowMultipleComponent]
-	[RequireComponent(typeof(AudioSource))]
 	[AddComponentMenu("Visual Pinball/Game Logic Engine/PinMAME")]
+	[RequireComponent(typeof(AudioSource))]
 	public class PinMameGamelogicEngine : MonoBehaviour, IGamelogicEngine
 	{
 		public string Name { get; } = "PinMAME Gamelogic Engine";
@@ -103,18 +103,10 @@ namespace VisualPinball.Engine.PinMAME
 		private static readonly Color Tint = new Color(1, 0.18f, 0);
 
 		private readonly Queue<Action> _dispatchQueue = new Queue<Action>();
-		private readonly Queue<float[]> _audioQueue = new Queue<float[]>();
 
-		private int _audioFilterChannels;
 		private PinMameAudioInfo _audioInfo;
-		private float[] _lastAudioFrame = {};
-		private int _lastAudioFrameOffset;
-		private const int _maximalQueueSize = 10;
-
-		private double _audioInputStart;
-		private double _audioOutputStart;
-		private int _audioNumSamplesInput;
-		private int _audioNumSamplesOutput;
+		private PinMameAudioPipeStream _audioStream;
+		private float[] _audioBuffer;
 
 		public bool _solenoidsEnabled;
 		public long _solenoidDelayStart;
@@ -124,14 +116,18 @@ namespace VisualPinball.Engine.PinMAME
 		private void Awake()
 		{
 			Logger.Info("Project audio sample rate: " +  AudioSettings.outputSampleRate);
+
+			int bufferLength = 0, numBuffers = 0;
+			AudioSettings.GetDSPBufferSize(out bufferLength, out numBuffers);
+
+			_audioStream = new PinMameAudioPipeStream();
+			_audioStream.MaxBufferLength = bufferLength * 2 * 2;
+			_audioBuffer = new float[bufferLength * 2];
 		}
 
 		private void Start()
 		{
 			UpdateCaches();
-
-			_lastAudioFrame = Array.Empty<float>();
-			_lastAudioFrameOffset = 0;
 		}
 
 		public void OnInit(Player player, TableApi tableApi, BallManager ballManager)
@@ -297,119 +293,48 @@ namespace VisualPinball.Engine.PinMAME
 
 		private int OnAudioUpdated(IntPtr framePtr, int frameSize)
 		{
-			if (_audioFilterChannels == 0) {
-				// don't know how many channels yet
-				return _audioInfo.SamplesPerFrame;
-			}
-
-			_audioNumSamplesInput += frameSize;
-			if (_audioNumSamplesInput > 100000) {
-				var delta = AudioSettings.dspTime - _audioInputStart;
-				var queueMs = System.Math.Round(_audioQueue.Count * (double)_audioInfo.SamplesPerFrame / _audioInfo.SampleRate * 1000);
-				//Debug.Log($"INPUT: {System.Math.Round(_audioNumSamplesInput / delta)} - {_audioQueue.Count} in queue ({queueMs}ms)");
-				_audioInputStart = AudioSettings.dspTime;
-				_audioNumSamplesInput = 0;
-			}
-
-			float[] frame;
-			if (_audioFilterChannels == _audioInfo.Channels) { // n channels -> n channels
-				frame = new float[frameSize];
-				unsafe {
-					var src = (float*)framePtr;
-					for (var i = 0; i < frameSize; i++) {
-						frame[i] = src[i];
-					}
-				}
-
-			} else if (_audioFilterChannels > _audioInfo.Channels) { // 1 channel -> 2 channels
-				frame = new float[frameSize * 2];
-				unsafe {
-					var src = (float*)framePtr;
-					for (var i = 0; i < frameSize; i++) {
-						frame[i * 2] = src[i];
-						frame[i * 2 + 1] = frame[i * 2];
-					}
-				}
-
-			} else { // 2 channels -> 1 channel
-				frame = new float[frameSize / 2];
-				unsafe {
-					var src = (float*)framePtr;
-					for (var i = 0; i < frameSize; i += 2) {
-						frame[i] = src[i];
-					}
-				}
-			}
-
-			lock (_audioQueue) {
-				if (_audioQueue.Count >= _maximalQueueSize) {
-					_audioQueue.Clear();
-					Logger.Error("Clearing full audio frame queue.");
-				}
-				_audioQueue.Enqueue(frame);
-			}
+			_audioStream.Write(framePtr, frameSize);
 
 			return _audioInfo.SamplesPerFrame;
 		}
 
-		private void OnAudioFilterRead(float[] data, int channels)
+		void OnAudioFilterRead(float[] data, int channels)
 		{
-			_audioNumSamplesOutput += data.Length / channels;
-			if (_audioNumSamplesOutput > 100000) {
-				var delta = AudioSettings.dspTime - _audioOutputStart;
-				//Debug.Log($"OUTPUT: {System.Math.Round(_audioNumSamplesOutput / delta)}");
-				_audioOutputStart = AudioSettings.dspTime;
-				_audioNumSamplesOutput = 0;
-			}
+			if (_audioBuffer.Length != data.Length)
+			{
+				Logger.Info("Does DSPBufferSize or speakerMode changed? Audio disabled.");
 
-			if (_audioFilterChannels == 0) {
-				_audioFilterChannels = channels;
-				Logger.Info($"Creating audio on {channels} channels.");
 				return;
 			}
 
-			if (_audioQueue.Count == 0) {
-				if (!DisableAudio) {
-					Logger.Info("Filtering audio but nothing to de-queue.");
-				}
-				return;
+			int size = _audioStream.Read(_audioBuffer, data.Length / channels);
+
+			if (_audioInfo.Channels == channels)
+			{ // n channels -> n channels
+				Buffer.BlockCopy(_audioBuffer, 0, data, 0, size);
 			}
-
-
-			const int size = sizeof(float);
-			var dataOffset = 0;
-			var lastFrameSize = _lastAudioFrame.Length - _lastAudioFrameOffset;
-			if (data.Length >= lastFrameSize) {
-				if (lastFrameSize > 0) {
-					Buffer.BlockCopy(_lastAudioFrame, _lastAudioFrameOffset * size, data, 0, lastFrameSize * size);
-					dataOffset += lastFrameSize;
+			else if (_audioInfo.Channels == 1 && channels == 2)
+			{  // 1 channel -> 2 channels
+				for (int index = 0; index < size; index++)
+				{
+					data[index * 2] = _audioBuffer[index];
+					data[index * 2 + 1] = _audioBuffer[index];
 				}
-				_lastAudioFrame = Array.Empty<float>();
-				_lastAudioFrameOffset = 0;
-
-				lock (_audioQueue) {
-					while (dataOffset < data.Length && _audioQueue.Count > 0) {
-						var frame = _audioQueue.Dequeue();
-						if (frame.Length <= data.Length - dataOffset) {
-							Buffer.BlockCopy(frame, 0, data, dataOffset * size, frame.Length * size);
-							dataOffset += frame.Length;
-
-						} else {
-							Buffer.BlockCopy(frame, 0, data, dataOffset * size, (data.Length - dataOffset) * size);
-							_lastAudioFrame = frame;
-							_lastAudioFrameOffset = data.Length - dataOffset;
-							dataOffset = data.Length;
-						}
-					}
+			}
+			else if (_audioInfo.Channels == 2 && channels == 1)
+			{ // 2 channels -> 1 channel
+				for (int index = 0; index < size; index++)
+				{
+					data[index] = _audioBuffer[index * 2];
 				}
-
-			} else {
-				Buffer.BlockCopy(_lastAudioFrame, _lastAudioFrameOffset * size, data, 0, data.Length * size);
-				_lastAudioFrameOffset += data.Length;
+			}
+			else
+			{
+				Logger.Info($"Unsupported channel conversion {_audioInfo.Channels} -> {channels}");
 			}
 		}
 
-		private void OnMechAvailable(int mechNo, PinMameMechInfo mechInfo)
+		private void OnMechAvailable(int mechNo, PinMame.PinMameMechInfo mechInfo)
 		{
 			Logger.Info($"[PinMAME] <= mech available: mechNo={mechNo}, mechInfo={mechInfo}");
 		}
