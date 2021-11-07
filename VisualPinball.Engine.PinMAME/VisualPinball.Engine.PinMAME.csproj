@@ -16,8 +16,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="PinMame" Version="0.1.0-preview.45" />
-    <PackageReference Include="PinMame.Native" Version="3.4.0-preview.311" />
+    <PackageReference Include="PinMame" Version="0.1.0-preview.47" />
+    <PackageReference Include="PinMame.Native" Version="3.4.0-preview.313" />
     <PackageReference Include="VisualPinball.Engine" Version="0.0.1-preview.71" />
   </ItemGroup>
 
@@ -27,6 +27,7 @@
     <Copy Condition="'$(RuntimeIdentifier)' == 'win-x64'" SourceFiles="$(OutDir)libpinmame-3.4.dll" DestinationFolder="..\VisualPinball.Engine.PinMAME.Unity\Plugins\$(RuntimeIdentifier)" SkipUnchangedFiles="true" />
     <Copy Condition="'$(RuntimeIdentifier)' == 'win-x86'" SourceFiles="$(OutDir)libpinmame-3.4.dll" DestinationFolder="..\VisualPinball.Engine.PinMAME.Unity\Plugins\$(RuntimeIdentifier)" SkipUnchangedFiles="true" />
     <Copy Condition="'$(RuntimeIdentifier)' == 'osx-x64'" SourceFiles="$(OutDir)libpinmame.3.4.dylib" DestinationFolder="..\VisualPinball.Engine.PinMAME.Unity\Plugins\$(RuntimeIdentifier)" SkipUnchangedFiles="true" />
+    <Copy Condition="'$(RuntimeIdentifier)' == 'osx-arm64'" SourceFiles="$(OutDir)libpinmame.3.4.dylib" DestinationFolder="..\VisualPinball.Engine.PinMAME.Unity\Plugins\$(RuntimeIdentifier)" SkipUnchangedFiles="true" />
     <Copy Condition="'$(RuntimeIdentifier)' == 'linux-x64'" SourceFiles="$(OutDir)libpinmame.so.3.4" DestinationFolder="..\VisualPinball.Engine.PinMAME.Unity\Plugins\$(RuntimeIdentifier)" SkipUnchangedFiles="true" />
   </Target>
 
