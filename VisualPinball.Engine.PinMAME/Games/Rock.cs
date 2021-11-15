@@ -120,6 +120,12 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineCoil("06", 6) { Description = "Four Pos. Bank Reset", DeviceHint = "^4PosBank\\s*" },
 			new GamelogicEngineCoil("08", 8) { Description = "Knocker Assembly" },
 			new GamelogicEngineCoil("09", 9) { Description = "Outhole", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "eject_coil" },
+
+			new GamelogicEngineCoil(CoilFlipperLowerRight, 46) { Description = "Right Flippers", DeviceHint = "^(Upper|Lower)RightFlipper$", NumMatches = 2 },
+			new GamelogicEngineCoil(CoilFlipperLowerLeft, 48) { Description = "Left Flippers", DeviceHint = "^(Upper|Lower)LeftFlipper$",  NumMatches = 2 },
+
+			new GamelogicEngineCoil(CoilFlipperUpperRight, 34) { IsUnused = true },
+			new GamelogicEngineCoil(CoilFlipperUpperLeft, 36) { IsUnused = true },
 		};
 	}
 }
