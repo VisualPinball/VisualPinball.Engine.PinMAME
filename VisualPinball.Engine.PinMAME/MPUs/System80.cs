@@ -37,10 +37,10 @@ namespace VisualPinball.Engine.PinMAME.MPUs
 			new GamelogicEngineSwitch(SwCoin1, 17) { Description = "Coin Button 1", InputActionHint = InputConstants.ActionInsertCoin1, InputMapHint = InputConstants.MapCabinetSwitches },
 			new GamelogicEngineSwitch(SwCoin2, 27) { Description = "Coin Button 2", InputActionHint = InputConstants.ActionInsertCoin2, InputMapHint = InputConstants.MapCabinetSwitches },
 			new GamelogicEngineSwitch(SwCoin3, 37) { Description = "Coin Button 3", InputActionHint = InputConstants.ActionInsertCoin3, InputMapHint = InputConstants.MapCabinetSwitches },
-			new GamelogicEngineSwitch(SwFlipperLowerRight, 112) { Description = "Lower Right Flipper", InputActionHint = InputConstants.ActionRightFlipper, InputMapHint = InputConstants.MapCabinetSwitches },
-			new GamelogicEngineSwitch(SwFlipperLowerLeft, 114) { Description = "Lower Left Flipper", InputActionHint = InputConstants.ActionLeftFlipper, InputMapHint = InputConstants.MapCabinetSwitches },
 			new GamelogicEngineSwitch(SwLeftAdvance, 6) { Description = "Left Advance", InputActionHint = InputConstants.ActionLeftAdvance, InputMapHint = InputConstants.MapCabinetSwitches },
 			new GamelogicEngineSwitch(SwRightAdvance, 16) { Description = "Right Advance", InputActionHint = InputConstants.ActionRightAdvance, InputMapHint = InputConstants.MapCabinetSwitches },
+			new GamelogicEngineSwitch(SwFlipperLowerLeft, 114) { Description = "Lower Left Flipper", InputActionHint = InputConstants.ActionLeftFlipper, InputMapHint = InputConstants.MapCabinetSwitches },
+			new GamelogicEngineSwitch(SwFlipperLowerRight, 112) { Description = "Lower Right Flipper", InputActionHint = InputConstants.ActionRightFlipper, InputMapHint = InputConstants.MapCabinetSwitches },
 		};
 
 		private readonly GamelogicEngineCoil[] _coils = {
