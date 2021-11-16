@@ -19,6 +19,7 @@
 using System;
 using VisualPinball.Engine.Game.Engines;
 using VisualPinball.Engine.PinMAME.MPUs;
+using VisualPinball.Engine.Common;
 
 namespace VisualPinball.Engine.PinMAME.Games
 {
@@ -41,7 +42,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 		protected override GamelogicEngineSwitch[] Switches { get; } = {
 			new GamelogicEngineSwitch("40") { Description = "#1 Drop Target (Upper)" },
 			new GamelogicEngineSwitch("41") { Description = "10 Point (2)" },
-			new GamelogicEngineSwitch("42") { Description = "Right Flipper (Lower)" },
+			new GamelogicEngineSwitch("42") { Description = "Right Flipper (Lower)", DeviceHint = "^LowerRightFlipper$" },
 			new GamelogicEngineSwitch("43") { Description = "Rollunder" },
 			new GamelogicEngineSwitch("44") { Description = "Right Outside Rollover" },
 			new GamelogicEngineSwitch("45") { Description = "Right Spinner (with Bracket)" },
@@ -70,6 +71,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 		};
 
 		public override GamelogicEngineLamp[] AvailableLamps { get; } = {
+			new GamelogicEngineLamp("01") { Description = "Lamp Group 1" },
 			new GamelogicEngineLamp("03") { Description = "Shoot Again" },
 			new GamelogicEngineLamp("05") { Description = "#1 Drop Target (Upper)" },
 			new GamelogicEngineLamp("06") { Description = "#2 Drop Target (Upper)" },
@@ -78,6 +80,8 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineLamp("09") { Description = "Level 1" },
 			new GamelogicEngineLamp("10") { Description = "Level 2" },
 			new GamelogicEngineLamp("11") { Description = "Level 3" },
+			new GamelogicEngineLamp("12") { Description = "Lamp Group 12" },
+			new GamelogicEngineLamp("13") { Description = "Lamp Group 13" },
 			new GamelogicEngineLamp("14") { Description = "#1 Drop Target (Lower)" },
 			new GamelogicEngineLamp("15") { Description = "#2 Drop Target (Lower)" },
 			new GamelogicEngineLamp("16") { Description = "#3 Drop Target (Lower)" },
