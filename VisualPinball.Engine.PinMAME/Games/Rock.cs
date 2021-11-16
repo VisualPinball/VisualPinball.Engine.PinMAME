@@ -71,7 +71,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 		};
 
 		public override GamelogicEngineLamp[] AvailableLamps { get; } = {
-			new GamelogicEngineLamp("01") { Description = "Lamp Group 1" },
+			new GamelogicEngineLamp("01") { Description = "Lamp Group 1", Type = LampType.SingleOffOn },
 			new GamelogicEngineLamp("03") { Description = "Shoot Again" },
 			new GamelogicEngineLamp("05") { Description = "#1 Drop Target (Upper)" },
 			new GamelogicEngineLamp("06") { Description = "#2 Drop Target (Upper)" },
