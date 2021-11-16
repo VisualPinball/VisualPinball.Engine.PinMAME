@@ -45,6 +45,8 @@ namespace VisualPinball.Engine.PinMAME
 		public const string SwBallRollTilt = "s_ball_roll_tilt";
 		public const string SwSlamTilt = "s_slam_tilt";
 		public const string SwStartButton = "s_start_button";
+		public const string SwLeftAdvance = "s_left_advance";
+		public const string SwRightAdvance = "s_right_advance";
 
 		public const string CoilGameOn = "c_game_on";
 		public const string CoilFlipperLowerRight = "c_flipper_lower_right";
