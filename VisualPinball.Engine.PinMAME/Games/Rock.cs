@@ -71,7 +71,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 		};
 
 		public override GamelogicEngineLamp[] AvailableLamps { get; } = {
-			new GamelogicEngineLamp("01") { Description = "Lamp Group 1", Type = LampType.SingleOffOn },
+			new GamelogicEngineLamp("01") { Description = "Lamp 1", Type = LampType.SingleOffOn, DeviceHint = "^LampGroup1$" },
 			new GamelogicEngineLamp("03") { Description = "Shoot Again" },
 			new GamelogicEngineLamp("05") { Description = "#1 Drop Target (Upper)" },
 			new GamelogicEngineLamp("06") { Description = "#2 Drop Target (Upper)" },
@@ -80,8 +80,8 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineLamp("09") { Description = "Level 1" },
 			new GamelogicEngineLamp("10") { Description = "Level 2" },
 			new GamelogicEngineLamp("11") { Description = "Level 3" },
-			new GamelogicEngineLamp("12") { Description = "Lamp Group 12" },
-			new GamelogicEngineLamp("13") { Description = "Lamp Group 13" },
+			new GamelogicEngineLamp("12") { Description = "Lamp 12", DeviceHint = "^(L12|LampGroup12)$", NumMatches = 2 },
+			new GamelogicEngineLamp("13") { Description = "Lamp 13", DeviceHint = "^(L13[a-b]|LampGroup13)$", NumMatches = 3  },
 			new GamelogicEngineLamp("14") { Description = "#1 Drop Target (Lower)" },
 			new GamelogicEngineLamp("15") { Description = "#2 Drop Target (Lower)" },
 			new GamelogicEngineLamp("16") { Description = "#3 Drop Target (Lower)" },
