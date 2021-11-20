@@ -41,7 +41,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 
 		protected override GamelogicEngineSwitch[] Switches { get; } = {
 			new GamelogicEngineSwitch("40") { Description = "#1 Drop Target (Upper)" },
-			new GamelogicEngineSwitch("41") { Description = "10 Point (2)" },
+			new GamelogicEngineSwitch("41") { Description = "10 Point (2)", DeviceHint = "^sw41[a-d]$", NumMatches = 4 },
 			new GamelogicEngineSwitch("42") { Description = "Right Flipper (Lower)", DeviceHint = "^LowerRightFlipper$" },
 			new GamelogicEngineSwitch("43") { Description = "Rollunder" },
 			new GamelogicEngineSwitch("44") { Description = "Right Outside Rollover" },
