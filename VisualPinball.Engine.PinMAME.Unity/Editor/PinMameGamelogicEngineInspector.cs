@@ -66,6 +66,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				new FlashGordon(),
 				new StarTrekEnterprise(),
 				new Rock(),
+				new RockEncore(),
 			};
 			_gameNames = new[] {"-- none --"}
 				.Concat(_games.Select(g => g.Name))
