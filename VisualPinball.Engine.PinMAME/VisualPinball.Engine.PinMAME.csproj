@@ -1,24 +1,21 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
-    <LangVersion>8</LangVersion>
     <AssemblyVersion>0.1.0.0</AssemblyVersion>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <LangVersion>9.0</LangVersion>
   </PropertyGroup>
-
   <PropertyGroup Condition="'$(RuntimeIdentifier)' == ''">
     <RuntimeIdentifier Condition="$([MSBuild]::IsOSPlatform('Windows')) And '$(PlatformTarget)' != 'x86'">win-x64</RuntimeIdentifier>
     <RuntimeIdentifier Condition="$([MSBuild]::IsOSPlatform('Windows')) And '$(PlatformTarget)' == 'x86'">win-x86</RuntimeIdentifier>
     <RuntimeIdentifier Condition="$([MSBuild]::IsOSPlatform('OSX'))">osx-x64</RuntimeIdentifier>
     <RuntimeIdentifier Condition="$([MSBuild]::IsOSPlatform('Linux'))">linux-x64</RuntimeIdentifier>
   </PropertyGroup>
-
   <ItemGroup>
     <PackageReference Include="PinMame" Version="0.1.0-preview.47" />
-    <PackageReference Include="PinMame.Native" Version="3.4.0-preview.316" />
-    <PackageReference Include="VisualPinball.Engine" Version="0.0.1-preview.73" /> 
+    <PackageReference Include="PinMame.Native" Version="3.4.0-preview.322" />
+    <PackageReference Include="VisualPinball.Engine" Version="0.0.1-preview.75" /> 
     <!-- Uncomment when doing local dev -->
     <!-- 
     <Reference Include="VisualPinball.Engine">
@@ -26,16 +23,13 @@
     </Reference> 
     -->
   </ItemGroup>
-
   <Target Name="PluginsDeploy" AfterTargets="AfterBuild">
     <ItemGroup>
       <Plugins Include="$(OutDir)$(AssemblyName).dll" />
       <Plugins Include="$(OutDir)PinMame.dll" />
-
       <Plugins Include="$(NuGetPackageRoot)\pinmame.native.$(RuntimeIdentifier)\3.4.0-preview.316\runtimes\$(RuntimeIdentifier)\native\*" />
     </ItemGroup>
     <Message Text="PluginsDeploy: @(Plugins)" />
     <Copy SourceFiles="@(Plugins)" DestinationFolder="..\VisualPinball.Engine.PinMAME.Unity\Plugins\$(RuntimeIdentifier)" SkipUnchangedFiles="true" />
   </Target>
-
 </Project>
