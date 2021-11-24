@@ -115,7 +115,7 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void Awake()
 		{
-			Logger.Info("Project audio sample rate: " +  AudioSettings.outputSampleRate);
+			Logger.Info($"Project audio sample rate: {AudioSettings.outputSampleRate}");
 
 			int bufferLength = 0, numBuffers = 0;
 			AudioSettings.GetDSPBufferSize(out bufferLength, out numBuffers);
@@ -298,8 +298,13 @@ namespace VisualPinball.Engine.PinMAME
 			return _audioInfo.SamplesPerFrame;
 		}
 
-		void OnAudioFilterRead(float[] data, int channels)
+		private void OnAudioFilterRead(float[] data, int channels)
 		{
+			if (DisableAudio)
+			{
+				return;
+			}
+
 			if (_audioBuffer.Length != data.Length)
 			{
 				Logger.Info("Does DSPBufferSize or speakerMode changed? Audio disabled.");
@@ -334,7 +339,7 @@ namespace VisualPinball.Engine.PinMAME
 			}
 		}
 
-		private void OnMechAvailable(int mechNo, PinMame.PinMameMechInfo mechInfo)
+		private void OnMechAvailable(int mechNo, PinMameMechInfo mechInfo)
 		{
 			Logger.Info($"[PinMAME] <= mech available: mechNo={mechNo}, mechInfo={mechInfo}");
 		}
