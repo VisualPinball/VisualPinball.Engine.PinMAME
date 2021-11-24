@@ -40,6 +40,9 @@ git update-index --assume-unchanged VisualPinball.Engine.PinMAME.Unity/Plugins/l
 git update-index --assume-unchanged VisualPinball.Engine.PinMAME.Unity/Plugins/osx-x64/PinMame.dll.meta
 git update-index --assume-unchanged VisualPinball.Engine.PinMAME.Unity/Plugins/osx-x64/VisualPinball.Engine.PinMAME.dll.meta
 git update-index --assume-unchanged VisualPinball.Engine.PinMAME.Unity/Plugins/osx-x64/libpinmame.3.4.dylib.meta
+git update-index --assume-unchanged VisualPinball.Engine.PinMAME.Unity/Plugins/osx-arm64/PinMame.dll.meta
+git update-index --assume-unchanged VisualPinball.Engine.PinMAME.Unity/Plugins/osx-arm64/VisualPinball.Engine.PinMAME.dll.meta
+git update-index --assume-unchanged VisualPinball.Engine.PinMAME.Unity/Plugins/osx-arm64/libpinmame.3.4.dylib.meta
 git update-index --assume-unchanged VisualPinball.Engine.PinMAME.Unity/Plugins/win-x86/PinMame.dll.meta
 git update-index --assume-unchanged VisualPinball.Engine.PinMAME.Unity/Plugins/win-x86/VisualPinball.Engine.PinMAME.dll.meta
 git update-index --assume-unchanged VisualPinball.Engine.PinMAME.Unity/Plugins/win-x86/libpinmame-3.4.dll.meta
