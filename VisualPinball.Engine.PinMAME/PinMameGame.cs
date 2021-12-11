@@ -98,7 +98,13 @@ namespace VisualPinball.Engine.PinMAME
 
 		protected GamelogicEngineCoil[] Concat(IEnumerable<GamelogicEngineCoil> parent, IEnumerable<GamelogicEngineCoil> children)
 		{
-			var c = parent.ToDictionary(s => s.InternalId, s => s);
+			var ids = parent.ToDictionary(s => s.Id, s => s);
+			foreach (var child in children) {
+				if (ids.ContainsKey(child.Id)) {
+					ids.Remove(child.Id);
+				}
+			}
+			var c = ids.Values.ToDictionary(s => s.InternalId, s => s);
 			foreach (var child in children) {
 				c[child.InternalId] = child;
 			}
