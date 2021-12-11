@@ -19,7 +19,6 @@
 using System;
 using VisualPinball.Engine.Game.Engines;
 using VisualPinball.Engine.PinMAME.MPUs;
-using VisualPinball.Engine.Common;
 
 namespace VisualPinball.Engine.PinMAME.Games
 {
@@ -71,7 +70,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 		};
 
 		public override GamelogicEngineLamp[] AvailableLamps { get; } = {
-			new GamelogicEngineLamp("01") { Description = "Lamp 1", Type = LampType.SingleOffOn, DeviceHint = "^LampGroup1$" },
+			new GamelogicEngineLamp("01") { Description = "Lamp 1" },
 			new GamelogicEngineLamp("03") { Description = "Shoot Again" },
 			new GamelogicEngineLamp("05") { Description = "#1 Drop Target (Upper)" },
 			new GamelogicEngineLamp("06") { Description = "#2 Drop Target (Upper)" },
@@ -80,8 +79,8 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineLamp("09") { Description = "Level 1" },
 			new GamelogicEngineLamp("10") { Description = "Level 2" },
 			new GamelogicEngineLamp("11") { Description = "Level 3" },
-			new GamelogicEngineLamp("12") { Description = "Lamp 12", DeviceHint = "^(L12|LampGroup12)$", NumMatches = 2 },
-			new GamelogicEngineLamp("13") { Description = "Lamp 13", DeviceHint = "^(L13[a-b]|LampGroup13)$", NumMatches = 3  },
+			new GamelogicEngineLamp("12") { Description = "Lamp 12" },
+			new GamelogicEngineLamp("13") { Description = "Lamp 13", DeviceHint = "^L13[a-b]$", NumMatches = 2  },
 			new GamelogicEngineLamp("14") { Description = "#1 Drop Target (Lower)" },
 			new GamelogicEngineLamp("15") { Description = "#2 Drop Target (Lower)" },
 			new GamelogicEngineLamp("16") { Description = "#3 Drop Target (Lower)" },
@@ -124,12 +123,10 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineCoil("06", 6) { Description = "Four Pos. Bank Reset", DeviceHint = "^4PosBank\\s*" },
 			new GamelogicEngineCoil("08", 8) { Description = "Knocker Assembly" },
 			new GamelogicEngineCoil("09", 9) { Description = "Outhole", DeviceHint = "^Trough\\s*\\d?", DeviceItemHint = "eject_coil" },
-
-			new GamelogicEngineCoil(CoilFlipperLowerRight, 46) { Description = "Right Flippers", DeviceHint = "^(Upper|Lower)RightFlipper$", NumMatches = 2 },
-			new GamelogicEngineCoil(CoilFlipperLowerLeft, 48) { Description = "Left Flippers", DeviceHint = "^(Upper|Lower)LeftFlipper$",  NumMatches = 2 },
-
-			new GamelogicEngineCoil(CoilFlipperUpperRight, 34) { IsUnused = true },
-			new GamelogicEngineCoil(CoilFlipperUpperLeft, 36) { IsUnused = true },
+			new GamelogicEngineCoil(CoilFlipperUpperRight, 45) { Description = "Upper Right Flipper", DeviceHint = "^UpperRightFlipper$" },
+			new GamelogicEngineCoil(CoilFlipperLowerRight, 46) { Description = "Lower Right Flipper", DeviceHint = "^LowerRightFlipper$" },
+			new GamelogicEngineCoil(CoilFlipperUpperLeft, 47) { Description = "Upper Left Flipper", DeviceHint = "^UpperLeftFlipper$" },
+			new GamelogicEngineCoil(CoilFlipperLowerLeft, 48) { Description = "Lower Left Flipper", DeviceHint = "^LowerLeftFlipper$" },
 		};
 	}
 }
