@@ -1,6 +1,6 @@
 {
   "name": "org.visualpinball.engine.pinmame",
-  "version": "0.0.1-preview.25",
+  "version": "0.0.1-preview.26",
   "displayName": "Visual Pinball Engine (PinMAME)",
   "description": "PinMAME support",
   "keywords": [
