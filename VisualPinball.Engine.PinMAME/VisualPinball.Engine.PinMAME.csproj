@@ -14,8 +14,8 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="PinMame" Version="0.1.0-preview.47" />
-    <PackageReference Include="PinMame.Native" Version="3.4.0-preview.334" />
-    <PackageReference Include="VisualPinball.Engine" Version="0.0.1-preview.80" /> 
+    <PackageReference Include="PinMame.Native" Version="3.4.0-preview.336" />
+    <PackageReference Include="VisualPinball.Engine" Version="0.0.1-preview.82" /> 
     <!-- Uncomment when doing local dev -->
     <!-- 
     <Reference Include="VisualPinball.Engine">
@@ -27,7 +27,7 @@
     <ItemGroup>
       <Plugins Include="$(OutDir)$(AssemblyName).dll" />
       <Plugins Include="$(OutDir)PinMame.dll" />
-      <Plugins Include="$(NuGetPackageRoot)\pinmame.native.$(RuntimeIdentifier)\3.4.0-preview.322\runtimes\$(RuntimeIdentifier)\native\*" />
+      <Plugins Include="$(NuGetPackageRoot)\pinmame.native.$(RuntimeIdentifier)\3.4.0-preview.336\runtimes\$(RuntimeIdentifier)\native\*" />
     </ItemGroup>
     <Message Text="PluginsDeploy: @(Plugins)" />
     <Copy SourceFiles="@(Plugins)" DestinationFolder="..\VisualPinball.Engine.PinMAME.Unity\Plugins\$(RuntimeIdentifier)" SkipUnchangedFiles="true" />
