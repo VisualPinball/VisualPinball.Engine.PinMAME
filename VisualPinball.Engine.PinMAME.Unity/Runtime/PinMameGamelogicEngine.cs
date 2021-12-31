@@ -79,6 +79,7 @@ namespace VisualPinball.Engine.PinMAME
 		public GamelogicEngineWire[] AvailableWires => _game?.AvailableWires ?? Array.Empty<GamelogicEngineWire>();
 
 		public event EventHandler<CoilEventArgs> OnCoilChanged;
+		public event EventHandler<SwitchEventArgs2> OnSwitchChanged;
 		public event EventHandler<LampEventArgs> OnLampChanged;
 		public event EventHandler<LampsEventArgs> OnLampsChanged;
 		public event EventHandler<LampColorEventArgs> OnLampColorChanged;
@@ -559,6 +560,8 @@ namespace VisualPinball.Engine.PinMAME
 			} else {
 				Logger.Error($"[PinMAME] Unknown switch \"{id}\".");
 			}
+
+			OnSwitchChanged?.Invoke(this, new SwitchEventArgs2(id, isClosed));
 		}
 
 		public static DisplayFrameFormat GetDisplayFrameFormat(PinMameDisplayLayout layout)
@@ -611,5 +614,22 @@ namespace VisualPinball.Engine.PinMAME
 
 			throw new NotImplementedException($"Still unsupported segmented display format: {layout}.");
 		}
+
+
+		public void SetCoil(string n, bool value)
+		{
+			OnCoilChanged?.Invoke(this, new CoilEventArgs(n, value));
+		}
+
+		public void SetLamp(string id, int value, bool isCoil = false, LampSource source = LampSource.Lamp)
+		{
+			OnLampChanged?.Invoke(this, new LampEventArgs(id, value, isCoil, source));
+		}
+
+		public void SetLamp(string id, Color color)
+		{
+			OnLampColorChanged?.Invoke(this, new LampColorEventArgs(id, color));
+		}
+
 	}
 }
