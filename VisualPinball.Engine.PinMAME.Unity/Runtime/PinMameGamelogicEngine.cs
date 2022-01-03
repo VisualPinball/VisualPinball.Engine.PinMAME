@@ -615,7 +615,6 @@ namespace VisualPinball.Engine.PinMAME
 			throw new NotImplementedException($"Still unsupported segmented display format: {layout}.");
 		}
 
-
 		public void SetCoil(string n, bool value)
 		{
 			OnCoilChanged?.Invoke(this, new CoilEventArgs(n, value));
@@ -629,6 +628,21 @@ namespace VisualPinball.Engine.PinMAME
 		public void SetLamp(string id, Color color)
 		{
 			OnLampColorChanged?.Invoke(this, new LampColorEventArgs(id, color));
+		}
+
+		public float GetLamp(string id)
+		{
+			return _player.LampStatuses.ContainsKey(id) ? _player.LampStatuses[id] : 0;
+		}
+
+		public bool GetSwitch(string id)
+		{
+			return _player.SwitchStatuses.ContainsKey(id) && _player.SwitchStatuses[id].IsSwitchEnabled;
+		}
+
+		public bool GetCoil(string id)
+		{
+			return _player.CoilStatuses.ContainsKey(id) && _player.CoilStatuses[id];
 		}
 
 	}
