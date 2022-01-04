@@ -632,17 +632,17 @@ namespace VisualPinball.Engine.PinMAME
 
 		public float GetLamp(string id)
 		{
-			return _player.LampStatuses.ContainsKey(id) ? _player.LampStatuses[id] : 0;
+			return _player != null && _player.LampStatuses.ContainsKey(id) ? _player.LampStatuses[id] : 0;
 		}
 
 		public bool GetSwitch(string id)
 		{
-			return _player.SwitchStatuses.ContainsKey(id) && _player.SwitchStatuses[id].IsSwitchEnabled;
+			return _player != null && _player.SwitchStatuses.ContainsKey(id) && _player.SwitchStatuses[id].IsSwitchEnabled;
 		}
 
 		public bool GetCoil(string id)
 		{
-			return _player.CoilStatuses.ContainsKey(id) && _player.CoilStatuses[id];
+			return _player != null && _player.CoilStatuses.ContainsKey(id) && _player.CoilStatuses[id];
 		}
 
 	}
