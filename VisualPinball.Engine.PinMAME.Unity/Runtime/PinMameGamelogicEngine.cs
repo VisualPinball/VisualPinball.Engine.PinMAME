@@ -142,8 +142,15 @@ namespace VisualPinball.Engine.PinMAME
 			}
 
 			Logger.Info($"New PinMAME instance at {(double)AudioSettings.outputSampleRate / 1000}kHz");
-			_pinMame = PinMame.PinMame.Instance(PinMameAudioFormat.AudioFormatFloat, AudioSettings.outputSampleRate);
 
+			string vpmPath = null;
+
+			#if UNITY_IOS && !UNITY_EDITOR
+			vpmPath = Application.dataPath + "/pinmame";
+			#endif
+
+			_pinMame = PinMame.PinMame.Instance(PinMameAudioFormat.AudioFormatFloat, AudioSettings.outputSampleRate, vpmPath);
+                
 			_pinMame.SetHandleKeyboard(false);
 			_pinMame.SetHandleMechanics(DisableMechs ? 0 : 0xFF);
 
