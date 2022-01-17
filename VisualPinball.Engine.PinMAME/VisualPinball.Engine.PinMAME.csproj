@@ -13,9 +13,9 @@
     <RuntimeIdentifier Condition="$([MSBuild]::IsOSPlatform('Linux'))">linux-x64</RuntimeIdentifier>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="PinMame" Version="0.2.0-preview.3" />
-    <PackageReference Include="PinMame.Native" Version="3.5.0-preview.9" />
-    <PackageReference Include="VisualPinball.Engine" Version="0.0.1-preview.83" /> 
+    <PackageReference Include="PinMame" Version="0.2.0-preview.5" />
+    <PackageReference Include="PinMame.Native" Version="3.5.0-preview.14" />
+    <PackageReference Include="VisualPinball.Engine" Version="0.0.1-preview.87" /> 
     <!-- Uncomment when doing local dev -->
     <!-- 
     <Reference Include="VisualPinball.Engine">
@@ -27,7 +27,7 @@
     <ItemGroup>
       <Plugins Include="$(OutDir)$(AssemblyName).dll" />
       <Plugins Include="$(OutDir)PinMame.dll" />
-      <Plugins Include="$(NuGetPackageRoot)\pinmame.native.$(RuntimeIdentifier)\3.5.0-preview.9\runtimes\$(RuntimeIdentifier)\native\*" />
+      <Plugins Include="$(NuGetPackageRoot)\pinmame.native.$(RuntimeIdentifier)\3.5.0-preview.14\runtimes\$(RuntimeIdentifier)\native\*" />
     </ItemGroup>
     <Message Text="PluginsDeploy: @(Plugins)" />
     <Copy SourceFiles="@(Plugins)" DestinationFolder="..\VisualPinball.Engine.PinMAME.Unity\Plugins\$(RuntimeIdentifier)" SkipUnchangedFiles="true" />

@@ -20,11 +20,13 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using NLog;
 using PinMame;
 using UnityEngine;
+using UnityEngine.Networking;
 using VisualPinball.Engine.Game.Engines;
 using VisualPinball.Unity;
 using Logger = NLog.Logger;
@@ -141,16 +143,34 @@ namespace VisualPinball.Engine.PinMAME
 				OnLampChanged?.Invoke(this, new LampEventArgs(lamp.Id, 0));
 			}
 
-			Logger.Info($"New PinMAME instance at {(double)AudioSettings.outputSampleRate / 1000}kHz");
-
 			string vpmPath = null;
 
-			#if UNITY_IOS && !UNITY_EDITOR
-			vpmPath = Application.dataPath + "/pinmame";
+			#if (UNITY_IOS || UNITY_ANDROID) && !UNITY_EDITOR
+				vpmPath = Path.Combine(Application.persistentDataPath, "pinmame");
+				Directory.CreateDirectory(Path.Combine(vpmPath, "roms"));
+
+				byte[] data = null;
+
+				#if UNITY_IOS
+					data = File.ReadAllBytes(Path.Combine(Application.streamingAssetsPath, $"{romId}.zip");
+				#else
+					UnityWebRequest webRequest = new UnityWebRequest(Path.Combine(Application.streamingAssetsPath, $"{romId}.zip"));
+
+					webRequest.downloadHandler = new DownloadHandlerBuffer();
+					webRequest.SendWebRequest();
+
+					while (!webRequest.isDone) { };
+
+					data = webRequest.downloadHandler.data;
+				#endif
+
+				File.WriteAllBytes(Path.Combine(vpmPath, "roms", $"{romId}.zip"), data);
 			#endif
 
+			Logger.Info($"New PinMAME instance at {(double)AudioSettings.outputSampleRate / 1000}kHz");
+
 			_pinMame = PinMame.PinMame.Instance(PinMameAudioFormat.AudioFormatFloat, AudioSettings.outputSampleRate, vpmPath);
-                
+
 			_pinMame.SetHandleKeyboard(false);
 			_pinMame.SetHandleMechanics(DisableMechs ? 0 : 0xFF);
 
