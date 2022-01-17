@@ -37,6 +37,9 @@ In order to not accidentally commit those files, we recommend to ignore them:
 git update-index --assume-unchanged VisualPinball.Engine.PinMAME.Unity/Plugins/linux-x64/PinMame.dll.meta
 git update-index --assume-unchanged VisualPinball.Engine.PinMAME.Unity/Plugins/linux-x64/VisualPinball.Engine.PinMAME.dll.meta
 git update-index --assume-unchanged VisualPinball.Engine.PinMAME.Unity/Plugins/linux-x64/libpinmame.so.3.5.meta
+git update-index --assume-unchanged VisualPinball.Engine.PinMAME.Unity/Plugins/android-arm64-v8a/PinMame.dll.meta
+git update-index --assume-unchanged VisualPinball.Engine.PinMAME.Unity/Plugins/android-arm64-v8a/VisualPinball.Engine.PinMAME.dll.meta
+git update-index --assume-unchanged VisualPinball.Engine.PinMAME.Unity/Plugins/android-arm64-v8a/libpinmame.3.5.so.meta
 git update-index --assume-unchanged VisualPinball.Engine.PinMAME.Unity/Plugins/osx-x64/PinMame.dll.meta
 git update-index --assume-unchanged VisualPinball.Engine.PinMAME.Unity/Plugins/osx-x64/VisualPinball.Engine.PinMAME.dll.meta
 git update-index --assume-unchanged VisualPinball.Engine.PinMAME.Unity/Plugins/osx-x64/libpinmame.3.5.dylib.meta
