@@ -24,9 +24,17 @@
     -->
   </ItemGroup>
   <Target Name="PluginsDeploy" AfterTargets="AfterBuild">
+    <ItemGroup Condition="'$(RuntimeIdentifier)' != 'ios-arm64' And '$(RuntimeIdentifier)' != 'android-arm64-v8a'">
+       <Plugins Include="$(OutDir)PinMame.dll" />
+    </ItemGroup>
+    <ItemGroup Condition="'$(RuntimeIdentifier)' == 'ios-arm64'">
+       <Plugins Include="$(NuGetPackageRoot)\pinmame\0.2.0-preview.5\runtimes\ios\lib\netstandard2.1\PinMame.dll" />
+    </ItemGroup>
+    <ItemGroup Condition="'$(RuntimeIdentifier)' == 'android-arm64-v8a'">
+       <Plugins Include="$(NuGetPackageRoot)\pinmame\0.2.0-preview.5\runtimes\android\lib\netstandard2.1\PinMame.dll" />
+    </ItemGroup>
     <ItemGroup>
       <Plugins Include="$(OutDir)$(AssemblyName).dll" />
-      <Plugins Include="$(OutDir)PinMame.dll" />
       <Plugins Include="$(NuGetPackageRoot)\pinmame.native.$(RuntimeIdentifier)\3.5.0-preview.14\runtimes\$(RuntimeIdentifier)\native\*" />
     </ItemGroup>
     <Message Text="PluginsDeploy: @(Plugins)" />
