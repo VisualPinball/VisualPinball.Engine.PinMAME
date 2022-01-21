@@ -36,7 +36,7 @@ namespace VisualPinball.Engine.PinMAME
 	[Serializable]
 	[DisallowMultipleComponent]
 	[RequireComponent(typeof(AudioSource))]
-	[AddComponentMenu("Visual Pinball/Game Logic Engine/PinMAME")]
+	[AddComponentMenu("Visual Pinball/Gamelogic Engine/PinMAME")]
 	public class PinMameGamelogicEngine : MonoBehaviour, IGamelogicEngine
 	{
 		public string Name { get; } = "PinMAME Gamelogic Engine";
@@ -87,6 +87,7 @@ namespace VisualPinball.Engine.PinMAME
 		public event EventHandler<LampColorEventArgs> OnLampColorChanged;
 		public event EventHandler<AvailableDisplays> OnDisplaysAvailable;
 		public event EventHandler<DisplayFrameData> OnDisplayFrame;
+		public event EventHandler<EventArgs> OnStarted;
 
 		[NonSerialized] private Player _player;
 		[NonSerialized] private PinMame.PinMame _pinMame;
@@ -214,6 +215,10 @@ namespace VisualPinball.Engine.PinMAME
 			SendMechs();
 
 			_solenoidDelayStart = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+
+			lock (_dispatchQueue) {
+				_dispatchQueue.Enqueue(() => OnStarted?.Invoke(this, EventArgs.Empty));
+			}
 		}
 
 		private void Update()
