@@ -153,7 +153,7 @@ namespace VisualPinball.Engine.PinMAME
 				byte[] data = null;
 
 				#if UNITY_IOS
-					data = File.ReadAllBytes(Path.Combine(Application.streamingAssetsPath, $"{romId}.zip");
+					data = File.ReadAllBytes(Path.Combine(Application.streamingAssetsPath, $"{romId}.zip"));
 				#else
 					UnityWebRequest webRequest = new UnityWebRequest(Path.Combine(Application.streamingAssetsPath, $"{romId}.zip"));
 
