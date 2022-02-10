@@ -59,19 +59,19 @@ namespace VisualPinball.Engine.PinMAME
 		[Tooltip("Disable audio")]
 		public bool DisableAudio;
 
-		public GamelogicEngineSwitch[] AvailableSwitches {
+		public GamelogicEngineSwitch[] RequestedSwitches {
 			get {
 				UpdateCaches();
 				return _game?.AvailableSwitches ?? Array.Empty<GamelogicEngineSwitch>();
 			}
 		}
-		public GamelogicEngineCoil[] AvailableCoils {
+		public GamelogicEngineCoil[] RequestedCoils {
 			get {
 				UpdateCaches();
 				return _coils.Values.ToArray();
 			}
 		}
-		public GamelogicEngineLamp[] AvailableLamps {
+		public GamelogicEngineLamp[] RequestedLamps {
 			get {
 				UpdateCaches();
 				return _lamps.Values.ToArray();
@@ -85,7 +85,7 @@ namespace VisualPinball.Engine.PinMAME
 		public event EventHandler<LampEventArgs> OnLampChanged;
 		public event EventHandler<LampsEventArgs> OnLampsChanged;
 		public event EventHandler<LampColorEventArgs> OnLampColorChanged;
-		public event EventHandler<AvailableDisplays> OnDisplaysAvailable;
+		public event EventHandler<RequestedDisplays> OnDisplaysRequested;
 		public event EventHandler<DisplayFrameData> OnDisplayFrame;
 		public event EventHandler<EventArgs> OnStarted;
 
@@ -177,7 +177,7 @@ namespace VisualPinball.Engine.PinMAME
 
 			_pinMame.OnGameStarted += OnGameStarted;
 			_pinMame.OnGameEnded += OnGameEnded;
-			_pinMame.OnDisplayAvailable += OnDisplayAvailable;
+			_pinMame.OnDisplayAvailable += OnDisplayRequested;
 			_pinMame.OnDisplayUpdated += OnDisplayUpdated;
 
 			if (!DisableAudio) {
@@ -252,12 +252,12 @@ namespace VisualPinball.Engine.PinMAME
 			}
 		}
 
-		private void OnDisplayAvailable(int index, int displayCount, PinMameDisplayLayout displayLayout)
+		private void OnDisplayRequested(int index, int displayCount, PinMameDisplayLayout displayLayout)
 		{
 			if (displayLayout.IsDmd) {
 				lock (_dispatchQueue) {
 					_dispatchQueue.Enqueue(() =>
-						OnDisplaysAvailable?.Invoke(this, new AvailableDisplays(
+						OnDisplaysRequested?.Invoke(this, new RequestedDisplays(
 							new DisplayConfig($"{DmdPrefix}{index}", displayLayout.Width, displayLayout.Height))));
 				}
 
@@ -267,7 +267,7 @@ namespace VisualPinball.Engine.PinMAME
 			} else {
 				lock (_dispatchQueue) {
 					_dispatchQueue.Enqueue(() =>
-						OnDisplaysAvailable?.Invoke(this, new AvailableDisplays(
+						OnDisplaysRequested?.Invoke(this, new RequestedDisplays(
 							new DisplayConfig($"{SegDispPrefix}{index}", displayLayout.Length, 1))));
 				}
 
@@ -562,7 +562,7 @@ namespace VisualPinball.Engine.PinMAME
 				_pinMame.StopGame();
 				_pinMame.OnGameStarted -= OnGameStarted;
 				_pinMame.OnGameEnded -= OnGameEnded;
-				_pinMame.OnDisplayAvailable -= OnDisplayAvailable;
+				_pinMame.OnDisplayAvailable -= OnDisplayRequested;
 				_pinMame.OnDisplayUpdated -= OnDisplayUpdated;
 
 				if (!DisableAudio)
