@@ -116,6 +116,11 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineLamp("46") { Description = "Spot Target" },
 			new GamelogicEngineLamp("47") { Description = "Left Outside Rollover / Right Spinner", DeviceHint = "^L47[a-b]$", NumMatches = 2 },
 			new GamelogicEngineLamp("51") { Description = "Right Outisde Rollover / Left Spinner", DeviceHint = "^L51[a-b]$", NumMatches = 2 },
+			new GamelogicEngineLamp("l_auxiliary", 100) { Description = "Auxiliary Lamps", DeviceHint = "^Auxiliary$" },
+			new GamelogicEngineLamp("l_lower", 101) { Description = "Lower", DeviceHint = "^Lower$" },
+			new GamelogicEngineLamp("l_upper_left_1", 102) { Description = "Upper Left 1", DeviceHint = "^UpperLeft1$" },
+			new GamelogicEngineLamp("l_upper_left_2", 103) { Description = "Upper Left 2", DeviceHint = "^UpperLeft2$" },
+			new GamelogicEngineLamp("l_upper_right", 104) { Description = "Upper Right", DeviceHint = "^UpperRight$" },
 		};
 
 		protected override GamelogicEngineCoil[] GameCoils { get; } = {
