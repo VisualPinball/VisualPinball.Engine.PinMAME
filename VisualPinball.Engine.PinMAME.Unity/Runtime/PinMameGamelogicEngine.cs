@@ -662,9 +662,9 @@ namespace VisualPinball.Engine.PinMAME
 			OnLampColorChanged?.Invoke(this, new LampColorEventArgs(id, color));
 		}
 
-		public float GetLamp(string id)
+		public LampState GetLamp(string id)
 		{
-			return _player != null && _player.LampStatuses.ContainsKey(id) ? _player.LampStatuses[id] : 0;
+			return _player != null && _player.LampStatuses.ContainsKey(id) ? _player.LampStatuses[id] : LampState.Default;
 		}
 
 		public bool GetSwitch(string id)
