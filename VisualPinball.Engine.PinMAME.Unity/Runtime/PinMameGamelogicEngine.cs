@@ -20,13 +20,11 @@
 
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using NLog;
 using PinMame;
 using UnityEngine;
-using UnityEngine.Networking;
 using VisualPinball.Engine.Game.Engines;
 using VisualPinball.Unity;
 using Logger = NLog.Logger;
@@ -46,6 +44,8 @@ namespace VisualPinball.Engine.PinMAME
 
 		public PinMameGame Game { get => _game; set => _game = value; }
 
+		#region Configuration
+
 		[HideInInspector]
 		public string romId = string.Empty;
 
@@ -54,10 +54,14 @@ namespace VisualPinball.Engine.PinMAME
 
 		[Min(0f)]
 		[Tooltip("Delay after startup to listen for solenoid events.")]
-		public float SolenoidDelay = 0;
+		public float SolenoidDelay;
 
 		[Tooltip("Disable audio")]
 		public bool DisableAudio;
+
+		#endregion
+
+		#region IGamelogicEngine
 
 		public GamelogicEngineSwitch[] RequestedSwitches {
 			get {
@@ -87,6 +91,10 @@ namespace VisualPinball.Engine.PinMAME
 		public event EventHandler<RequestedDisplays> OnDisplaysRequested;
 		public event EventHandler<DisplayFrameData> OnDisplayFrame;
 		public event EventHandler<EventArgs> OnStarted;
+
+		#endregion
+
+		#region Internals
 
 		[NonSerialized] private Player _player;
 		[NonSerialized] private PinMame.PinMame _pinMame;
@@ -123,6 +131,10 @@ namespace VisualPinball.Engine.PinMAME
 		private Dictionary<int, PinMameMechComponent> _registeredMechs = new();
 		private HashSet<int> _mechSwitches = new();
 
+		#endregion
+
+		#region Lifecycle
+
 		private void Awake()
 		{
 			Logger.Info("Project audio sample rate: " +  AudioSettings.outputSampleRate);
@@ -134,6 +146,61 @@ namespace VisualPinball.Engine.PinMAME
 
 			_lastAudioFrame = Array.Empty<float>();
 			_lastAudioFrameOffset = 0;
+		}
+
+		private void Update()
+		{
+			if (_pinMame == null || !_isRunning) {
+				return;
+			}
+
+			lock (_dispatchQueue) {
+				while (_dispatchQueue.Count > 0) {
+					_dispatchQueue.Dequeue().Invoke();
+				}
+			}
+
+			// lamps
+			foreach (var changedLamp in _pinMame.GetChangedLamps()) {
+				if (_lamps.ContainsKey(changedLamp.Id)) {
+					//Logger.Info($"[PinMAME] <= lamp {changedLamp.Id}: {changedLamp.Value}");
+					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[changedLamp.Id].Id, changedLamp.Value));
+				}
+			}
+
+			// gi
+			foreach (var changedGi in _pinMame.GetChangedGIs()) {
+				if (_lamps.ContainsKey(changedGi.Id)) {
+					//Logger.Info($"[PinMAME] <= gi {changedGi.Id}: {changedGi.Value}");
+					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[changedGi.Id].Id, changedGi.Value, LampSource.GI));
+				} else {
+					Debug.Log($"No GI {changedGi.Id} found.");
+				}
+			}
+		}
+
+		private void OnDestroy()
+		{
+			if (_pinMame != null) {
+				_pinMame.StopGame();
+				_pinMame.OnGameStarted -= OnGameStarted;
+				_pinMame.OnGameEnded -= OnGameEnded;
+				_pinMame.OnDisplayAvailable -= OnDisplayRequested;
+				_pinMame.OnDisplayUpdated -= OnDisplayUpdated;
+
+				if (!DisableAudio)
+				{
+					_pinMame.OnAudioAvailable -= OnAudioAvailable;
+					_pinMame.OnAudioUpdated -= OnAudioUpdated;
+				}
+
+				_pinMame.OnMechAvailable -= OnMechAvailable;
+				_pinMame.OnMechUpdated -= OnMechUpdated;
+				_pinMame.OnSolenoidUpdated -= OnSolenoidUpdated;
+
+			}
+			_frameBuffer.Clear();
+			_dmdLevels.Clear();
 		}
 
 		public void OnInit(Player player, TableApi tableApi, BallManager ballManager)
@@ -169,6 +236,7 @@ namespace VisualPinball.Engine.PinMAME
 
 			Logger.Info($"New PinMAME instance at {(double)AudioSettings.outputSampleRate / 1000}kHz");
 
+			// ReSharper disable once ExpressionIsAlwaysNull
 			_pinMame = PinMame.PinMame.Instance(PinMameAudioFormat.AudioFormatFloat, AudioSettings.outputSampleRate, vpmPath);
 
 			_pinMame.SetHandleKeyboard(false);
@@ -199,12 +267,6 @@ namespace VisualPinball.Engine.PinMAME
 			}
 		}
 
-		public void RegisterMech(PinMameMechComponent mechComponent)
-		{
-			var id = _numMechs++;
-			_registeredMechs[id] = mechComponent;
-		}
-
 		private void OnGameStarted()
 		{
 			Logger.Info($"[PinMAME] Game started.");
@@ -220,38 +282,36 @@ namespace VisualPinball.Engine.PinMAME
 			}
 		}
 
-		private void Update()
+		private void OnGameEnded()
 		{
-			if (_pinMame == null || !_isRunning) {
+			Logger.Info($"[PinMAME] Game ended.");
+			_isRunning = false;
+		}
+
+		private void UpdateCaches()
+		{
+			if (_game == null) {
 				return;
 			}
-
-			lock (_dispatchQueue) {
-				while (_dispatchQueue.Count > 0) {
-					_dispatchQueue.Dequeue().Invoke();
-				}
+			_lamps.Clear();
+			_coils.Clear();
+			_switches.Clear();
+			foreach (var lamp in _game.AvailableLamps) {
+				_lamps[lamp.InternalId] = lamp;
 			}
-
-			// lamps
-			foreach (var changedLamp in _pinMame.GetChangedLamps()) {
-				if (_lamps.ContainsKey(changedLamp.Id)) {
-					//Logger.Info($"[PinMAME] <= lamp {changedLamp.Id}: {changedLamp.Value}");
-					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[changedLamp.Id].Id, changedLamp.Value));
-				}
+			foreach (var coil in _game.AvailableCoils) {
+				_coils[coil.InternalId] = coil;
 			}
-
-			// gi
-			foreach (var changedGi in _pinMame.GetChangedGIs()) {
-				if (_lamps.ContainsKey(changedGi.Id)) {
-					//Logger.Info($"[PinMAME] <= gi {changedGi.Id}: {changedGi.Value}");
-					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[changedGi.Id].Id, changedGi.Value, LampSource.GI));
-				} else {
-					Debug.Log($"No GI {changedGi.Id} found.");
-				}
+			foreach (var sw in _game.AvailableSwitches) {
+				_switches[sw.Id] = sw;
 			}
 		}
 
-		private void OnDisplayRequested(int index, int displayCount, PinMameDisplayLayout displayLayout)
+		#endregion
+
+		#region Displays
+
+				private void OnDisplayRequested(int index, int displayCount, PinMameDisplayLayout displayLayout)
 		{
 			if (displayLayout.IsDmd) {
 				lock (_dispatchQueue) {
@@ -318,7 +378,62 @@ namespace VisualPinball.Engine.PinMAME
 			}
 		}
 
-		private int OnAudioAvailable(PinMameAudioInfo audioInfo)
+		public static DisplayFrameFormat GetDisplayFrameFormat(PinMameDisplayLayout layout)
+		{
+			if (layout.IsDmd) {
+				return layout.Depth == 4 ? DisplayFrameFormat.Dmd4 : DisplayFrameFormat.Dmd2;
+			}
+
+			switch (layout.Type) {
+				case PinMameDisplayType.Seg8:   // 7  segments and comma
+				case PinMameDisplayType.Seg7SC: // 7  segments, small, with comma
+				case PinMameDisplayType.Seg8D:  // 7  segments and period
+				case PinMameDisplayType.Seg7:  // 7  segments
+				case PinMameDisplayType.Seg7S: // 7  segments, small
+				case PinMameDisplayType.Seg87:  // 7  segments, comma every three
+				case PinMameDisplayType.Seg87F: // 7  segments, forced comma every three
+				case PinMameDisplayType.Seg10: // 9  segments and comma
+				case PinMameDisplayType.Seg9: // 9  segments
+				case PinMameDisplayType.Seg98: // 9  segments, comma every three
+				case PinMameDisplayType.Seg98F: // 9  segments, forced comma every three
+				case PinMameDisplayType.Seg16:  // 16 segments
+				case PinMameDisplayType.Seg16R: // 16 segments with comma and period reversed
+				case PinMameDisplayType.Seg16N: // 16 segments without commas
+				case PinMameDisplayType.Seg16D: // 16 segments with periods only
+				case PinMameDisplayType.Seg16S: // 16 segments with split top and bottom line
+				case PinMameDisplayType.Seg8H:
+				case PinMameDisplayType.Seg7H:
+				case PinMameDisplayType.Seg87H:
+				case PinMameDisplayType.Seg87FH:
+				case PinMameDisplayType.Seg7SH:
+				case PinMameDisplayType.Seg7SCH:
+				case PinMameDisplayType.Seg7 | PinMameDisplayType.NoDisp:
+					return DisplayFrameFormat.Segment;
+
+				case PinMameDisplayType.Video:
+					break;
+
+				case PinMameDisplayType.SegAll:
+				case PinMameDisplayType.Import:
+				case PinMameDisplayType.SegMask:
+				case PinMameDisplayType.SegHiBit:
+				case PinMameDisplayType.SegRev:
+				case PinMameDisplayType.DmdNoAA:
+				case PinMameDisplayType.NoDisp:
+					throw new ArgumentOutOfRangeException(nameof(layout), layout, null);
+
+				default:
+					throw new ArgumentOutOfRangeException(nameof(layout), layout, null);
+			}
+
+			throw new NotImplementedException($"Still unsupported segmented display format: {layout}.");
+		}
+
+		#endregion
+
+		#region Audio
+
+			private int OnAudioAvailable(PinMameAudioInfo audioInfo)
 		{
 			Logger.Info("Game audio available: " + audioInfo);
 
@@ -335,8 +450,8 @@ namespace VisualPinball.Engine.PinMAME
 
 			_audioNumSamplesInput += frameSize;
 			if (_audioNumSamplesInput > 100000) {
-				var delta = AudioSettings.dspTime - _audioInputStart;
-				var queueMs = System.Math.Round(_audioQueue.Count * (double)_audioInfo.SamplesPerFrame / _audioInfo.SampleRate * 1000);
+				// var delta = AudioSettings.dspTime - _audioInputStart;
+				// var queueMs = System.Math.Round(_audioQueue.Count * (double)_audioInfo.SamplesPerFrame / _audioInfo.SampleRate * 1000);
 				//Debug.Log($"INPUT: {System.Math.Round(_audioNumSamplesInput / delta)} - {_audioQueue.Count} in queue ({queueMs}ms)");
 				_audioInputStart = AudioSettings.dspTime;
 				_audioNumSamplesInput = 0;
@@ -387,7 +502,7 @@ namespace VisualPinball.Engine.PinMAME
 		{
 			_audioNumSamplesOutput += data.Length / channels;
 			if (_audioNumSamplesOutput > 100000) {
-				var delta = AudioSettings.dspTime - _audioOutputStart;
+				//var delta = AudioSettings.dspTime - _audioOutputStart;
 				//Debug.Log($"OUTPUT: {System.Math.Round(_audioNumSamplesOutput / delta)}");
 				_audioOutputStart = AudioSettings.dspTime;
 				_audioNumSamplesOutput = 0;
@@ -440,21 +555,17 @@ namespace VisualPinball.Engine.PinMAME
 			}
 		}
 
-		private void OnMechAvailable(int mechNo, PinMameMechInfo mechInfo)
+		#endregion
+
+		#region Coils
+
+		public void SetCoil(string n, bool value)
 		{
-			Logger.Info($"[PinMAME] <= mech available: mechNo={mechNo}, mechInfo={mechInfo}");
+			OnCoilChanged?.Invoke(this, new CoilEventArgs(n, value));
 		}
-
-		private void OnMechUpdated(int mechNo, PinMameMechInfo mechInfo)
+		public bool GetCoil(string id)
 		{
-			if (_registeredMechs.ContainsKey(mechNo)) {
-				lock (_dispatchQueue) {
-					_dispatchQueue.Enqueue(() => _registeredMechs[mechNo].UpdateMech(mechInfo));
-				}
-
-			} else {
-				Logger.Info($"[PinMAME] <= mech updated: mechNo={mechNo}, mechInfo={mechInfo}");
-			}
+			return _player != null && _player.CoilStatuses.ContainsKey(id) && _player.CoilStatuses[id];
 		}
 
 		private void OnSolenoidUpdated(int internalId, bool isActive)
@@ -492,11 +603,23 @@ namespace VisualPinball.Engine.PinMAME
 			}
 		}
 
-		private void OnGameEnded()
+		#endregion
+
+		#region Lamps
+
+		public void SetLamp(string id, float value, bool isCoil = false, LampSource source = LampSource.Lamp)
 		{
-			Logger.Info($"[PinMAME] Game ended.");
-			_isRunning = false;
+			OnLampChanged?.Invoke(this, new LampEventArgs(id, value, isCoil, source));
 		}
+
+		public LampState GetLamp(string id)
+		{
+			return _player != null && _player.LampStatuses.ContainsKey(id) ? _player.LampStatuses[id] : LampState.Default;
+		}
+
+		#endregion
+
+		#region Switches
 
 		public void SendInitialSwitches()
 		{
@@ -512,6 +635,54 @@ namespace VisualPinball.Engine.PinMAME
 					Logger.Info($"[PinMAME] => sw {id} ({_switches[id].InternalId}): {true} | {_switches[id].Description}");
 					_pinMame.SetSwitch(_switches[id].InternalId, true);
 				}
+			}
+		}
+
+		public void Switch(string id, bool isClosed)
+		{
+			if (_switches.ContainsKey(id)) {
+				if (_mechSwitches.Contains(_switches[id].InternalId)) {
+					// mech switches are triggered internally by pinmame.
+					return;
+				}
+				Logger.Info($"[PinMAME] => sw {id} ({_switches[id].InternalId}): {isClosed} | {_switches[id].Description}");
+				_pinMame.SetSwitch(_switches[id].InternalId, isClosed);
+			} else {
+				Logger.Error($"[PinMAME] Unknown switch \"{id}\".");
+			}
+
+			OnSwitchChanged?.Invoke(this, new SwitchEventArgs2(id, isClosed));
+		}
+
+		public bool GetSwitch(string id)
+		{
+			return _player != null && _player.SwitchStatuses.ContainsKey(id) && _player.SwitchStatuses[id].IsSwitchEnabled;
+		}
+
+		#endregion
+
+		#region Mechs
+
+		public void RegisterMech(PinMameMechComponent mechComponent)
+		{
+			var id = _numMechs++;
+			_registeredMechs[id] = mechComponent;
+		}
+
+		private void OnMechAvailable(int mechNo, PinMameMechInfo mechInfo)
+		{
+			Logger.Info($"[PinMAME] <= mech available: mechNo={mechNo}, mechInfo={mechInfo}");
+		}
+
+		private void OnMechUpdated(int mechNo, PinMameMechInfo mechInfo)
+		{
+			if (_registeredMechs.ContainsKey(mechNo)) {
+				lock (_dispatchQueue) {
+					_dispatchQueue.Enqueue(() => _registeredMechs[mechNo].UpdateMech(mechInfo));
+				}
+
+			} else {
+				Logger.Info($"[PinMAME] <= mech updated: mechNo={mechNo}, mechInfo={mechInfo}");
 			}
 		}
 
@@ -531,145 +702,6 @@ namespace VisualPinball.Engine.PinMAME
 			}
 		}
 
-		private void UpdateCaches()
-		{
-			if (_game == null) {
-				return;
-			}
-			_lamps.Clear();
-			_coils.Clear();
-			_switches.Clear();
-			foreach (var lamp in _game.AvailableLamps) {
-				_lamps[lamp.InternalId] = lamp;
-			}
-			foreach (var coil in _game.AvailableCoils) {
-				_coils[coil.InternalId] = coil;
-			}
-			foreach (var sw in _game.AvailableSwitches) {
-				_switches[sw.Id] = sw;
-			}
-		}
-
-		private void OnDestroy()
-		{
-			StopGame();
-		}
-
-		public void StopGame()
-		{
-			if (_pinMame != null) {
-				_pinMame.StopGame();
-				_pinMame.OnGameStarted -= OnGameStarted;
-				_pinMame.OnGameEnded -= OnGameEnded;
-				_pinMame.OnDisplayAvailable -= OnDisplayRequested;
-				_pinMame.OnDisplayUpdated -= OnDisplayUpdated;
-
-				if (!DisableAudio)
-				{
-					_pinMame.OnAudioAvailable -= OnAudioAvailable;
-					_pinMame.OnAudioUpdated -= OnAudioUpdated;
-				}
-
-				_pinMame.OnMechAvailable -= OnMechAvailable;
-				_pinMame.OnMechUpdated -= OnMechUpdated;
-				_pinMame.OnSolenoidUpdated -= OnSolenoidUpdated;
-
-			}
-			_frameBuffer.Clear();
-			_dmdLevels.Clear();
-		}
-
-		public void Switch(string id, bool isClosed)
-		{
-			if (_switches.ContainsKey(id)) {
-				if (_mechSwitches.Contains(_switches[id].InternalId)) {
-					// mech switches are triggered internally by pinmame.
-					return;
-				}
-				Logger.Info($"[PinMAME] => sw {id} ({_switches[id].InternalId}): {isClosed} | {_switches[id].Description}");
-				_pinMame.SetSwitch(_switches[id].InternalId, isClosed);
-			} else {
-				Logger.Error($"[PinMAME] Unknown switch \"{id}\".");
-			}
-
-			OnSwitchChanged?.Invoke(this, new SwitchEventArgs2(id, isClosed));
-		}
-
-		public static DisplayFrameFormat GetDisplayFrameFormat(PinMameDisplayLayout layout)
-		{
-			if (layout.IsDmd) {
-				return layout.Depth == 4 ? DisplayFrameFormat.Dmd4 : DisplayFrameFormat.Dmd2;
-			}
-
-			switch (layout.Type) {
-				case PinMameDisplayType.Seg8:   // 7  segments and comma
-				case PinMameDisplayType.Seg7SC: // 7  segments, small, with comma
-				case PinMameDisplayType.Seg8D:  // 7  segments and period
-				case PinMameDisplayType.Seg7:  // 7  segments
-				case PinMameDisplayType.Seg7S: // 7  segments, small
-				case PinMameDisplayType.Seg87:  // 7  segments, comma every three
-				case PinMameDisplayType.Seg87F: // 7  segments, forced comma every three
-				case PinMameDisplayType.Seg10: // 9  segments and comma
-				case PinMameDisplayType.Seg9: // 9  segments
-				case PinMameDisplayType.Seg98: // 9  segments, comma every three
-				case PinMameDisplayType.Seg98F: // 9  segments, forced comma every three
-				case PinMameDisplayType.Seg16:  // 16 segments
-				case PinMameDisplayType.Seg16R: // 16 segments with comma and period reversed
-				case PinMameDisplayType.Seg16N: // 16 segments without commas
-				case PinMameDisplayType.Seg16D: // 16 segments with periods only
-				case PinMameDisplayType.Seg16S: // 16 segments with split top and bottom line
-				case PinMameDisplayType.Seg8H:
-				case PinMameDisplayType.Seg7H:
-				case PinMameDisplayType.Seg87H:
-				case PinMameDisplayType.Seg87FH:
-				case PinMameDisplayType.Seg7SH:
-				case PinMameDisplayType.Seg7SCH:
-				case PinMameDisplayType.Seg7 | PinMameDisplayType.NoDisp:
-					return DisplayFrameFormat.Segment;
-
-				case PinMameDisplayType.Video:
-					break;
-
-				case PinMameDisplayType.SegAll:
-				case PinMameDisplayType.Import:
-				case PinMameDisplayType.SegMask:
-				case PinMameDisplayType.SegHiBit:
-				case PinMameDisplayType.SegRev:
-				case PinMameDisplayType.DmdNoAA:
-				case PinMameDisplayType.NoDisp:
-					throw new ArgumentOutOfRangeException(nameof(layout), layout, null);
-
-				default:
-					throw new ArgumentOutOfRangeException(nameof(layout), layout, null);
-			}
-
-			throw new NotImplementedException($"Still unsupported segmented display format: {layout}.");
-		}
-
-		public void SetCoil(string n, bool value)
-		{
-			OnCoilChanged?.Invoke(this, new CoilEventArgs(n, value));
-		}
-
-		public void SetLamp(string id, float value, bool isCoil = false, LampSource source = LampSource.Lamp)
-		{
-			OnLampChanged?.Invoke(this, new LampEventArgs(id, value, isCoil, source));
-		}
-
-		public LampState GetLamp(string id)
-		{
-			return _player != null && _player.LampStatuses.ContainsKey(id) ? _player.LampStatuses[id] : LampState.Default;
-		}
-
-		public bool GetSwitch(string id)
-		{
-			return _player != null && _player.SwitchStatuses.ContainsKey(id) && _player.SwitchStatuses[id].IsSwitchEnabled;
-		}
-
-		public bool GetCoil(string id)
-		{
-			return _player != null && _player.CoilStatuses.ContainsKey(id) && _player.CoilStatuses[id];
-		}
-
+		#endregion
 	}
 }
