@@ -100,20 +100,20 @@ namespace VisualPinball.Engine.PinMAME
 		[NonSerialized] private PinMame.PinMame _pinMame;
 		[SerializeReference] private PinMameGame _game;
 
-		private Dictionary<string, GamelogicEngineSwitch> _switches = new Dictionary<string, GamelogicEngineSwitch>();
-		private Dictionary<int, GamelogicEngineCoil> _coils = new Dictionary<int, GamelogicEngineCoil>();
-		private Dictionary<int, GamelogicEngineLamp> _lamps = new Dictionary<int, GamelogicEngineLamp>();
+		private Dictionary<string, GamelogicEngineSwitch> _switches = new();
+		private Dictionary<int, GamelogicEngineCoil> _coils = new();
+		private Dictionary<int, GamelogicEngineLamp> _lamps = new();
 
 		private bool _isRunning;
 		private int _numMechs;
-		private Dictionary<int, byte[]> _frameBuffer = new Dictionary<int, byte[]>();
-		private Dictionary<int, Dictionary<byte, byte>> _dmdLevels = new Dictionary<int, Dictionary<byte, byte>>();
+		private Dictionary<int, byte[]> _frameBuffer = new();
+		private Dictionary<int, Dictionary<byte, byte>> _dmdLevels = new();
 
 		private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-		private static readonly Color Tint = new Color(1, 0.18f, 0);
+		private static readonly Color Tint = new(1, 0.18f, 0);
 
-		private readonly Queue<Action> _dispatchQueue = new Queue<Action>();
-		private readonly Queue<float[]> _audioQueue = new Queue<float[]>();
+		private readonly Queue<Action> _dispatchQueue = new();
+		private readonly Queue<float[]> _audioQueue = new();
 
 		private int _audioFilterChannels;
 		private PinMameAudioInfo _audioInfo;
@@ -570,26 +570,25 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void OnSolenoidUpdated(int internalId, bool isActive)
 		{
-			if (_coils.ContainsKey(internalId))
-			{
-				if (!_solenoidsEnabled)
-				{
-					_solenoidsEnabled = (DateTimeOffset.Now.ToUnixTimeMilliseconds() - _solenoidDelayStart) >= SolenoidDelay;
+			if (_coils.ContainsKey(internalId)) {
 
-					if (_solenoidsEnabled)
-					{
+				if (!_solenoidsEnabled) {
+					_solenoidsEnabled = DateTimeOffset.Now.ToUnixTimeMilliseconds() - _solenoidDelayStart >= SolenoidDelay;
+
+					if (_solenoidsEnabled) {
 						Logger.Info($"Solenoids enabled, {SolenoidDelay}ms passed");
 					}
 				}
 
-				if (_solenoidsEnabled)
-				{
-					Logger.Info($"[PinMAME] <= coil {_coils[internalId].Id} ({internalId}): {isActive} | {_coils[internalId].Description}");
+				if (_solenoidsEnabled) {
+					var coil = _coils[internalId];
+					var id = coil != null ? coil.Id : internalId.ToString();
+					var desc = coil != null ? coil.Description : "-";
+					Logger.Info($"[PinMAME] <= coil {id} ({internalId}): {isActive} | {desc}");
 
-					lock (_dispatchQueue)
-					{
-						_dispatchQueue.Enqueue(() =>
-							OnCoilChanged?.Invoke(this, new CoilEventArgs(_coils[internalId].Id, isActive)));
+					lock (_dispatchQueue) {
+						id = _coils[internalId].Id;
+						_dispatchQueue.Enqueue(() => OnCoilChanged?.Invoke(this, new CoilEventArgs(id, isActive)));
 					}
 				}
 				else
