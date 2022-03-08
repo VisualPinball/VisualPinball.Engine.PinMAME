@@ -61,13 +61,15 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			_games = new PinMameGame[] {
 				new AttackFromMars(),
 				new CreatureFromTheBlackLagoon(),
-				new MedievalMadness(),
-				new Terminator2(),
 				new FlashGordon(),
-				new StarTrekEnterprise(),
+				new MedievalMadness(),
 				new Rock(),
 				new RockEncore(),
+				new StarTrekEnterprise(),
+				new Terminator2(),
+				new TheWalkingDead(),
 			};
+
 			_gameNames = new[] {"-- none --"}
 				.Concat(_games.Select(g => g.Name))
 				.ToArray();
