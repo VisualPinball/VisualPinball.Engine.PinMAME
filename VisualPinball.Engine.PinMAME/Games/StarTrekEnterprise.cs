@@ -15,7 +15,6 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 using System;
-using VisualPinball.Engine.Common;
 using VisualPinball.Engine.Game.Engines;
 using VisualPinball.Engine.Math;
 using VisualPinball.Engine.PinMAME.MPUs;
@@ -23,7 +22,7 @@ using VisualPinball.Engine.PinMAME.MPUs;
 namespace VisualPinball.Engine.PinMAME.Games
 {
 	[Serializable]
-	public class StarTrekEnterprise : Wpc
+	public class StarTrekEnterprise : Sam
 	{
 		public override string Name => "Star Trek - Enterprise Limited Edition";
 		public override string Id => "star-trek-stern";
