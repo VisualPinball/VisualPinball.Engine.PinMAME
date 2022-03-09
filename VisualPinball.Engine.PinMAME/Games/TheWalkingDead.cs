@@ -137,9 +137,9 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineLamp("22") { Description = "Left Outlane" },
 			new GamelogicEngineLamp("23") { Description = "Left Return Lane" },
 
-			new GamelogicEngineLamp("24") { Description = "R. Loop Arrow Red", Type = LampType.RgbMulti, Channel = ColorChannel.Red },
-			new GamelogicEngineLamp("24") { Description = "R. Loop Arrow Grn", Type = LampType.RgbMulti, Channel = ColorChannel.Green },
-			new GamelogicEngineLamp("24") { Description = "R. Loop Arrow Blu", Type = LampType.RgbMulti, Channel = ColorChannel.Blue },
+			new GamelogicEngineLamp("24", 168) { Description = "R. Loop Arrow Red", Type = LampType.RgbMulti, Channel = ColorChannel.Red },
+			new GamelogicEngineLamp("24", 169) { Description = "R. Loop Arrow Grn", Type = LampType.RgbMulti, Channel = ColorChannel.Green },
+			new GamelogicEngineLamp("24", 170) { Description = "R. Loop Arrow Blu", Type = LampType.RgbMulti, Channel = ColorChannel.Blue },
 
 			new GamelogicEngineLamp("25") { Description = "Blood Bath" },
 			new GamelogicEngineLamp("26") { Description = "First Aid" },
@@ -150,25 +150,25 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineLamp("31") { Description = "L. Loop Multi-Kill" },
 			new GamelogicEngineLamp("32") { Description = "Barn Mode" },
 
-			new GamelogicEngineLamp("33") { Description = "L. Loop Arrow Red", Type = LampType.RgbMulti, Channel = ColorChannel.Red },
-			new GamelogicEngineLamp("33") { Description = "L. Loop Arrow Grn", Type = LampType.RgbMulti, Channel = ColorChannel.Green },
-			new GamelogicEngineLamp("33") { Description = "L. Loop Arrow Blu", Type = LampType.RgbMulti, Channel = ColorChannel.Blue },
+			new GamelogicEngineLamp("33", 195) { Description = "L. Loop Arrow Red", Type = LampType.RgbMulti, Channel = ColorChannel.Red },
+			new GamelogicEngineLamp("33", 196) { Description = "L. Loop Arrow Grn", Type = LampType.RgbMulti, Channel = ColorChannel.Green },
+			new GamelogicEngineLamp("33", 197) { Description = "L. Loop Arrow Blu", Type = LampType.RgbMulti, Channel = ColorChannel.Blue },
 
 			new GamelogicEngineLamp("34") { Description = "L. Ramp Multi-Kill" },
 			new GamelogicEngineLamp("35") { Description = "CDC Mode" },
 
-			new GamelogicEngineLamp("36") { Description = "L. Ramp Arrow Red", Type = LampType.RgbMulti, Channel = ColorChannel.Red },
-			new GamelogicEngineLamp("36") { Description = "L. Ramp Arrow Grn", Type = LampType.RgbMulti, Channel = ColorChannel.Green },
-			new GamelogicEngineLamp("36") { Description = "L. Ramp Arrow Blu", Type = LampType.RgbMulti, Channel = ColorChannel.Blue },
+			new GamelogicEngineLamp("36", 203) { Description = "L. Ramp Arrow Red", Type = LampType.RgbMulti, Channel = ColorChannel.Red },
+			new GamelogicEngineLamp("36", 204) { Description = "L. Ramp Arrow Grn", Type = LampType.RgbMulti, Channel = ColorChannel.Green },
+			new GamelogicEngineLamp("36", 205) { Description = "L. Ramp Arrow Blu", Type = LampType.RgbMulti, Channel = ColorChannel.Blue },
 
 			new GamelogicEngineLamp("37") { Description = "Right Outlane" },
 			new GamelogicEngineLamp("38") { Description = "Right Return Lane" },
 			new GamelogicEngineLamp("39") { Description = "Extra Ball" },
 			new GamelogicEngineLamp("40") { Description = "Welcome To Woodbury" },
 
-			new GamelogicEngineLamp("41") { Description = "R. Ramp Arrow Red", Type = LampType.RgbMulti, Channel = ColorChannel.Red },
-			new GamelogicEngineLamp("41") { Description = "R. Ramp Arrow Grn", Type = LampType.RgbMulti, Channel = ColorChannel.Green },
-			new GamelogicEngineLamp("41") { Description = "R. Ramp Arrow Blu", Type = LampType.RgbMulti, Channel = ColorChannel.Blue },
+			new GamelogicEngineLamp("41", 152) { Description = "R. Ramp Arrow Red", Type = LampType.RgbMulti, Channel = ColorChannel.Red },
+			new GamelogicEngineLamp("41", 153) { Description = "R. Ramp Arrow Grn", Type = LampType.RgbMulti, Channel = ColorChannel.Green },
+			new GamelogicEngineLamp("41", 154) { Description = "R. Ramp Arrow Blu", Type = LampType.RgbMulti, Channel = ColorChannel.Blue },
 
 			new GamelogicEngineLamp("42") { Description = "R. Ramp Walker Kill" },
 			new GamelogicEngineLamp("43") { Description = "R. Ramp Multi-Kill" },
@@ -186,9 +186,9 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineLamp("55") { Description = "R. Prison Standup" },
 			new GamelogicEngineLamp("56") { Description = "L. Prison Standup" },
 
-			new GamelogicEngineLamp("57") { Description = "C. Lane Arrow Red", Type = LampType.RgbMulti, Channel = ColorChannel.Red },
-			new GamelogicEngineLamp("57") { Description = "C. Lane Arrow Grn", Type = LampType.RgbMulti, Channel = ColorChannel.Green },
-			new GamelogicEngineLamp("57") { Description = "C. Lane Arrow Blu", Type = LampType.RgbMulti, Channel = ColorChannel.Blue },
+			new GamelogicEngineLamp("57", 187) { Description = "C. Lane Arrow Red", Type = LampType.RgbMulti, Channel = ColorChannel.Red },
+			new GamelogicEngineLamp("57", 188) { Description = "C. Lane Arrow Grn", Type = LampType.RgbMulti, Channel = ColorChannel.Green },
+			new GamelogicEngineLamp("57", 189) { Description = "C. Lane Arrow Blu", Type = LampType.RgbMulti, Channel = ColorChannel.Blue },
 
 			new GamelogicEngineLamp("58") { Description = "Riot Mode" },
 			new GamelogicEngineLamp("59") { Description = "C. Lane Multi-Kill" },
@@ -212,17 +212,25 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineLamp("77") { Description = "Right Top Lane" },
 			new GamelogicEngineLamp("78") { Description = "Bicycle Girl" },
 
-			new GamelogicEngineLamp("79") { Description = "Star Rollover (Bot.) Red", Type = LampType.RgbMulti, Channel = ColorChannel.Red },
-			new GamelogicEngineLamp("79") { Description = "Star Rollover (Bot.) Grn", Type = LampType.RgbMulti, Channel = ColorChannel.Green },
-			new GamelogicEngineLamp("79") { Description = "Star Rollover (Bot.) Blu", Type = LampType.RgbMulti, Channel = ColorChannel.Blue },
+			new GamelogicEngineLamp("79", 136) { Description = "Star Rollover (Bot.) Red", Type = LampType.RgbMulti, Channel = ColorChannel.Red },
+			new GamelogicEngineLamp("79", 137) { Description = "Star Rollover (Bot.) Grn", Type = LampType.RgbMulti, Channel = ColorChannel.Green },
+			new GamelogicEngineLamp("79", 138) { Description = "Star Rollover (Bot.) Blu", Type = LampType.RgbMulti, Channel = ColorChannel.Blue },
 
-			new GamelogicEngineLamp("80") { Description = "Star Rollover (Top.) Red", Type = LampType.RgbMulti, Channel = ColorChannel.Red },
-			new GamelogicEngineLamp("80") { Description = "Star Rollover (Top.) Grn", Type = LampType.RgbMulti, Channel = ColorChannel.Green },
-			new GamelogicEngineLamp("80") { Description = "Star Rollover (Top.) Blu", Type = LampType.RgbMulti, Channel = ColorChannel.Blue },
+			new GamelogicEngineLamp("80", 133) { Description = "Star Rollover (Top.) Red", Type = LampType.RgbMulti, Channel = ColorChannel.Red },
+			new GamelogicEngineLamp("80", 134) { Description = "Star Rollover (Top.) Grn", Type = LampType.RgbMulti, Channel = ColorChannel.Green },
+			new GamelogicEngineLamp("80", 135) { Description = "Star Rollover (Top.) Blu", Type = LampType.RgbMulti, Channel = ColorChannel.Blue },
 
 			new GamelogicEngineLamp("81") { Description = "Fire Button (Red)", Type = LampType.RgbMulti, Channel = ColorChannel.Red },
 			new GamelogicEngineLamp("81") { Description = "Fire Button (Grn)", Type = LampType.RgbMulti, Channel = ColorChannel.Green },
 			new GamelogicEngineLamp("81") { Description = "Fire Button (Blu)", Type = LampType.RgbMulti, Channel = ColorChannel.Blue },
+
+			new GamelogicEngineLamp("gi", 106) { Description = "GI (Red)", Type = LampType.RgbMulti, Source = LampSource.GI, Channel = ColorChannel.Red },
+			new GamelogicEngineLamp("gi", 107) { Description = "GI (Grn)", Type = LampType.RgbMulti, Source = LampSource.GI, Channel = ColorChannel.Green },
+			new GamelogicEngineLamp("gi", 108) { Description = "GI (Blu)", Type = LampType.RgbMulti, Source = LampSource.GI, Channel = ColorChannel.Blue },
+
+			new GamelogicEngineLamp("gi_slings", 109) { Description = "GI: Slings (Red)", Type = LampType.RgbMulti, Source = LampSource.GI, Channel = ColorChannel.Red },
+			new GamelogicEngineLamp("gi_slings", 114) { Description = "GI: Slings (Grn)", Type = LampType.RgbMulti, Source = LampSource.GI, Channel = ColorChannel.Green },
+			new GamelogicEngineLamp("gi_slings", 149) { Description = "GI: Slings (Blu)", Type = LampType.RgbMulti, Source = LampSource.GI, Channel = ColorChannel.Blue },
 		};
 
 		protected override GamelogicEngineCoil[] GameCoils { get; } = {
