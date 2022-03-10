@@ -60,7 +60,6 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineSwitch("10") { Description = "Left 3-Bank #2 (Mid)" },
 			new GamelogicEngineSwitch("11") { Description = "Left 3-Bank #3 (Top)" },
 			new GamelogicEngineSwitch("15") { Description = "Tourn Start" },
-			new GamelogicEngineSwitch("16") { Description = "Start" },
 			new GamelogicEngineSwitch("18") { Description = "Trough #4 Left" },
 			new GamelogicEngineSwitch("19") { Description = "Trough #3" },
 			new GamelogicEngineSwitch("20") { Description = "Trough #2" },
