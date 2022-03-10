@@ -84,6 +84,10 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineSwitch("51") { Description = "Crossbow Mark" },
 			new GamelogicEngineSwitch("52") { Description = "Crossbow Eject" },
 
+			/*
+
+			From manual:
+
 			new GamelogicEngineSwitch("D1") { Description = "Left Coin Slot" },
 			new GamelogicEngineSwitch("D2") { Description = "Center Coin Slot" },
 			new GamelogicEngineSwitch("D3") { Description = "Right Coin Slot" },
@@ -109,6 +113,8 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineSwitch("D30") { Description = "Dip 12345(6)78" },
 			new GamelogicEngineSwitch("D31") { Description = "Dip 123456(7)8" },
 			new GamelogicEngineSwitch("D32") { Description = "Dip 1234567(8)" },
+
+			*/
 		};
 
 		public override GamelogicEngineLamp[] AvailableLamps { get; } = {
