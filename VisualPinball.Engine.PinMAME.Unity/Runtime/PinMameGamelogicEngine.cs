@@ -459,14 +459,13 @@ namespace VisualPinball.Engine.PinMAME
 
 			float[] frame;
 			if (_audioFilterChannels == _audioInfo.Channels) { // n channels -> n channels
-				frame = new float[frameSize];
+				frame = new float[frameSize * 2];
 				unsafe {
 					var src = (float*)framePtr;
-					for (var i = 0; i < frameSize; i++) {
+					for (var i = 0; i < frameSize * 2; i++) {
 						frame[i] = src[i];
 					}
 				}
-
 			} else if (_audioFilterChannels > _audioInfo.Channels) { // 1 channel -> 2 channels
 				frame = new float[frameSize * 2];
 				unsafe {
@@ -476,7 +475,6 @@ namespace VisualPinball.Engine.PinMAME
 						frame[i * 2 + 1] = frame[i * 2];
 					}
 				}
-
 			} else { // 2 channels -> 1 channel
 				frame = new float[frameSize / 2];
 				unsafe {
