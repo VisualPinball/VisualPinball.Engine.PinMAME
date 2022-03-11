@@ -15,15 +15,14 @@
   <ItemGroup>
     <PackageReference Include="PinMame" Version="0.2.0-preview.6" />
     <PackageReference Include="PinMame.Native" Version="3.5.0-preview.41" />
+    <PackageReference Include="VisualPinball.Engine" Version="0.0.1-preview.95" /> 
 
-    <!-- Fix this before release! -->
-    <!-- <PackageReference Include="VisualPinball.Engine" Version="0.0.1-preview.94" /> -->
     <!-- Uncomment when doing local dev -->
-
+    <!-- 
     <Reference Include="VisualPinball.Engine">
       <HintPath>..\..\VisualPinball.Engine\VisualPinball.Engine\.bin\Release\netstandard2.1\VisualPinball.Engine.dll</HintPath>
     </Reference> 
-    
+    -->
   </ItemGroup>
   <Target Name="PluginsDeploy" AfterTargets="AfterBuild">
     <ItemGroup Condition="'$(RuntimeIdentifier)' != 'ios-arm64' And '$(RuntimeIdentifier)' != 'android-arm64-v8a'">
