@@ -253,8 +253,6 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineCoil("12") { Description = "Left 3-Bank Drop Target" },
 			new GamelogicEngineCoil("13") { Description = "Left Slingshot" },
 			new GamelogicEngineCoil("14") { Description = "Right Slingshot" },
-			new GamelogicEngineCoil("15") { Description = "Left Flipper (50V RED/YEL)" },
-			new GamelogicEngineCoil("16") { Description = "Right Flipper (50V RED/YEL)" },
 			new GamelogicEngineCoil("19") { Description = "Flash: Well Walker", IsLamp = true },
 			new GamelogicEngineCoil("20") { Description = "Flash: Right Spinner", IsLamp = true },
 			new GamelogicEngineCoil("21") { Description = "Crossbow Motor" },

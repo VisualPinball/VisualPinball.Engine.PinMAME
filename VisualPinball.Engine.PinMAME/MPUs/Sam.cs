@@ -39,11 +39,13 @@ namespace VisualPinball.Engine.PinMAME.MPUs
 			new GamelogicEngineSwitch(SwStartButton, 16) { Description = "Start", InputActionHint = InputConstants.ActionStartGame, InputMapHint = InputConstants.MapCabinetSwitches },
 			new GamelogicEngineSwitch(SwSlamTilt, -6) { Description = "Slam Tilt", InputActionHint = InputConstants.ActionSlamTilt, InputMapHint = InputConstants.MapCabinetSwitches },
 			new GamelogicEngineSwitch(SwTilt, -7) { Description = "Tilt" },
-			new GamelogicEngineSwitch(SwFlipperLowerRight, 82) { Description = "Lower Right Flipper", InputActionHint = InputConstants.ActionRightFlipper, InputMapHint = InputConstants.MapCabinetSwitches },
 			new GamelogicEngineSwitch(SwFlipperLowerLeft, 84) { Description = "Lower Left Flipper", InputActionHint = InputConstants.ActionLeftFlipper, InputMapHint = InputConstants.MapCabinetSwitches },
+			new GamelogicEngineSwitch(SwFlipperLowerRight, 82) { Description = "Lower Right Flipper", InputActionHint = InputConstants.ActionRightFlipper, InputMapHint = InputConstants.MapCabinetSwitches },
 		};
 
 		private readonly GamelogicEngineCoil[] _coils = {
+			new GamelogicEngineCoil(CoilFlipperLowerLeft, 15) { Description = "Lower Left Flipper", DeviceHint = "^(LeftFlipper|LFlipper|FlipperLeft|FlipperL)$"},
+			new GamelogicEngineCoil(CoilFlipperLowerRight, 16) { Description = "Lower Right Flipper", DeviceHint = "^(RightFlipper|RFlipper|FlipperRight|FlipperR)$"},
 		};
 	}
 }
