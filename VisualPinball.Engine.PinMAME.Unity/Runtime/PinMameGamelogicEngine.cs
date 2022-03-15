@@ -166,7 +166,7 @@ namespace VisualPinball.Engine.PinMAME
 			foreach (var changedLamp in _pinMame.GetChangedLamps()) {
 				if (_lamps.ContainsKey(changedLamp.Id)) {
 					//Logger.Info($"[PinMAME] <= lamp {changedLamp.Id}: {changedLamp.Value}");
-					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[changedLamp.Id].Id, changedLamp.Value));
+					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[changedLamp.Id].Id, changedLamp.Id, changedLamp.Value));
 				}
 			}
 
@@ -174,7 +174,7 @@ namespace VisualPinball.Engine.PinMAME
 			foreach (var changedGi in _pinMame.GetChangedGIs()) {
 				if (_lamps.ContainsKey(changedGi.Id)) {
 					//Logger.Info($"[PinMAME] <= gi {changedGi.Id}: {changedGi.Value}");
-					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[changedGi.Id].Id, changedGi.Value, LampSource.GI));
+					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[changedGi.Id].Id, _lamps[changedGi.Id].InternalId, changedGi.Value, LampSource.GI));
 				} else {
 					Debug.Log($"No GI {changedGi.Id} found.");
 				}
@@ -209,7 +209,7 @@ namespace VisualPinball.Engine.PinMAME
 		{
 			// turn off all lamps
 			foreach (var lamp in _lamps.Values) {
-				OnLampChanged?.Invoke(this, new LampEventArgs(lamp.Id, 0));
+				OnLampChanged?.Invoke(this, new LampEventArgs(lamp.Id, lamp.InternalId, 0));
 			}
 
 			string vpmPath = null;
