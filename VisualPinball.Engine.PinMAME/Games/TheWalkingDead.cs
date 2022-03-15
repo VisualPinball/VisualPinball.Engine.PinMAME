@@ -142,6 +142,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineLamp("22") { Description = "Left Outlane" },
 			new GamelogicEngineLamp("23") { Description = "Left Return Lane" },
 
+			new GamelogicEngineLamp("24", 24) { Description = "R. Loop Arrow" },
 			new GamelogicEngineLamp("24", 168) { Description = "R. Loop Arrow Red", Type = LampType.RgbMulti, Channel = ColorChannel.Red },
 			new GamelogicEngineLamp("24", 169) { Description = "R. Loop Arrow Grn", Type = LampType.RgbMulti, Channel = ColorChannel.Green },
 			new GamelogicEngineLamp("24", 170) { Description = "R. Loop Arrow Blu", Type = LampType.RgbMulti, Channel = ColorChannel.Blue },
@@ -155,6 +156,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineLamp("31") { Description = "L. Loop Multi-Kill" },
 			new GamelogicEngineLamp("32") { Description = "Barn Mode" },
 
+			new GamelogicEngineLamp("33", 33) { Description = "L. Loop Arrow" },
 			new GamelogicEngineLamp("33", 195) { Description = "L. Loop Arrow Red", Type = LampType.RgbMulti, Channel = ColorChannel.Red },
 			new GamelogicEngineLamp("33", 196) { Description = "L. Loop Arrow Grn", Type = LampType.RgbMulti, Channel = ColorChannel.Green },
 			new GamelogicEngineLamp("33", 197) { Description = "L. Loop Arrow Blu", Type = LampType.RgbMulti, Channel = ColorChannel.Blue },
@@ -162,6 +164,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineLamp("34") { Description = "L. Ramp Multi-Kill" },
 			new GamelogicEngineLamp("35") { Description = "CDC Mode" },
 
+			new GamelogicEngineLamp("36", 36) { Description = "L. Ramp Arrow" },
 			new GamelogicEngineLamp("36", 203) { Description = "L. Ramp Arrow Red", Type = LampType.RgbMulti, Channel = ColorChannel.Red },
 			new GamelogicEngineLamp("36", 204) { Description = "L. Ramp Arrow Grn", Type = LampType.RgbMulti, Channel = ColorChannel.Green },
 			new GamelogicEngineLamp("36", 205) { Description = "L. Ramp Arrow Blu", Type = LampType.RgbMulti, Channel = ColorChannel.Blue },
@@ -171,6 +174,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineLamp("39") { Description = "Extra Ball" },
 			new GamelogicEngineLamp("40") { Description = "Welcome To Woodbury" },
 
+			new GamelogicEngineLamp("41", 41) { Description = "R. Ramp Arrow" },
 			new GamelogicEngineLamp("41", 152) { Description = "R. Ramp Arrow Red", Type = LampType.RgbMulti, Channel = ColorChannel.Red },
 			new GamelogicEngineLamp("41", 153) { Description = "R. Ramp Arrow Grn", Type = LampType.RgbMulti, Channel = ColorChannel.Green },
 			new GamelogicEngineLamp("41", 154) { Description = "R. Ramp Arrow Blu", Type = LampType.RgbMulti, Channel = ColorChannel.Blue },
@@ -191,6 +195,7 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineLamp("55") { Description = "R. Prison Standup" },
 			new GamelogicEngineLamp("56") { Description = "L. Prison Standup" },
 
+			new GamelogicEngineLamp("57", 57) { Description = "C. Lane Arrow" },
 			new GamelogicEngineLamp("57", 187) { Description = "C. Lane Arrow Red", Type = LampType.RgbMulti, Channel = ColorChannel.Red },
 			new GamelogicEngineLamp("57", 188) { Description = "C. Lane Arrow Grn", Type = LampType.RgbMulti, Channel = ColorChannel.Green },
 			new GamelogicEngineLamp("57", 189) { Description = "C. Lane Arrow Blu", Type = LampType.RgbMulti, Channel = ColorChannel.Blue },
@@ -217,10 +222,12 @@ namespace VisualPinball.Engine.PinMAME.Games
 			new GamelogicEngineLamp("77") { Description = "Right Top Lane" },
 			new GamelogicEngineLamp("78") { Description = "Bicycle Girl" },
 
+			new GamelogicEngineLamp("79", 79) { Description = "Star Rollover (Bot.)" },
 			new GamelogicEngineLamp("79", 136) { Description = "Star Rollover (Bot.) Red", Type = LampType.RgbMulti, Channel = ColorChannel.Red },
 			new GamelogicEngineLamp("79", 137) { Description = "Star Rollover (Bot.) Grn", Type = LampType.RgbMulti, Channel = ColorChannel.Green },
 			new GamelogicEngineLamp("79", 138) { Description = "Star Rollover (Bot.) Blu", Type = LampType.RgbMulti, Channel = ColorChannel.Blue },
 
+			new GamelogicEngineLamp("80", 80) { Description = "Star Rollover (Top.)" },
 			new GamelogicEngineLamp("80", 133) { Description = "Star Rollover (Top.) Red", Type = LampType.RgbMulti, Channel = ColorChannel.Red },
 			new GamelogicEngineLamp("80", 134) { Description = "Star Rollover (Top.) Grn", Type = LampType.RgbMulti, Channel = ColorChannel.Green },
 			new GamelogicEngineLamp("80", 135) { Description = "Star Rollover (Top.) Blu", Type = LampType.RgbMulti, Channel = ColorChannel.Blue },
