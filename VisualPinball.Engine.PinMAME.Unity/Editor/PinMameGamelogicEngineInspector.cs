@@ -197,6 +197,15 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			EditorGUILayout.Space();
 			EditorGUILayout.Separator();
 
+			if (Application.isPlaying) {
+				if (GUILayout.Button("Toggle Speed")) {
+					_gle.ToggleSpeed();
+				}
+
+				EditorGUILayout.Space();
+				EditorGUILayout.Separator();
+			}
+	
 			//EditorGUI.BeginDisabledGroup(!IsGameSet || Application.isPlaying);
 			if (GUILayout.Button("Populate Hardware")) {
 				if (EditorUtility.DisplayDialog("PinMAME", "This will clear all linked switches, coils and lamps and re-populate them. You sure you want to do that?", "Yes", "No")) {
