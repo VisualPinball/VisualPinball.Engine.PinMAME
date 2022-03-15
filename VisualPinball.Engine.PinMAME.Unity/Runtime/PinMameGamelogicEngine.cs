@@ -131,6 +131,8 @@ namespace VisualPinball.Engine.PinMAME
 		private Dictionary<int, PinMameMechComponent> _registeredMechs = new();
 		private HashSet<int> _mechSwitches = new();
 
+		private bool _toggleSpeed = false;
+
 		#endregion
 
 		#region Lifecycle
@@ -197,7 +199,7 @@ namespace VisualPinball.Engine.PinMAME
 				_pinMame.OnMechAvailable -= OnMechAvailable;
 				_pinMame.OnMechUpdated -= OnMechUpdated;
 				_pinMame.OnSolenoidUpdated -= OnSolenoidUpdated;
-
+				_pinMame.IsKeyPressed -= IsKeyPressed;
 			}
 			_frameBuffer.Clear();
 			_dmdLevels.Clear();
@@ -255,6 +257,8 @@ namespace VisualPinball.Engine.PinMAME
 			_pinMame.OnMechAvailable += OnMechAvailable;
 			_pinMame.OnMechUpdated += OnMechUpdated;
 			_pinMame.OnSolenoidUpdated += OnSolenoidUpdated;
+			_pinMame.IsKeyPressed += IsKeyPressed;
+
 			_player = player;
 
 			_solenoidsEnabled = SolenoidDelay == 0;
@@ -265,6 +269,14 @@ namespace VisualPinball.Engine.PinMAME
 			} catch (Exception e) {
 				Logger.Error(e);
 			}
+		}
+
+		public void ToggleSpeed()
+		{
+			Logger.Info($"[PinMAME] Toggle speed.");
+
+			_pinMame.SetHandleKeyboard(true);
+			_toggleSpeed = true;
 		}
 
 		private void OnGameStarted()
@@ -311,7 +323,7 @@ namespace VisualPinball.Engine.PinMAME
 
 		#region Displays
 
-				private void OnDisplayRequested(int index, int displayCount, PinMameDisplayLayout displayLayout)
+		private void OnDisplayRequested(int index, int displayCount, PinMameDisplayLayout displayLayout)
 		{
 			if (displayLayout.IsDmd) {
 				lock (_dispatchQueue) {
@@ -433,7 +445,7 @@ namespace VisualPinball.Engine.PinMAME
 
 		#region Audio
 
-			private int OnAudioAvailable(PinMameAudioInfo audioInfo)
+		private int OnAudioAvailable(PinMameAudioInfo audioInfo)
 		{
 			Logger.Info("Game audio available: " + audioInfo);
 
@@ -700,5 +712,20 @@ namespace VisualPinball.Engine.PinMAME
 		}
 
 		#endregion
+
+		private int IsKeyPressed(PinMameKeycode keycode)
+		{
+			if (keycode == PinMameKeycode.F10) {
+				if (_toggleSpeed) {
+					_toggleSpeed = false;
+
+					_pinMame.SetHandleKeyboard(false);
+
+					return 1;
+				}
+			}
+
+			return 0;
+		}
 	}
 }
