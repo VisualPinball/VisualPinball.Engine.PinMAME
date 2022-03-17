@@ -207,11 +207,6 @@ namespace VisualPinball.Engine.PinMAME
 
 		public void OnInit(Player player, TableApi tableApi, BallManager ballManager)
 		{
-			// turn off all lamps
-			foreach (var lamp in _lamps.Values) {
-				OnLampChanged?.Invoke(this, new LampEventArgs(lamp.Id, lamp.InternalId, 0));
-			}
-
 			string vpmPath = null;
 
 			#if (UNITY_IOS || UNITY_ANDROID) && !UNITY_EDITOR
