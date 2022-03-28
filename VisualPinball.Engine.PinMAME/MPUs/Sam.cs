@@ -36,11 +36,46 @@ namespace VisualPinball.Engine.PinMAME.MPUs
 			new GamelogicEngineSwitch(SwDown, -2) { Description = "Coin Door -", InputActionHint = InputConstants.ActionCoinDoorMinus, InputMapHint = InputConstants.MapCabinetSwitches },
 			new GamelogicEngineSwitch(SwUp, -1) { Description = "Coin Door +", InputActionHint = InputConstants.ActionCoinDoorPlus, InputMapHint = InputConstants.MapCabinetSwitches },
 			new GamelogicEngineSwitch(SwEnter, 0) { Description = "Coin Door Select", InputActionHint = InputConstants.ActionCoinDoorSelect, InputMapHint = InputConstants.MapCabinetSwitches },
+			new GamelogicEngineSwitch("15") { Description = "Tourn Start" },
 			new GamelogicEngineSwitch(SwStartButton, 16) { Description = "Start", InputActionHint = InputConstants.ActionStartGame, InputMapHint = InputConstants.MapCabinetSwitches },
 			new GamelogicEngineSwitch(SwSlamTilt, -6) { Description = "Slam Tilt", InputActionHint = InputConstants.ActionSlamTilt, InputMapHint = InputConstants.MapCabinetSwitches },
 			new GamelogicEngineSwitch(SwTilt, -7) { Description = "Tilt" },
 			new GamelogicEngineSwitch(SwFlipperLowerLeft, 84) { Description = "Lower Left Flipper", InputActionHint = InputConstants.ActionLeftFlipper, InputMapHint = InputConstants.MapCabinetSwitches },
 			new GamelogicEngineSwitch(SwFlipperLowerRight, 82) { Description = "Lower Right Flipper", InputActionHint = InputConstants.ActionRightFlipper, InputMapHint = InputConstants.MapCabinetSwitches },
+
+
+			/*
+
+			From manuals:
+
+			new GamelogicEngineSwitch("D1") { Description = "Left Coin Slot" },
+			new GamelogicEngineSwitch("D2") { Description = "Center Coin Slot" },
+			new GamelogicEngineSwitch("D3") { Description = "Right Coin Slot" },
+			new GamelogicEngineSwitch("D4") { Description = "Forth Coin Slot" },
+			new GamelogicEngineSwitch("D5") { Description = "Fifth Coin Slot" },
+			new GamelogicEngineSwitch("D6") { Description = "Star Rollover (Bottom)" },
+			new GamelogicEngineSwitch("D7") { Description = "Fire Bottom" },
+			new GamelogicEngineSwitch("D8") { Description = "Star Rollover (Top)" },
+			new GamelogicEngineSwitch("D9") { Description = "Left Flipper Button" },
+			new GamelogicEngineSwitch("D10") { Description = "Left Flipper EOS" },
+			new GamelogicEngineSwitch("D17") { Description = "Tilt Pendulum" },
+			new GamelogicEngineSwitch("D18") { Description = "Slam Tilt" },
+			new GamelogicEngineSwitch("D19") { Description = "Ticket Notch" },
+			new GamelogicEngineSwitch("D21") { Description = "Back (Green)" },
+			new GamelogicEngineSwitch("D22") { Description = "Minus (Red)" },
+			new GamelogicEngineSwitch("D23") { Description = "Plus (Red)" },
+			new GamelogicEngineSwitch("D24") { Description = "Select (Black)" },
+			new GamelogicEngineSwitch("D25") { Description = "Dip (1)2345678" },
+			new GamelogicEngineSwitch("D26") { Description = "Dip 1(2)345678" },
+			new GamelogicEngineSwitch("D27") { Description = "Dip 12(3)45678" },
+			new GamelogicEngineSwitch("D28") { Description = "Dip 123(4)5678" },
+			new GamelogicEngineSwitch("D29") { Description = "Dip 1234(5)678" },
+			new GamelogicEngineSwitch("D30") { Description = "Dip 12345(6)78" },
+			new GamelogicEngineSwitch("D31") { Description = "Dip 123456(7)8" },
+			new GamelogicEngineSwitch("D32") { Description = "Dip 1234567(8)" },
+
+			*/
+
 		};
 
 		private readonly GamelogicEngineCoil[] _coils = {
