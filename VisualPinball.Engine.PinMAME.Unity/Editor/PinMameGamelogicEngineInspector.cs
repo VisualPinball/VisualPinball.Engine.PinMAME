@@ -68,6 +68,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				new StarTrekEnterprise(),
 				new Terminator2(),
 				new TheWalkingDead(),
+				new TRONLegacy(),
 			};
 
 			_gameNames = new[] {"-- none --"}
