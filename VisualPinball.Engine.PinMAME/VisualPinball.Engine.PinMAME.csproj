@@ -9,14 +9,13 @@
   <PropertyGroup Condition="'$(RuntimeIdentifier)' == ''">
     <RuntimeIdentifier Condition="$([MSBuild]::IsOSPlatform('Windows')) And '$(PlatformTarget)' != 'x86'">win-x64</RuntimeIdentifier>
     <RuntimeIdentifier Condition="$([MSBuild]::IsOSPlatform('Windows')) And '$(PlatformTarget)' == 'x86'">win-x86</RuntimeIdentifier>
-    <RuntimeIdentifier Condition="$([MSBuild]::IsOSPlatform('OSX'))">osx-x64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="$([MSBuild]::IsOSPlatform('OSX'))">osx</RuntimeIdentifier>
     <RuntimeIdentifier Condition="$([MSBuild]::IsOSPlatform('Linux'))">linux-x64</RuntimeIdentifier>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="PinMame" Version="0.2.0-preview.6" />
-    <PackageReference Include="PinMame.Native" Version="3.5.0-preview.49" />
-    <PackageReference Include="VisualPinball.Engine" Version="0.0.1-preview.99" /> 
-
+    <PackageReference Include="PinMame" Version="0.2.0-preview.7" />
+    <PackageReference Include="PinMame.Native" Version="3.5.0-preview.58" />
+    <PackageReference Include="VisualPinball.Engine" Version="0.0.1-preview.104" />
     <!-- Uncomment when doing local dev -->
     <!-- 
     <Reference Include="VisualPinball.Engine">
@@ -29,14 +28,14 @@
        <Plugins Include="$(OutDir)PinMame.dll" />
     </ItemGroup>
     <ItemGroup Condition="'$(RuntimeIdentifier)' == 'ios-arm64'">
-       <Plugins Include="$(NuGetPackageRoot)\pinmame\0.2.0-preview.6\runtimes\ios\lib\netstandard2.1\PinMame.dll" />
+       <Plugins Include="$(NuGetPackageRoot)\pinmame\0.2.0-preview.7\runtimes\ios\lib\netstandard2.1\PinMame.dll" />
     </ItemGroup>
     <ItemGroup Condition="'$(RuntimeIdentifier)' == 'android-arm64-v8a'">
-       <Plugins Include="$(NuGetPackageRoot)\pinmame\0.2.0-preview.6\runtimes\android\lib\netstandard2.1\PinMame.dll" />
+       <Plugins Include="$(NuGetPackageRoot)\pinmame\0.2.0-preview.7\runtimes\android\lib\netstandard2.1\PinMame.dll" />
     </ItemGroup>
     <ItemGroup>
       <Plugins Include="$(OutDir)$(AssemblyName).dll" />
-      <Plugins Include="$(NuGetPackageRoot)\pinmame.native.$(RuntimeIdentifier)\3.5.0-preview.49\runtimes\$(RuntimeIdentifier)\native\*" />
+      <Plugins Include="$(NuGetPackageRoot)\pinmame.native.$(RuntimeIdentifier)\3.5.0-preview.58\runtimes\$(RuntimeIdentifier)\native\*" />
     </ItemGroup>
     <Message Text="PluginsDeploy: @(Plugins)" />
     <Copy SourceFiles="@(Plugins)" DestinationFolder="..\VisualPinball.Engine.PinMAME.Unity\Plugins\$(RuntimeIdentifier)" SkipUnchangedFiles="true" />
