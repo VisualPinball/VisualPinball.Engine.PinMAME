@@ -14,26 +14,24 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-// ReSharper disable StringLiteralTypo
-
-using System;
-
-namespace VisualPinball.Engine.PinMAME.Games
+namespace VisualPinball.Engine.PinMAME
 {
-	[Serializable]
-	public class RockEncore : Rock
+	public enum AliasType
 	{
-		public override string Name => "Rock Encore";
-		public override string Id => "rock_enc";
-		public override int Year => 1986;
-		public override int IpdbId => 1979;
+		Switch, Coil, Lamp
+	}
 
-		public override PinMameRom[] Roms { get; } = {
-			new PinMameRom("rock_enc"),
-			new PinMameRom("rock_efp", description: "Free Play"),
-			new PinMameRom("rock_eg", language: PinMameRomLanguage.German),
-			new PinMameRom("rockegfp", description: "Free Play", language: PinMameRomLanguage.German),
-			new PinMameRom("clash", version: "Clash, The (Rock Encore unofficial MOD)"),
-		};
+	public class PinMameIdAlias
+	{
+		public readonly int Id;
+		public readonly string Name;
+		public readonly AliasType AliasType;
+
+		public PinMameIdAlias(int id, string name, AliasType aliasType)
+		{
+			Id = id;
+			Name = name;
+			AliasType = aliasType;
+		}
 	}
 }
