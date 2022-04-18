@@ -79,7 +79,7 @@ namespace VisualPinball.Engine.PinMAME
 
 		public event EventHandler<MechEventArgs> OnMechUpdate;
 
-		public PinMameMechConfig Config(List<SwitchMapping> switchMappings, List<CoilMapping> coilMappings)
+		public PinMameMechConfig Config(List<SwitchMapping> switchMappings, List<CoilMapping> coilMappings, Dictionary<string, int> switchIdToPinMameIdMappings, Dictionary<string, int> coilIdToPinMameIdMappings)
 		{
 			var type = 0u;
 			type |= Type switch {
@@ -102,13 +102,23 @@ namespace VisualPinball.Engine.PinMAME
 			type |= FastUpdates ? (uint)PinMameMechFlag.Fast : (uint)PinMameMechFlag.Slow;
 			type |= ResultByLength ? (uint)PinMameMechFlag.LengthSw : (uint)PinMameMechFlag.StepSw;
 
+			int coilId1 = 0;
+			int coilId2 = 0;
+
 			var coilMapping1 = coilMappings.FirstOrDefault(cm => ReferenceEquals(cm.Device, this) && cm.DeviceItem == _solenoid1);
+			if (coilMapping1 != null && coilIdToPinMameIdMappings.ContainsKey(coilMapping1.Id)) {
+				coilId1 = coilIdToPinMameIdMappings[coilMapping1.Id];
+			}
+
 			var coilMapping2 = coilMappings.FirstOrDefault(cm => ReferenceEquals(cm.Device, this) && cm.DeviceItem == _solenoid2);
+			if (coilMapping2 != null && coilIdToPinMameIdMappings.ContainsKey(coilMapping2.Id)) {
+				coilId2 = coilIdToPinMameIdMappings[coilMapping2.Id];
+			}
 
 			var mechConfig = new PinMameMechConfig(
 				type,
-				coilMapping1?.InternalId ?? 0,
-				coilMapping2?.InternalId ?? 0,
+				coilId1,
+				coilId2,
 				Length,
 				Steps,
 				0,
@@ -125,16 +135,17 @@ namespace VisualPinball.Engine.PinMAME
 
 				switch (mark.Type) {
 					case MechMarkSwitchType.EnableBetween:
-						mechConfig.AddSwitch(new PinMameMechSwitchConfig(switchMapping.InternalId, mark.StepBeginning, mark.StepEnd));
+						mechConfig.AddSwitch(new PinMameMechSwitchConfig(switchIdToPinMameIdMappings[switchMapping.Id], mark.StepBeginning, mark.StepEnd));
 						break;
 
 					case MechMarkSwitchType.AlwaysPulse:
-						mechConfig.AddSwitch(new PinMameMechSwitchConfig(switchMapping.InternalId, -mark.PulseFreq, mark.PulseDuration));
+						mechConfig.AddSwitch(new PinMameMechSwitchConfig(switchIdToPinMameIdMappings[switchMapping.Id], -mark.PulseFreq, mark.PulseDuration));
 						break;
 
 					case MechMarkSwitchType.PulseBetween:
-						mechConfig.AddSwitch(new PinMameMechSwitchConfig(switchMapping.InternalId, mark.StepBeginning, mark.StepEnd, mark.PulseFreq));
+						mechConfig.AddSwitch(new PinMameMechSwitchConfig(switchIdToPinMameIdMappings[switchMapping.Id], mark.StepBeginning, mark.StepEnd, mark.PulseFreq));
 						break;
+
 					default:
 						throw new ArgumentOutOfRangeException();
 				}
@@ -230,7 +241,6 @@ namespace VisualPinball.Engine.PinMAME
 			if (string.IsNullOrEmpty(_solenoid2) || _solenoid1 == _solenoid2) {
 				_solenoid2 = GenerateCoilId();
 			}
-
 
 			var switchIds = new HashSet<string>();
 			foreach (var mark in Marks) {

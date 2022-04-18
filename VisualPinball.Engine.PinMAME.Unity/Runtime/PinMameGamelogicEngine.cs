@@ -69,12 +69,14 @@ namespace VisualPinball.Engine.PinMAME
 				return _game?.AvailableSwitches ?? Array.Empty<GamelogicEngineSwitch>();
 			}
 		}
+
 		public GamelogicEngineCoil[] RequestedCoils {
 			get {
 				UpdateCaches();
 				return _coils.Values.ToArray();
 			}
 		}
+
 		public GamelogicEngineLamp[] RequestedLamps {
 			get {
 				UpdateCaches();
@@ -101,8 +103,15 @@ namespace VisualPinball.Engine.PinMAME
 		[SerializeReference] private PinMameGame _game;
 
 		private Dictionary<string, GamelogicEngineSwitch> _switches = new();
-		private Dictionary<int, GamelogicEngineCoil> _coils = new();
-		private Dictionary<int, GamelogicEngineLamp> _lamps = new();
+		private Dictionary<int, string> _pinMameIdToSwitchIdMappings = new();
+		private Dictionary<string, int> _switchIdToPinMameIdMappings = new();
+
+		private Dictionary<string, GamelogicEngineCoil> _coils = new();
+		private Dictionary<int, string> _pinMameIdToCoilIdMapping = new();
+		private Dictionary<string, int> _coilIdToPinMameIdMapping = new();
+
+		private Dictionary<string, GamelogicEngineLamp> _lamps = new();
+		private Dictionary<int, string> _pinMameIdToLampIdMapping = new();
 
 		private bool _isRunning;
 		private int _numMechs;
@@ -164,17 +173,17 @@ namespace VisualPinball.Engine.PinMAME
 
 			// lamps
 			foreach (var changedLamp in _pinMame.GetChangedLamps()) {
-				if (_lamps.ContainsKey(changedLamp.Id)) {
+				if (_pinMameIdToLampIdMapping.ContainsKey(changedLamp.Id)) {
 					//Logger.Info($"[PinMAME] <= lamp {changedLamp.Id}: {changedLamp.Value}");
-					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[changedLamp.Id].Id, changedLamp.Id, changedLamp.Value));
+					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[_pinMameIdToLampIdMapping[changedLamp.Id]].Id, changedLamp.Value));
 				}
 			}
 
 			// gi
 			foreach (var changedGi in _pinMame.GetChangedGIs()) {
-				if (_lamps.ContainsKey(changedGi.Id)) {
+				if (_pinMameIdToLampIdMapping.ContainsKey(changedGi.Id)) {
 					//Logger.Info($"[PinMAME] <= gi {changedGi.Id}: {changedGi.Value}");
-					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[changedGi.Id].Id, _lamps[changedGi.Id].InternalId, changedGi.Value, LampSource.GI));
+					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[_pinMameIdToLampIdMapping[changedGi.Id]].Id, changedGi.Value, LampSource.GI));
 				} else {
 					Debug.Log($"No GI {changedGi.Id} found.");
 				}
@@ -279,10 +288,16 @@ namespace VisualPinball.Engine.PinMAME
 			Logger.Info($"[PinMAME] Game started.");
 			_isRunning = true;
 
-			SendInitialSwitches();
-			SendMechs();
-
 			_solenoidDelayStart = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+
+			try {
+				SendInitialSwitches();
+				SendMechs();
+			}
+
+			catch(Exception e) {
+				Logger.Error($"[PinMAME] OnGameStarted: {e.Message}");
+			}
 
 			lock (_dispatchQueue) {
 				_dispatchQueue.Enqueue(() => OnStarted?.Invoke(this, EventArgs.Empty));
@@ -300,17 +315,61 @@ namespace VisualPinball.Engine.PinMAME
 			if (_game == null) {
 				return;
 			}
+
 			_lamps.Clear();
+			_pinMameIdToLampIdMapping.Clear();
+
 			_coils.Clear();
+			_pinMameIdToCoilIdMapping.Clear();
+
 			_switches.Clear();
-			foreach (var lamp in _game.AvailableLamps) {
-				_lamps[lamp.InternalId] = lamp;
+			_pinMameIdToSwitchIdMappings.Clear();
+			_switchIdToPinMameIdMappings.Clear();
+
+			foreach (var alias in _game.AvailableAliases) {
+				switch (alias.AliasType) {
+					case AliasType.Switch:
+						_pinMameIdToSwitchIdMappings[alias.Id] = alias.Name;
+						_switchIdToPinMameIdMappings[alias.Name] = alias.Id;
+						break;
+
+
+					case AliasType.Coil:
+						_pinMameIdToCoilIdMapping[alias.Id] = alias.Name;
+						_coilIdToPinMameIdMapping[alias.Name] = alias.Id;
+						break;
+
+					case AliasType.Lamp:
+						_pinMameIdToLampIdMapping[alias.Id] = alias.Name;
+						break;
+				}
 			}
+
+
+			foreach (var @switch in _game.AvailableSwitches) {
+				_switches[@switch.Id] = @switch;
+
+				if (int.TryParse(@switch.Id, out int pinMameId)) {
+					_pinMameIdToSwitchIdMappings[pinMameId] = @switch.Id;
+					_switchIdToPinMameIdMappings[@switch.Id] = pinMameId;
+				}
+			}
+
 			foreach (var coil in _game.AvailableCoils) {
-				_coils[coil.InternalId] = coil;
+				_coils[coil.Id] = coil;
+
+				if (int.TryParse(coil.Id, out int pinMameId)) {
+					_pinMameIdToCoilIdMapping[pinMameId] = coil.Id;
+					_coilIdToPinMameIdMapping[coil.Id] = pinMameId;
+				}
 			}
-			foreach (var sw in _game.AvailableSwitches) {
-				_switches[sw.Id] = sw;
+
+			foreach (var lamp in _game.AvailableLamps) {
+				_lamps[lamp.Id] = lamp;
+
+				if (int.TryParse(lamp.Id, out int pinMameId)) {
+					_pinMameIdToLampIdMapping[pinMameId] = lamp.Id;
+				}
 			}
 		}
 
@@ -568,15 +627,15 @@ namespace VisualPinball.Engine.PinMAME
 		{
 			OnCoilChanged?.Invoke(this, new CoilEventArgs(n, value));
 		}
+
 		public bool GetCoil(string id)
 		{
 			return _player != null && _player.CoilStatuses.ContainsKey(id) && _player.CoilStatuses[id];
 		}
 
-		private void OnSolenoidUpdated(int internalId, bool isActive)
+		private void OnSolenoidUpdated(int id, bool isActive)
 		{
-			if (_coils.ContainsKey(internalId)) {
-
+			if (_pinMameIdToCoilIdMapping.ContainsKey(id)) {
 				if (!_solenoidsEnabled) {
 					_solenoidsEnabled = DateTimeOffset.Now.ToUnixTimeMilliseconds() - _solenoidDelayStart >= SolenoidDelay;
 
@@ -585,25 +644,21 @@ namespace VisualPinball.Engine.PinMAME
 					}
 				}
 
+				var coil = _coils[_pinMameIdToCoilIdMapping[id]];
+
 				if (_solenoidsEnabled) {
-					var coil = _coils[internalId];
-					var id = coil != null ? coil.Id : internalId.ToString();
-					var desc = coil != null ? coil.Description : "-";
-					Logger.Info($"[PinMAME] <= coil {id} ({internalId}): {isActive} | {desc}");
+					Logger.Info($"[PinMAME] <= coil {coil.Id} : {isActive} | {coil.Description}");
 
 					lock (_dispatchQueue) {
-						id = _coils[internalId].Id;
-						_dispatchQueue.Enqueue(() => OnCoilChanged?.Invoke(this, new CoilEventArgs(id, isActive)));
+						_dispatchQueue.Enqueue(() => OnCoilChanged?.Invoke(this, new CoilEventArgs(coil.Id, isActive)));
 					}
 				}
-				else
-				{
-					Logger.Info($"[PinMAME] <= solenoids disabled, coil {_coils[internalId].Id} ({internalId}): {isActive} | {_coils[internalId].Description}");
+				else {
+					Logger.Info($"[PinMAME] <= solenoids disabled, coil {coil.Id} : {isActive} | {coil.Description}");
 				}
 			}
-			else
-			{
-				Logger.Warn($"[PinMAME] <= coil UNMAPPED {internalId}: {isActive}");
+			else {
+				Logger.Warn($"[PinMAME] <= coil UNMAPPED {id}: {isActive}");
 			}
 		}
 
@@ -635,9 +690,10 @@ namespace VisualPinball.Engine.PinMAME
 				if (!isClosed) {
 					continue;
 				}
-				if (_switches.ContainsKey(id) && !_mechSwitches.Contains(_switches[id].InternalId)) {
-					Logger.Info($"[PinMAME] => sw {id} ({_switches[id].InternalId}): {true} | {_switches[id].Description}");
-					_pinMame.SetSwitch(_switches[id].InternalId, true);
+				if (_switches.ContainsKey(id) && !_mechSwitches.Contains(_switchIdToPinMameIdMappings[_switches[id].Id])) {
+					Logger.Info($"[PinMAME] => sw {id} ({_switches[id].Id}): {true} | {_switches[id].Description}");
+
+					_pinMame.SetSwitch(_switchIdToPinMameIdMappings[_switches[id].Id], true);
 				}
 			}
 		}
@@ -645,12 +701,12 @@ namespace VisualPinball.Engine.PinMAME
 		public void Switch(string id, bool isClosed)
 		{
 			if (_switches.ContainsKey(id)) {
-				if (_mechSwitches.Contains(_switches[id].InternalId)) {
+				if (_mechSwitches.Contains(_switchIdToPinMameIdMappings[_switches[id].Id])) {
 					// mech switches are triggered internally by pinmame.
 					return;
 				}
-				Logger.Info($"[PinMAME] => sw {id} ({_switches[id].InternalId}): {isClosed} | {_switches[id].Description}");
-				_pinMame.SetSwitch(_switches[id].InternalId, isClosed);
+				Logger.Info($"[PinMAME] => sw {id}: {isClosed} | {_switches[id].Description}");
+				_pinMame.SetSwitch(_switchIdToPinMameIdMappings[_switches[id].Id], isClosed);
 			} else {
 				Logger.Error($"[PinMAME] Unknown switch \"{id}\".");
 			}
@@ -698,7 +754,7 @@ namespace VisualPinball.Engine.PinMAME
 					Logger.Error($"PinMAME only supports up to {max} custom mechs, ignoring {mech.name}.");
 					return;
 				}
-				var mechConfig = mech.Config(_player.SwitchMapping, _player.CoilMapping);
+				var mechConfig = mech.Config(_player.SwitchMapping, _player.CoilMapping, _switchIdToPinMameIdMappings, _coilIdToPinMameIdMapping);
 				_pinMame.SetMech(id, mechConfig);
 				foreach (var c in mechConfig.SwitchList) {
 					_mechSwitches.Add(c.SwNo);

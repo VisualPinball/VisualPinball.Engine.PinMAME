@@ -63,6 +63,11 @@ namespace VisualPinball.Engine.PinMAME
 		public abstract PinMameRom[] Roms { get; }
 
 		/// <summary>
+		/// All available id aliases for that game
+		/// </summary>
+		public abstract PinMameIdAlias[] AvailableAliases { get; }
+
+		/// <summary>
 		/// All available switches for that game
 		/// </summary>
 		public abstract GamelogicEngineSwitch[] AvailableSwitches { get; }
@@ -90,10 +95,10 @@ namespace VisualPinball.Engine.PinMAME
 		/// These coils are common to all games.
 		/// </summary>
 		private readonly GamelogicEngineCoil[] _coils = {
-			new GamelogicEngineCoil(CoilFlipperLowerRight, 46) { Description = "Lower Right Flipper", DeviceHint = "^(RightFlipper|RFlipper|FlipperRight|FlipperR)$"},
-			new GamelogicEngineCoil(CoilFlipperLowerLeft, 48) { Description = "Lower Left Flipper", DeviceHint = "^(LeftFlipper|LFlipper|FlipperLeft|FlipperL)$"},
-			new GamelogicEngineCoil(CoilFlipperUpperRight, 34) { Description = "Upper Right Flipper"},
-			new GamelogicEngineCoil(CoilFlipperUpperLeft, 36) { Description = "Upper Left Flipper"},
+			new GamelogicEngineCoil(CoilFlipperLowerRight) { Description = "Lower Right Flipper", DeviceHint = "^(RightFlipper|RFlipper|FlipperRight|FlipperR)$"},
+			new GamelogicEngineCoil(CoilFlipperLowerLeft) { Description = "Lower Left Flipper", DeviceHint = "^(LeftFlipper|LFlipper|FlipperLeft|FlipperL)$"},
+			new GamelogicEngineCoil(CoilFlipperUpperRight) { Description = "Upper Right Flipper"},
+			new GamelogicEngineCoil(CoilFlipperUpperLeft) { Description = "Upper Left Flipper"},		
 		};
 
 		protected GamelogicEngineCoil[] Concat(IEnumerable<GamelogicEngineCoil> parent, IEnumerable<GamelogicEngineCoil> children)
@@ -104,18 +109,18 @@ namespace VisualPinball.Engine.PinMAME
 					ids.Remove(child.Id);
 				}
 			}
-			var c = ids.Values.ToDictionary(s => s.InternalId, s => s);
+			var c = ids.Values.ToDictionary(s => s.Id, s => s);
 			foreach (var child in children) {
-				c[child.InternalId] = child;
+				c[child.Id] = child;
 			}
 			return c.Values.ToArray();
 		}
 
 		protected GamelogicEngineSwitch[] Concat(IEnumerable<GamelogicEngineSwitch> parent, IEnumerable<GamelogicEngineSwitch> children)
 		{
-			var c = parent.ToDictionary(s => s.InternalId, s => s);
+			var c = parent.ToDictionary(s => s.Id, s => s);
 			foreach (var child in children) {
-				c[child.InternalId] = child;
+				c[child.Id] = child;
 			}
 			return c.Values.ToArray();
 		}

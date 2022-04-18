@@ -22,6 +22,9 @@ namespace VisualPinball.Engine.PinMAME.MPUs
 {
 	public abstract class System80 : PinMameGame
 	{
+		public override PinMameIdAlias[] AvailableAliases => Aliases.Concat(_aliases).ToArray();
+		protected abstract PinMameIdAlias[] Aliases { get; }
+
 		protected override GamelogicEngineCoil[] Coils => GameCoils.Concat(_coils).ToArray();
 		protected abstract GamelogicEngineCoil[] GameCoils { get; }
 
@@ -29,22 +32,39 @@ namespace VisualPinball.Engine.PinMAME.MPUs
 
 		protected abstract GamelogicEngineSwitch[] Switches { get; }
 
+		private readonly PinMameIdAlias[] _aliases =
+		{
+			new PinMameIdAlias(7, SwSelfTest, AliasType.Switch),
+			new PinMameIdAlias(47, SwStartButton, AliasType.Switch),
+			new PinMameIdAlias(57, SwTilt, AliasType.Switch),
+			new PinMameIdAlias(-1, SwSlamTilt, AliasType.Switch),
+			new PinMameIdAlias(17, SwCoin1, AliasType.Switch),
+			new PinMameIdAlias(27, SwCoin2, AliasType.Switch),
+			new PinMameIdAlias(37, SwCoin3, AliasType.Switch),
+			new PinMameIdAlias(6, SwLeftAdvance, AliasType.Switch),
+			new PinMameIdAlias(16, SwRightAdvance, AliasType.Switch),
+			new PinMameIdAlias(114, SwFlipperLowerLeft, AliasType.Switch), 
+			new PinMameIdAlias(112, SwFlipperLowerRight, AliasType.Switch),
+
+			new PinMameIdAlias(10, CoilGameOn, AliasType.Coil),
+		};
+
 		private readonly GamelogicEngineSwitch[] _switches = {
-			new GamelogicEngineSwitch(SwSelfTest, 7) { Description = "Self Test",  InputActionHint = InputConstants.ActionSelfTest },
-			new GamelogicEngineSwitch(SwStartButton, 47) { Description = "Start Button", InputActionHint = InputConstants.ActionStartGame, InputMapHint = InputConstants.MapCabinetSwitches },
-			new GamelogicEngineSwitch(SwTilt, 57) { Description = "Tilt" },
-			new GamelogicEngineSwitch(SwSlamTilt, -1) { Description = "Slam Tilt", InputActionHint = InputConstants.ActionSlamTilt, InputMapHint = InputConstants.MapCabinetSwitches },
-			new GamelogicEngineSwitch(SwCoin1, 17) { Description = "Coin Button 1", InputActionHint = InputConstants.ActionInsertCoin1, InputMapHint = InputConstants.MapCabinetSwitches },
-			new GamelogicEngineSwitch(SwCoin2, 27) { Description = "Coin Button 2", InputActionHint = InputConstants.ActionInsertCoin2, InputMapHint = InputConstants.MapCabinetSwitches },
-			new GamelogicEngineSwitch(SwCoin3, 37) { Description = "Coin Button 3", InputActionHint = InputConstants.ActionInsertCoin3, InputMapHint = InputConstants.MapCabinetSwitches },
-			new GamelogicEngineSwitch(SwLeftAdvance, 6) { Description = "Left Advance", InputActionHint = InputConstants.ActionLeftAdvance, InputMapHint = InputConstants.MapCabinetSwitches },
-			new GamelogicEngineSwitch(SwRightAdvance, 16) { Description = "Right Advance", InputActionHint = InputConstants.ActionRightAdvance, InputMapHint = InputConstants.MapCabinetSwitches },
-			new GamelogicEngineSwitch(SwFlipperLowerLeft, 114) { Description = "Lower Left Flipper", InputActionHint = InputConstants.ActionLeftFlipper, InputMapHint = InputConstants.MapCabinetSwitches },
-			new GamelogicEngineSwitch(SwFlipperLowerRight, 112) { Description = "Lower Right Flipper", InputActionHint = InputConstants.ActionRightFlipper, InputMapHint = InputConstants.MapCabinetSwitches },
+			new GamelogicEngineSwitch(SwSelfTest) { Description = "Self Test",  InputActionHint = InputConstants.ActionSelfTest },
+			new GamelogicEngineSwitch(SwStartButton) { Description = "Start Button", InputActionHint = InputConstants.ActionStartGame, InputMapHint = InputConstants.MapCabinetSwitches },
+			new GamelogicEngineSwitch(SwTilt) { Description = "Tilt" },
+			new GamelogicEngineSwitch(SwSlamTilt) { Description = "Slam Tilt", InputActionHint = InputConstants.ActionSlamTilt, InputMapHint = InputConstants.MapCabinetSwitches },
+			new GamelogicEngineSwitch(SwCoin1) { Description = "Coin Button 1", InputActionHint = InputConstants.ActionInsertCoin1, InputMapHint = InputConstants.MapCabinetSwitches },
+			new GamelogicEngineSwitch(SwCoin2) { Description = "Coin Button 2", InputActionHint = InputConstants.ActionInsertCoin2, InputMapHint = InputConstants.MapCabinetSwitches },
+			new GamelogicEngineSwitch(SwCoin3) { Description = "Coin Button 3", InputActionHint = InputConstants.ActionInsertCoin3, InputMapHint = InputConstants.MapCabinetSwitches },
+			new GamelogicEngineSwitch(SwLeftAdvance) { Description = "Left Advance", InputActionHint = InputConstants.ActionLeftAdvance, InputMapHint = InputConstants.MapCabinetSwitches },
+			new GamelogicEngineSwitch(SwRightAdvance) { Description = "Right Advance", InputActionHint = InputConstants.ActionRightAdvance, InputMapHint = InputConstants.MapCabinetSwitches },
+			new GamelogicEngineSwitch(SwFlipperLowerLeft) { Description = "Lower Left Flipper", InputActionHint = InputConstants.ActionLeftFlipper, InputMapHint = InputConstants.MapCabinetSwitches },
+			new GamelogicEngineSwitch(SwFlipperLowerRight) { Description = "Lower Right Flipper", InputActionHint = InputConstants.ActionRightFlipper, InputMapHint = InputConstants.MapCabinetSwitches },
 		};
 
 		private readonly GamelogicEngineCoil[] _coils = {
-			new GamelogicEngineCoil(CoilGameOn, 10) { Description = "ROM Started" }
+			new GamelogicEngineCoil(CoilGameOn) { Description = "ROM Started" }
 		};
 	}
 }
