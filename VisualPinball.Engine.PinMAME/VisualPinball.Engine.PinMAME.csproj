@@ -14,12 +14,12 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="PinMame" Version="0.2.0-preview.7" />
-    <PackageReference Include="PinMame.Native" Version="3.5.0-preview.58" />
-    <!-- <PackageReference Include="VisualPinball.Engine" Version="0.0.1-preview.104" /> -->
+    <PackageReference Include="PinMame.Native" Version="3.5.0-preview.79" />
+    <PackageReference Include="VisualPinball.Engine" Version="0.0.1-preview.105" /> 
     <!-- Uncomment when doing local dev -->
-    <Reference Include="VisualPinball.Engine">
+    <!-- <Reference Include="VisualPinball.Engine">
       <HintPath>..\..\VisualPinball.Engine\VisualPinball.Engine\.bin\Release\netstandard2.1\VisualPinball.Engine.dll</HintPath>
-    </Reference> 
+    </Reference> -->
   </ItemGroup>
   <Target Name="PluginsDeploy" AfterTargets="AfterBuild">
     <ItemGroup Condition="'$(RuntimeIdentifier)' != 'ios-arm64' And '$(RuntimeIdentifier)' != 'android-arm64-v8a'">
@@ -33,7 +33,7 @@
     </ItemGroup>
     <ItemGroup>
       <Plugins Include="$(OutDir)$(AssemblyName).dll" />
-      <Plugins Include="$(NuGetPackageRoot)\pinmame.native.$(RuntimeIdentifier)\3.5.0-preview.58\runtimes\$(RuntimeIdentifier)\native\*" />
+      <Plugins Include="$(NuGetPackageRoot)\pinmame.native.$(RuntimeIdentifier)\3.5.0-preview.79\runtimes\$(RuntimeIdentifier)\native\*" />
     </ItemGroup>
     <Message Text="PluginsDeploy: @(Plugins)" />
     <Copy SourceFiles="@(Plugins)" DestinationFolder="..\VisualPinball.Engine.PinMAME.Unity\Plugins\$(RuntimeIdentifier)" SkipUnchangedFiles="true" />
