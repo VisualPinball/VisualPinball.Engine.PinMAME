@@ -91,7 +91,8 @@ namespace VisualPinball.Engine.PinMAME
 		public event EventHandler<LampEventArgs> OnLampChanged;
 		public event EventHandler<LampsEventArgs> OnLampsChanged;
 		public event EventHandler<RequestedDisplays> OnDisplaysRequested;
-		public event EventHandler<DisplayFrameData> OnDisplayFrame;
+		public event EventHandler<string> OnDisplayClear;
+		public event EventHandler<DisplayFrameData> OnDisplayUpdateFrame;
 		public event EventHandler<EventArgs> OnStarted;
 
 		#endregion
@@ -428,7 +429,7 @@ namespace VisualPinball.Engine.PinMAME
 			}
 
 			lock (_dispatchQueue) {
-				_dispatchQueue.Enqueue(() => OnDisplayFrame?.Invoke(this,
+				_dispatchQueue.Enqueue(() => OnDisplayUpdateFrame?.Invoke(this,
 					new DisplayFrameData($"{DmdPrefix}{index}", GetDisplayFrameFormat(displayLayout), _frameBuffer[index])));
 			}
 		}
@@ -439,7 +440,7 @@ namespace VisualPinball.Engine.PinMAME
 
 			lock (_dispatchQueue) {
 				//Logger.Info($"[PinMAME] Seg data ({index}): {BitConverter.ToString(_frameBuffer[index])}" );
-				_dispatchQueue.Enqueue(() => OnDisplayFrame?.Invoke(this,
+				_dispatchQueue.Enqueue(() => OnDisplayUpdateFrame?.Invoke(this,
 					new DisplayFrameData($"{SegDispPrefix}{index}", GetDisplayFrameFormat(displayLayout), _frameBuffer[index])));
 			}
 		}
@@ -493,6 +494,10 @@ namespace VisualPinball.Engine.PinMAME
 			}
 
 			throw new NotImplementedException($"Still unsupported segmented display format: {layout}.");
+		}
+
+		public void DisplayChanged(DisplayFrameData displayFrameData)
+		{
 		}
 
 		#endregion
