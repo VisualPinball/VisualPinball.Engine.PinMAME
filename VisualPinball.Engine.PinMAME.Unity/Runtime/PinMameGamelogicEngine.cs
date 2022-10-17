@@ -101,7 +101,11 @@ namespace VisualPinball.Engine.PinMAME
 
 		[NonSerialized] private Player _player;
 		[NonSerialized] private PinMame.PinMame _pinMame;
+		[NonSerialized] private BallManager _ballManager;
+		[NonSerialized] private PlayfieldComponent _playfieldComponent;
+
 		[SerializeReference] private PinMameGame _game;
+
 
 		private Dictionary<string, GamelogicEngineSwitch> _switches = new();
 		private Dictionary<int, string> _pinMameIdToSwitchIdMappings = new();
@@ -218,6 +222,8 @@ namespace VisualPinball.Engine.PinMAME
 		public void OnInit(Player player, TableApi tableApi, BallManager ballManager)
 		{
 			string vpmPath = null;
+			_ballManager = ballManager;
+			_playfieldComponent = GetComponentInChildren<PlayfieldComponent>();
 
 			#if (UNITY_IOS || UNITY_ANDROID) && !UNITY_EDITOR
 				vpmPath = Path.Combine(Application.persistentDataPath, "pinmame");
@@ -712,6 +718,10 @@ namespace VisualPinball.Engine.PinMAME
 				}
 				Logger.Info($"[PinMAME] => sw {id}: {isClosed} | {_switches[id].Description}");
 				_pinMame.SetSwitch(_switchIdToPinMameIdMappings[_switches[id].Id], isClosed);
+			} else if (id == "s_spawn_ball") {
+				if (isClosed) {
+					_ballManager.CreateBall(new DebugBallCreator(630, _playfieldComponent.Height / 2f, _playfieldComponent.TableHeight));
+				}
 			} else {
 				Logger.Error($"[PinMAME] Unknown switch \"{id}\".");
 			}
