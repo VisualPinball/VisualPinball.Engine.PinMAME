@@ -333,6 +333,7 @@ namespace VisualPinball.Engine.PinMAME
 			_pinMameIdToSwitchIdMappings.Clear();
 			_switchIdToPinMameIdMappings.Clear();
 
+			// check aliases first (the switches/coils that aren't an integer)
 			foreach (var alias in _game.AvailableAliases) {
 				switch (alias.AliasType) {
 					case AliasType.Switch:
@@ -352,16 +353,30 @@ namespace VisualPinball.Engine.PinMAME
 				}
 			}
 
-
+			// retrieve the game's switches
 			foreach (var @switch in _game.AvailableSwitches) {
 				_switches[@switch.Id] = @switch;
 
-				if (int.TryParse(@switch.Id, out int pinMameId)) {
+				if (int.TryParse(@switch.Id, out var pinMameId)) {
 					_pinMameIdToSwitchIdMappings[pinMameId] = @switch.Id;
 					_switchIdToPinMameIdMappings[@switch.Id] = pinMameId;
+
+					// add mappings with prefixed 0.
+					if (pinMameId < 10) {
+						_switchIdToPinMameIdMappings["0" + @switch.Id] = pinMameId;
+						_switchIdToPinMameIdMappings["00" + @switch.Id] = pinMameId;
+
+						_switches["0" + @switch.Id] = @switch;
+						_switches["00" + @switch.Id] = @switch;
+					}
+					if (pinMameId < 100) {
+						_switchIdToPinMameIdMappings["0" + @switch.Id] = pinMameId;
+						_switches["0" + @switch.Id] = @switch;
+					}
 				}
 			}
 
+			// retrieve the game's coils
 			foreach (var coil in _game.AvailableCoils) {
 				_coils[coil.Id] = coil;
 
@@ -371,6 +386,7 @@ namespace VisualPinball.Engine.PinMAME
 				}
 			}
 
+			// retrieve the game's lamps
 			foreach (var lamp in _game.AvailableLamps) {
 				_lamps[lamp.Id] = lamp;
 
