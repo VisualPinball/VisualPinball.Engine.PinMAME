@@ -246,8 +246,8 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			var tableHeight = 0f;
 			var tableWidth = 1f;
 			if (ta) {
-				tableHeight = pa.GlassHeight * PlayfieldComponent.GlobalScale;
-				tableWidth = pa.Width * PlayfieldComponent.GlobalScale;
+				tableHeight = pa.GlassHeight * 0.00053975f; // todo use Physics.ScaleToVpx()
+				tableWidth = pa.Width * 0.00053975f;
 			}
 
 			// get total height
