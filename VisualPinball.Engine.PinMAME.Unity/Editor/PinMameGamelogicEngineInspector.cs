@@ -52,7 +52,11 @@ namespace VisualPinball.Engine.PinMAME.Editor
 
 		private bool _toggleDebug = true;
 
+		int _debugSwitchId;
+
 		private SerializedProperty _disableAudioProperty;
+
+
 
 		private void OnEnable()
 		{
@@ -188,6 +192,17 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				{
 					serializedObject.ApplyModifiedProperties();
 				}
+
+				EditorGUILayout.BeginHorizontal();
+				_debugSwitchId = EditorGUILayout.IntField("Switch", _debugSwitchId);
+				if (GUILayout.Button("ON")) {
+					_gle.Switch(_debugSwitchId.ToString(), true);
+				}
+				if (GUILayout.Button("OFF")) {
+					_gle.Switch(_debugSwitchId.ToString(), false);
+				}
+
+				EditorGUILayout.EndHorizontal();
 
 				EditorGUI.indentLevel--;
 			}
