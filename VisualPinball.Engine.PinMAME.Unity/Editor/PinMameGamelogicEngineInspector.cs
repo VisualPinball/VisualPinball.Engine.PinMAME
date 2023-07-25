@@ -60,6 +60,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 
 			_games = new PinMameGame[] {
 				new AttackFromMars(),
+				new Centaur(),
 				new CreatureFromTheBlackLagoon(),
 				new FlashGordon(),
 				new MedievalMadness(),
