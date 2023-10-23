@@ -104,8 +104,10 @@ namespace VisualPinball.Engine.PinMAME
 		[NonSerialized] private BallManager _ballManager;
 		[NonSerialized] private PlayfieldComponent _playfieldComponent;
 
-		[SerializeReference] private PinMameGame _game;
+		[NonSerialized] private readonly List<PinMameLampInfo> _changedLamps = new();
+		[NonSerialized] private readonly List<PinMameLampInfo> _changedGIs = new();
 
+		[SerializeReference] private PinMameGame _game;
 
 		private Dictionary<string, GamelogicEngineSwitch> _switches = new();
 		private Dictionary<int, string> _pinMameIdToSwitchIdMappings = new();
@@ -177,7 +179,8 @@ namespace VisualPinball.Engine.PinMAME
 			}
 
 			// lamps
-			foreach (var changedLamp in _pinMame.GetChangedLamps()) {
+			_pinMame.GetChangedLamps(_changedLamps);
+			foreach (var changedLamp in _changedLamps) {
 				if (_pinMameIdToLampIdMapping.ContainsKey(changedLamp.Id)) {
 					//Logger.Info($"[PinMAME] <= lamp {changedLamp.Id}: {changedLamp.Value}");
 					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[_pinMameIdToLampIdMapping[changedLamp.Id]].Id, changedLamp.Value));
@@ -185,13 +188,14 @@ namespace VisualPinball.Engine.PinMAME
 			}
 
 			// gi
-			foreach (var changedGi in _pinMame.GetChangedGIs()) {
+			_pinMame.GetChangedGIs(_changedGIs);
+			foreach (var changedGi in _changedGIs) {
 				if (_pinMameIdToLampIdMapping.ContainsKey(changedGi.Id)) {
 					//Logger.Info($"[PinMAME] <= gi {changedGi.Id}: {changedGi.Value}");
 					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[_pinMameIdToLampIdMapping[changedGi.Id]].Id, changedGi.Value, LampSource.GI));
-				} else {
-					Debug.Log($"No GI {changedGi.Id} found.");
-				}
+				} /*else {
+					Logger.Info($"No GI {changedGi.Id} found.");
+				}*/
 			}
 		}
 
@@ -545,7 +549,7 @@ namespace VisualPinball.Engine.PinMAME
 			if (_audioNumSamplesInput > 100000) {
 				// var delta = AudioSettings.dspTime - _audioInputStart;
 				// var queueMs = System.Math.Round(_audioQueue.Count * (double)_audioInfo.SamplesPerFrame / _audioInfo.SampleRate * 1000);
-				//Debug.Log($"INPUT: {System.Math.Round(_audioNumSamplesInput / delta)} - {_audioQueue.Count} in queue ({queueMs}ms)");
+				// Logger.Info($"INPUT: {System.Math.Round(_audioNumSamplesInput / delta)} - {_audioQueue.Count} in queue ({queueMs}ms)");
 				_audioInputStart = AudioSettings.dspTime;
 				_audioNumSamplesInput = 0;
 			}
@@ -594,7 +598,7 @@ namespace VisualPinball.Engine.PinMAME
 			_audioNumSamplesOutput += data.Length / channels;
 			if (_audioNumSamplesOutput > 100000) {
 				//var delta = AudioSettings.dspTime - _audioOutputStart;
-				//Debug.Log($"OUTPUT: {System.Math.Round(_audioNumSamplesOutput / delta)}");
+				//Logger.Info($"OUTPUT: {System.Math.Round(_audioNumSamplesOutput / delta)}");
 				_audioOutputStart = AudioSettings.dspTime;
 				_audioNumSamplesOutput = 0;
 			}
