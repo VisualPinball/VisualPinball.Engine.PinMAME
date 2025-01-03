@@ -740,7 +740,7 @@ namespace VisualPinball.Engine.PinMAME
 				_pinMame.SetSwitch(_switchIdToPinMameIdMappings[_switches[id].Id], isClosed);
 			} else if (id == "s_spawn_ball") {
 				if (isClosed) {
-					_ballManager.CreateBall(new DebugBallCreator(630, _playfieldComponent.Height / 2f, _playfieldComponent.TableHeight));
+					_ballManager.CreateBall(new DebugBallCreator(630f, _playfieldComponent.Height / 2f));
 				}
 			} else {
 				Logger.Error($"[PinMAME] Unknown switch \"{id}\".");
