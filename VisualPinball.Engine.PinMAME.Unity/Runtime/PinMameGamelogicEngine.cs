@@ -22,6 +22,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using NLog;
 using PinMame;
 using UnityEngine;
@@ -223,7 +224,7 @@ namespace VisualPinball.Engine.PinMAME
 			_dmdLevels.Clear();
 		}
 
-		public void OnInit(Player player, TableApi tableApi, BallManager ballManager)
+		public Task OnInit(Player player, TableApi tableApi, BallManager ballManager)
 		{
 			string vpmPath = null;
 			_ballManager = ballManager;
@@ -284,6 +285,8 @@ namespace VisualPinball.Engine.PinMAME
 			} catch (Exception e) {
 				Logger.Error(e);
 			}
+
+			return Task.CompletedTask;
 		}
 
 		public void ToggleSpeed()
