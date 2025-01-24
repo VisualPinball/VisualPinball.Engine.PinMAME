@@ -22,6 +22,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using NLog;
 using PinMame;
@@ -224,7 +225,7 @@ namespace VisualPinball.Engine.PinMAME
 			_dmdLevels.Clear();
 		}
 
-		public Task OnInit(Player player, TableApi tableApi, BallManager ballManager)
+		public Task OnInit(Player player, TableApi tableApi, BallManager ballManager, CancellationToken ct)
 		{
 			string vpmPath = null;
 			_ballManager = ballManager;
