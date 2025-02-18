@@ -7,14 +7,15 @@
     "Unity",
     "PinMAME"
   ],
-  "unity": "2021.3",
-  "unityRelease": "0f1",
+  "unity": "6000.0",
+  "unityRelease": "37f1",
   "dependencies": {
     "org.visualpinball.engine.unity": "0.0.1-preview.119"
   },
   "author": "freezy <freezy@vpdb.io>",
   "contributors": [
-    "jsm174 <jsm174@gmail.com>"
+    "jsm174 <jsm174@gmail.com>",
+    "Arthur Kehrwald"
   ],
   "documentationUrl": "https://docs.visualpinball.org/plugins/pinmame/",
   "changelogUrl": "https://docs.visualpinball.org/CHANGELOG.html",
