@@ -4,19 +4,21 @@ on:
     types: [ release-complete ]
 
 jobs:
-  registry:
+  publish-registry:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: dawidd6/action-download-artifact@v2
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
         with:
-          workflow: build
-          run_id: ${{ github.event.client_payload.artifacts_run_id }}
+          merge-multiple: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.client_payload.artifacts_run_id }}
           path: VisualPinball.Engine.PinMAME.Unity
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          registry-url: 'https://registry.visualpinball.org'
       - name: Publish
-        run: |
-          cd VisualPinball.Engine.PinMAME.Unity
-          echo "//registry.visualpinball.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
-          npm publish
+        run: npm publish
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
