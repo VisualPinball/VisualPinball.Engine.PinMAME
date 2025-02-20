@@ -43,7 +43,7 @@ jobs:
           cp -r VisualPinball.Engine.PinMAME.Unity/Plugins/${{ matrix.rid }} tmp
       - uses: actions/upload-artifact@v4
         with:
-          name: Plugins
+          name: Plugins-${{ matrix.rid }}
           path: tmp
 
   dispatch:
