@@ -13,7 +13,7 @@
     <RuntimeIdentifier Condition="$([MSBuild]::IsOSPlatform('Linux'))">linux-x64</RuntimeIdentifier>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="PinMame" Version="0.2.0-preview.8" />
+    <PackageReference Include="PinMame" Version="0.2.0-preview.9" />
     <PackageReference Include="PinMame.Native" Version="3.5.0-preview.79" />
     <PackageReference Include="VisualPinball.Engine" Version="0.0.1-preview.105" /> 
     <!-- Uncomment when doing local dev -->
@@ -26,10 +26,10 @@
        <Plugins Include="$(OutDir)PinMame.dll" />
     </ItemGroup>
     <ItemGroup Condition="'$(RuntimeIdentifier)' == 'ios-arm64'">
-       <Plugins Include="$(NuGetPackageRoot)\pinmame\0.2.0-preview.7\runtimes\ios\lib\netstandard2.1\PinMame.dll" />
+       <Plugins Include="$(NuGetPackageRoot)\pinmame\0.2.0-preview.9\runtimes\ios\lib\netstandard2.1\PinMame.dll" />
     </ItemGroup>
     <ItemGroup Condition="'$(RuntimeIdentifier)' == 'android-arm64-v8a'">
-       <Plugins Include="$(NuGetPackageRoot)\pinmame\0.2.0-preview.7\runtimes\android\lib\netstandard2.1\PinMame.dll" />
+       <Plugins Include="$(NuGetPackageRoot)\pinmame\0.2.0-preview.9\runtimes\android\lib\netstandard2.1\PinMame.dll" />
     </ItemGroup>
     <ItemGroup>
       <Plugins Include="$(OutDir)$(AssemblyName).dll" />
