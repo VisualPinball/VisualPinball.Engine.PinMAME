@@ -14,8 +14,6 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ github.event.client_payload.artifacts_run_id }}
           path: VisualPinball.Engine.PinMAME.Unity/Plugins
-      - run: |
-          ls -laR VisualPinball.Engine.PinMAME.Unity/Plugins    
       - uses: actions/setup-node@v4
         with:
           node-version: '20.x'
