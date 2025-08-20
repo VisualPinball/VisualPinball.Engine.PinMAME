@@ -27,6 +27,7 @@ using System.Threading.Tasks;
 using NLog;
 using PinMame;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using VisualPinball.Engine.Game.Engines;
 using VisualPinball.Unity;
 using Logger = NLog.Logger;
@@ -36,7 +37,7 @@ namespace VisualPinball.Engine.PinMAME
 	[Serializable]
 	[DisallowMultipleComponent]
 	[RequireComponent(typeof(AudioSource))]
-	[AddComponentMenu("Visual Pinball/Gamelogic Engine/PinMAME")]
+	[AddComponentMenu("Pinball/Gamelogic Engine/PinMAME")]
 	public class PinMameGamelogicEngine : MonoBehaviour, IGamelogicEngine
 	{
 		public string Name { get; } = "PinMAME Gamelogic Engine";
@@ -150,6 +151,7 @@ namespace VisualPinball.Engine.PinMAME
 		private HashSet<int> _mechSwitches = new();
 
 		private bool _toggleSpeed = false;
+		private Keyboard _keyboard;
 
 		#endregion
 
@@ -158,6 +160,7 @@ namespace VisualPinball.Engine.PinMAME
 		private void Awake()
 		{
 			Logger.Info("Project audio sample rate: " +  AudioSettings.outputSampleRate);
+			_keyboard = Keyboard.current;
 		}
 
 		private void Start()
@@ -199,6 +202,12 @@ namespace VisualPinball.Engine.PinMAME
 					Logger.Info($"No GI {changedGi.Id} found.");
 				}*/
 			}
+
+			// if (_keyboard != null && _keyboard.cKey.wasPressedThisFrame)
+			// {
+			// 	OnCoilChanged.Invoke(this, new CoilEventArgs("28", true));
+			// 	OnCoilChanged.Invoke(this, new CoilEventArgs("28", false));
+			// }
 		}
 
 		private void OnDestroy()

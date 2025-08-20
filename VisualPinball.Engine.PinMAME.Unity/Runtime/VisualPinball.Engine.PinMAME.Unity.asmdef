@@ -3,7 +3,8 @@
 	"rootNamespace": "VisualPinball.Engine.PinMAME.Unity",
 	"references": [
 		"VisualPinball.Engine",
-		"VisualPinball.Unity"
+		"VisualPinball.Unity",
+		"Unity.InputSystem"
 	],
 	"includePlatforms": [],
 	"excludePlatforms": [],

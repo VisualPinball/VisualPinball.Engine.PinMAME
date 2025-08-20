@@ -28,8 +28,9 @@ using Logger = NLog.Logger;
 
 namespace VisualPinball.Engine.PinMAME
 {
-	[AddComponentMenu("Visual Pinball/Mechs/PinMAME Mech Handler")]
-	public class PinMameMechComponent : MonoBehaviour, IMechHandler, ISwitchDeviceComponent, ICoilDeviceComponent, ISerializationCallbackReceiver
+	[AddComponentMenu("Pinball/Mechs/PinMAME Mech Handler")]
+	public class PinMameMechComponent : MonoBehaviour, IMechHandler, ISwitchDeviceComponent, ICoilDeviceComponent,
+		IPinballEventEmitter, ISerializationCallbackReceiver
 	{
 		#region Data
 
@@ -78,6 +79,11 @@ namespace VisualPinball.Engine.PinMAME
 		[SerializeField] private string _solenoid2;
 
 		public event EventHandler<MechEventArgs> OnMechUpdate;
+		public event EventHandler<PinballEventArgs> OnPinballEvent;
+		public PinballEvent[] Events => new[] {
+			new PinballEvent(EventNameSpeed, PinballEventUnit.DegreesPerSecond),
+			new PinballEvent(EventNamePosition, PinballEventUnit.Degrees),
+		};
 
 		public PinMameMechConfig Config(List<SwitchMapping> switchMappings, List<CoilMapping> coilMappings, Dictionary<string, int> switchIdToPinMameIdMappings, Dictionary<string, int> coilIdToPinMameIdMappings)
 		{
@@ -155,6 +161,9 @@ namespace VisualPinball.Engine.PinMAME
 
 		private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
+		private const string EventNameSpeed = "Mech Speed";
+		private const string EventNamePosition = "Mech Position";
+
 		#endregion
 
 		#region Wiring
@@ -173,15 +182,16 @@ namespace VisualPinball.Engine.PinMAME
 
 		public IEnumerable<GamelogicEngineCoil> AvailableCoils {
 			get {
-				switch (Type)
-				{
+				switch (Type) {
 					case PinMameMechType.OneSolenoid:
 						return new[] { new GamelogicEngineCoil(_solenoid1) { Description = "Motor Power" } };
+
 					case PinMameMechType.OneDirectionalSolenoid:
 						return new[] {
 							new GamelogicEngineCoil(_solenoid1) { Description = "Motor Power" },
 							new GamelogicEngineCoil(_solenoid2) { Description = "Motor Direction" },
 						};
+
 					case PinMameMechType.TwoDirectionalSolenoids:
 						return new[] {
 							new GamelogicEngineCoil(_solenoid1) { Description = "Motor Clockwise" },
@@ -193,15 +203,19 @@ namespace VisualPinball.Engine.PinMAME
 							new GamelogicEngineCoil(_solenoid1) { Description = "Stepper 1" },
 							new GamelogicEngineCoil(_solenoid2) { Description = "Stepper 2" },
 						};
+
 					case PinMameMechType.FourStepperSolenoids:
 						return new[] {
 							new GamelogicEngineCoil(_solenoid1) { Description = "First Stepper" },
 						};
+
 					default:
 						throw new ArgumentOutOfRangeException();
 				}
 			}
 		}
+
+		IApiCoil ICoilDeviceComponent.CoilDevice(string deviceId) => null; // fixme
 
 		#endregion
 
@@ -225,6 +239,8 @@ namespace VisualPinball.Engine.PinMAME
 		public void UpdateMech(PinMameMechInfo data)
 		{
 			OnMechUpdate?.Invoke(this, new MechEventArgs(data.Speed, data.Pos));
+			OnPinballEvent?.Invoke(this, new PinballEventArgs(EventNameSpeed, data.Speed, PinballEventUnit.MetersPerSecond));
+			OnPinballEvent?.Invoke(this, new PinballEventArgs(EventNamePosition, data.Pos, PinballEventUnit.Degrees));
 		}
 
 		#endregion
