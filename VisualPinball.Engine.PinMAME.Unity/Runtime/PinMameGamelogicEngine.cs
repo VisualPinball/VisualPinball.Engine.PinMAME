@@ -744,19 +744,27 @@ namespace VisualPinball.Engine.PinMAME
 
 		public void Switch(string id, bool isClosed)
 		{
-			if (_switches.ContainsKey(id)) {
-				if (_mechSwitches.Contains(_switchIdToPinMameIdMappings[_switches[id].Id])) {
+			if (_switches.TryGetValue(id, out var sw)) {
+				if (_switchIdToPinMameIdMappings.TryGetValue(sw.Id, out var pinMameId) && _mechSwitches.Contains(pinMameId)) {
 					// mech switches are triggered internally by pinmame.
 					return;
 				}
-				Logger.Info($"[PinMAME] => sw {id}: {isClosed} | {_switches[id].Description}");
-				_pinMame.SetSwitch(_switchIdToPinMameIdMappings[_switches[id].Id], isClosed);
+				if (_pinMame != null && _isRunning) {
+					if (Logger.IsDebugEnabled) {
+						Logger.Debug($"[PinMAME] => sw {id}: {isClosed} | {sw.Description}");
+					}
+					if (_switchIdToPinMameIdMappings.TryGetValue(sw.Id, out pinMameId)) {
+						_pinMame.SetSwitch(pinMameId, isClosed);
+					}
+				}
 			} else if (id == "s_spawn_ball") {
 				if (isClosed) {
 					_ballManager.CreateBall(new DebugBallCreator(630f, _playfieldComponent.Height / 2f));
 				}
 			} else {
-				Logger.Error($"[PinMAME] Unknown switch \"{id}\".");
+				if (Logger.IsErrorEnabled) {
+					Logger.Error($"[PinMAME] Unknown switch \"{id}\".");
+				}
 			}
 
 			OnSwitchChanged?.Invoke(this, new SwitchEventArgs2(id, isClosed));
