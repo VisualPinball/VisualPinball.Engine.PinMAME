@@ -35,9 +35,23 @@
     </ItemGroup>
     <ItemGroup>
       <Plugins Include="$(OutDir)$(AssemblyName).dll" />
-      <Plugins Include="$(NuGetPackageRoot)pinmame.native.$(RuntimeIdentifier)/$(PinMameNativeVersion)/runtimes/$(RuntimeIdentifier)/native/*" />
+      <Plugins Condition="'$(RuntimeIdentifier)' != 'win-x64'" Include="$(NuGetPackageRoot)pinmame.native.$(RuntimeIdentifier)/$(PinMameNativeVersion)/runtimes/$(RuntimeIdentifier)/native/*" />
     </ItemGroup>
+
+    <!-- PinMameDotNet P/Invokes "pinmame" on Windows. The win-x64 native package ships
+         pinmame64.dll, so copy it as pinmame.dll for Unity to resolve it. -->
+    <ItemGroup Condition="'$(RuntimeIdentifier)' == 'win-x64'">
+      <RenamedPlugins Include="$(NuGetPackageRoot)pinmame.native.$(RuntimeIdentifier)/$(PinMameNativeVersion)/runtimes/$(RuntimeIdentifier)/native/pinmame64.dll">
+        <DestinationFile>..\VisualPinball.Engine.PinMAME.Unity\Plugins\$(RuntimeIdentifier)\pinmame.dll</DestinationFile>
+      </RenamedPlugins>
+    </ItemGroup>
+
     <Message Text="PluginsDeploy: @(Plugins)" />
     <Copy SourceFiles="@(Plugins)" DestinationFolder="..\VisualPinball.Engine.PinMAME.Unity\Plugins\$(RuntimeIdentifier)" SkipUnchangedFiles="true" />
+
+    <Copy Condition="'@(RenamedPlugins)' != ''" SourceFiles="@(RenamedPlugins)" DestinationFiles="@(RenamedPlugins->'%(DestinationFile)')" SkipUnchangedFiles="true" />
+
+    <!-- If an older build already dropped pinmame64.dll, remove it so the package only contains pinmame.dll. -->
+    <Delete Condition="'$(RuntimeIdentifier)' == 'win-x64'" Files="..\VisualPinball.Engine.PinMAME.Unity\Plugins\$(RuntimeIdentifier)\pinmame64.dll" />
   </Target>
 </Project>
