@@ -92,7 +92,8 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			_stopwatch = Stopwatch.StartNew();
 			Logger.Warn($"{LogPrefix} [PinMAME] Stop requested ({reason})");
 
-			// Stop sim thread(s) first to avoid starving the PinMAME emulation thread.
+			// Stop sim thread(s) first. This reduces the chance of other high-frequency code paths
+			// continuing to call into PinMAME while we are stopping it.
 			try {
 				var sims = UnityEngine.Object.FindObjectsByType<VisualPinball.Unity.Simulation.SimulationThreadComponent>(FindObjectsSortMode.None);
 				for (var i = 0; i < sims.Length; i++) {
