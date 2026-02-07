@@ -159,9 +159,7 @@ namespace VisualPinball.Engine.PinMAME
 		private int _onInitCalled;
 		private int _stopRequested;
 		private int _playModeExitHandled;
-		private int _loggedFirstLampUpdate;
-		private int _loggedNoLampUpdates;
-		private long _gameStartedMs;
+		// (removed) lamp delta debug tracking
 		private const int StopTimeoutMs = 10000;
 
 		#endregion
@@ -188,15 +186,6 @@ namespace VisualPinball.Engine.PinMAME
 				return;
 			}
 
-			// Detect cases where the game claims to be started but never produces outputs.
-			if (Interlocked.CompareExchange(ref _loggedFirstLampUpdate, 0, 0) == 0 && _gameStartedMs != 0) {
-				var nowMs = DateTimeOffset.Now.ToUnixTimeMilliseconds();
-				var elapsedMs = nowMs - _gameStartedMs;
-				if (elapsedMs > 2000 && Interlocked.Exchange(ref _loggedNoLampUpdates, 1) == 0) {
-					Logger.Warn($"{LogPrefix} [PinMAME] No lamp deltas after {elapsedMs}ms (NativeIsRunning={PinMame.PinMame.IsRunning}, RunState={PinMame.PinMame.RunState})");
-				}
-			}
-
 			lock (_dispatchQueue) {
 				while (_dispatchQueue.Count > 0) {
 					_dispatchQueue.Dequeue().Invoke();
@@ -205,9 +194,6 @@ namespace VisualPinball.Engine.PinMAME
 
 			// lamps
 			_pinMame.GetChangedLamps(_changedLamps);
-			if (_changedLamps.Count > 0 && Interlocked.Exchange(ref _loggedFirstLampUpdate, 1) == 0) {
-				Logger.Info($"{LogPrefix} [PinMAME] First lamp batch: count={_changedLamps.Count}");
-			}
 			foreach (var changedLamp in _changedLamps) {
 				if (_pinMameIdToLampIdMapping.ContainsKey(changedLamp.Id)) {
 					//Logger.Info($"[PinMAME] <= lamp {changedLamp.Id}: {changedLamp.Value}");
@@ -549,9 +535,6 @@ namespace VisualPinball.Engine.PinMAME
 		{
 			Logger.Info($"{LogPrefix} [PinMAME] Game started.");
 			_isRunning = true;
-			_gameStartedMs = DateTimeOffset.Now.ToUnixTimeMilliseconds();
-			_loggedFirstLampUpdate = 0;
-			_loggedNoLampUpdates = 0;
 
 			_solenoidDelayStart = DateTimeOffset.Now.ToUnixTimeMilliseconds();
 
