@@ -32,28 +32,13 @@ namespace VisualPinball.Engine.PinMAME.Editor
 	public static class PinMamePlayModeLifecycle
 	{
 		private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-		private const string LogPrefix = "[PinMAME-debug]";
 		private static bool _stopping;
 		private static Stopwatch _stopwatch;
 		private const int StopTimeoutMs = 2000;
 		private static bool _warnedTimeout;
 		private static System.Threading.Tasks.Task _stopTask;
 
-		private static bool IsDomainReloadDisabled()
-		{
-			// When Enter Play Mode Options are enabled, Unity can skip domain/scene reload.
-			// If domain reload is enabled (default), we must not run PinMAME stop on a background task
-			// that can outlive the managed domain during playmode transitions.
-			try {
-				if (!EditorSettings.enterPlayModeOptionsEnabled) {
-					return false;
-				}
-				return (EditorSettings.enterPlayModeOptions & EnterPlayModeOptions.DisableDomainReload) != 0;
-			} catch {
-				return false;
-			}
-		}
-		// Native stop is potentially blocking; we do it on a background thread.
+		// (removed) Domain reload branching; stop is synchronous for determinism.
 
 		static PinMamePlayModeLifecycle()
 		{
@@ -75,8 +60,10 @@ namespace VisualPinball.Engine.PinMAME.Editor
 
 		private static void RequestStop(string reason)
 		{
+			int runState;
 			try {
-				if (!PinMame.PinMame.IsRunning) {
+				runState = PinMame.PinMame.RunState;
+				if (runState == 0) {
 					return;
 				}
 			} catch {
@@ -90,7 +77,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			_stopping = true;
 			_warnedTimeout = false;
 			_stopwatch = Stopwatch.StartNew();
-			Logger.Warn($"{LogPrefix} [PinMAME] Stop requested ({reason})");
+			Logger.Info($"[PinMAME] Stop requested ({reason}), RunState={runState}");
 
 			// Stop sim thread(s) first. This reduces the chance of other high-frequency code paths
 			// continuing to call into PinMAME while we are stopping it.
@@ -113,35 +100,27 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			EditorApplication.update += Update;
 
 			// Stop PinMAME now.
-			// - With Domain Reload enabled: stop synchronously while the domain is still stable.
-			// - With Domain Reload disabled: stop on a background task to keep the editor responsive.
-			if (IsDomainReloadDisabled()) {
-				_stopTask = System.Threading.Tasks.Task.Run(() => {
-					try {
-						PinMame.PinMame.StopRunningGame();
-					} catch (Exception e) {
-						Logger.Warn(e, $"{LogPrefix} [PinMAME] StopGame failed while exiting play mode.");
-					}
-				});
-			} else {
-				try {
-					PinMame.PinMame.StopRunningGame();
-					_stopTask = System.Threading.Tasks.Task.CompletedTask;
-				} catch (Exception e) {
-					Logger.Warn(e, $"{LogPrefix} [PinMAME] StopGame failed while exiting play mode.");
-					_stopTask = System.Threading.Tasks.Task.CompletedTask;
-				}
+			// With Domain Reload disabled, background stop can overlap the next play session.
+			// Now that other hot loops are tamed, prefer a synchronous stop for determinism.
+			try {
+				var sw = Stopwatch.StartNew();
+				PinMame.PinMame.StopRunningGame();
+				Logger.Info($"[PinMAME] Stop call returned after {sw.ElapsedMilliseconds}ms");
+			} catch (Exception e) {
+				Logger.Warn(e, "[PinMAME] StopGame failed while exiting play mode.");
 			}
+			_stopTask = System.Threading.Tasks.Task.CompletedTask;
 		}
 
 		private static void Update()
 		{
-			bool running;
+			int runState;
 			try {
-				running = PinMame.PinMame.IsRunning;
+				runState = PinMame.PinMame.RunState;
 			} catch {
-				running = false;
+				runState = 0;
 			}
+			var running = runState != 0;
 
 			var stopDone = _stopTask == null || _stopTask.IsCompleted;
 			if (!running && stopDone) {
@@ -149,13 +128,13 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				_stopping = false;
 				_warnedTimeout = false;
 				_stopTask = null;
-				Logger.Warn($"{LogPrefix} [PinMAME] Stopped (editor)");
+				Logger.Info("[PinMAME] Stopped (editor)");
 				return;
 			}
 
 			if (!_warnedTimeout && _stopwatch != null && _stopwatch.ElapsedMilliseconds > StopTimeoutMs) {
 				_warnedTimeout = true;
-				Logger.Warn($"{LogPrefix} [PinMAME] Still running after stop timeout (editor)");
+				Logger.Warn($"[PinMAME] Still running after stop timeout (editor), RunState={runState}");
 			}
 		}
 	}

@@ -42,7 +42,6 @@ namespace VisualPinball.Engine.PinMAME
 	public class PinMameGamelogicEngine : MonoBehaviour, IGamelogicEngine
 	{
 		public string Name { get; } = "PinMAME Gamelogic Engine";
-		private const string LogPrefix = "[PinMAME-debug]";
 
 		public const string DmdPrefix = "dmd";
 		public const string SegDispPrefix = "display";
@@ -280,7 +279,7 @@ namespace VisualPinball.Engine.PinMAME
 			// Stop polling outputs immediately to avoid concurrent calls into pinmame.dll
 			// while a stop is in progress (pinmame APIs are not guaranteed thread-safe).
 			_isRunning = false;
-			Logger.Info($"{LogPrefix} [PinMAME] StopForPlayModeExit: unsubscribing callbacks ({name}#{GetInstanceID()})");
+			Logger.Info($"[PinMAME] StopForPlayModeExit: unsubscribing callbacks ({name}#{GetInstanceID()})");
 			try {
 				if (_pinMame == null) {
 					return;
@@ -320,20 +319,20 @@ namespace VisualPinball.Engine.PinMAME
 				}
 
 			} catch (Exception e) {
-				Logger.Warn(e, $"{LogPrefix} [PinMAME] StopGame ({reason}) failed.");
+				Logger.Warn(e, $"[PinMAME] StopGame ({reason}) failed.");
 				return;
 			}
 
 			// Avoid racing StartGame on re-entering play mode.
 			if (!PinMameStartStopGate.Wait(0)) {
-				Logger.Warn($"{LogPrefix} [PinMAME] StopGame ({reason}) skipped: start/stop already in progress.");
+				Logger.Warn($"[PinMAME] StopGame ({reason}) skipped: start/stop already in progress.");
 				return;
 			}
 
 			// Never block the Unity main thread during playmode exit.
 			// PinMAME shutdown is best-effort here; OnInit() and the editor lifecycle hook
 			// will recover/ensure shutdown before starting a new ROM.
-			Logger.Warn($"{LogPrefix} [PinMAME] StopGame ({reason}) requested. RunningGame={_pinMame?.RunningGame}");
+			Logger.Warn($"[PinMAME] StopGame ({reason}) requested. RunningGame={_pinMame?.RunningGame}");
 
 			try {
 				if (_pinMame != null) {
@@ -359,7 +358,7 @@ namespace VisualPinball.Engine.PinMAME
 				try {
 					_pinMame?.StopGame();
 				} catch (Exception e) {
-					Logger.Warn(e, $"{LogPrefix} [PinMAME] StopGame ({reason}) failed.");
+					Logger.Warn(e, $"[PinMAME] StopGame ({reason}) failed.");
 				} finally {
 					PinMameStartStopGate.Release();
 				}
@@ -401,7 +400,7 @@ namespace VisualPinball.Engine.PinMAME
 
 			await PinMameStartStopGate.WaitAsync(ct);
 			try {
-				Logger.Info($"{LogPrefix} [PinMAME] OnInit {name}: romId={romId}, sampleRate={AudioSettings.outputSampleRate}");
+				Logger.Info($"[PinMAME] OnInit {name}: romId={romId}, sampleRate={AudioSettings.outputSampleRate}");
 
 				#if UNITY_EDITOR
 				// With Domain Reload disabled, PinMAME (native + managed singleton) persists across play sessions.
@@ -412,16 +411,16 @@ namespace VisualPinball.Engine.PinMAME
 				try {
 					PinMame.PinMame.StopRunningGame();
 				} catch (Exception e) {
-					Logger.Warn(e, $"{LogPrefix} [PinMAME] Pre-start StopRunningGame failed.");
+					Logger.Warn(e, "[PinMAME] Pre-start StopRunningGame failed.");
 				}
 				// Wait for a clean stopped state before starting a new ROM.
 				var preStopWaitSw = Stopwatch.StartNew();
 				while (PinMame.PinMame.RunState != 0 && preStopWaitSw.ElapsedMilliseconds < StopTimeoutMs) {
 					await Task.Delay(10, ct);
 				}
-				Logger.Info($"{LogPrefix} [PinMAME] Editor pre-stop: initialRunState={preStopState}, stopCallMs={preStopSw.ElapsedMilliseconds}, waitMs={preStopWaitSw.ElapsedMilliseconds}, finalRunState={PinMame.PinMame.RunState}");
+				Logger.Debug($"[PinMAME] Editor pre-stop: initialRunState={preStopState}, stopCallMs={preStopSw.ElapsedMilliseconds}, waitMs={preStopWaitSw.ElapsedMilliseconds}, finalRunState={PinMame.PinMame.RunState}");
 				if (PinMame.PinMame.RunState != 0) {
-					Logger.Error($"{LogPrefix} [PinMAME] Cannot start ROM; PinMAME did not reach stopped state (RunState={PinMame.PinMame.RunState}).");
+					Logger.Error($"[PinMAME] Cannot start ROM; PinMAME did not reach stopped state (RunState={PinMame.PinMame.RunState}).");
 					return;
 				}
 
@@ -439,7 +438,7 @@ namespace VisualPinball.Engine.PinMAME
 				while ((PinMame.PinMame.IsStopInProgress || PinMame.PinMame.IsRunning) && swStop.ElapsedMilliseconds < StopTimeoutMs) {
 					await Task.Delay(10, ct);
 				}
-				Logger.Info($"{LogPrefix} [PinMAME] Pre-start wait: {swStop.ElapsedMilliseconds}ms (WasRunning={wasRunning}, WasStopping={wasStopping}, IsRunning={PinMame.PinMame.IsRunning}, RunState={PinMame.PinMame.RunState}, StopInProgress={PinMame.PinMame.IsStopInProgress})");
+				Logger.Debug($"[PinMAME] Pre-start wait: {swStop.ElapsedMilliseconds}ms (WasRunning={wasRunning}, WasStopping={wasStopping}, IsRunning={PinMame.PinMame.IsRunning}, RunState={PinMame.PinMame.RunState}, StopInProgress={PinMame.PinMame.IsStopInProgress})");
 
 				// ReSharper disable once ExpressionIsAlwaysNull
 				_pinMame = PinMame.PinMame.Instance(PinMameAudioFormat.AudioFormatFloat, AudioSettings.outputSampleRate, vpmPath);
@@ -461,12 +460,12 @@ namespace VisualPinball.Engine.PinMAME
 				// If domain reload is disabled or a previous table didn't shut down cleanly,
 				// PinMAME can still be running here.
 				if (PinMame.PinMame.IsRunning) {
-					Logger.Warn($"{LogPrefix} [PinMAME] A game is already running (RunningGame={_pinMame.RunningGame}); stopping it before starting a new one.");
+					Logger.Warn($"[PinMAME] A game is already running (RunningGame={_pinMame.RunningGame}); stopping it before starting a new one.");
 					try {
 						_pinMame.StopGame();
 					}
 					catch (Exception e) {
-						Logger.Warn(e, $"{LogPrefix} [PinMAME] StopGame failed while recovering from already running state.");
+						Logger.Warn(e, "[PinMAME] StopGame failed while recovering from already running state.");
 					}
 
 					var sw = Stopwatch.StartNew();
@@ -474,7 +473,7 @@ namespace VisualPinball.Engine.PinMAME
 						await Task.Delay(10, ct);
 					}
 					if (PinMame.PinMame.IsRunning) {
-						Logger.Warn($"{LogPrefix} [PinMAME] Failed to stop running game within timeout; attempting StartGame anyway.");
+						Logger.Warn("[PinMAME] Failed to stop running game within timeout; attempting StartGame anyway.");
 					}
 				}
 
@@ -501,14 +500,16 @@ namespace VisualPinball.Engine.PinMAME
 
 				try {
 					_pinMame.StartGame(romId);
+					Logger.Debug($"[PinMAME] StartGame returned. RunState={PinMame.PinMame.RunState}");
 				}
 				catch (InvalidOperationException e) when (e.Message != null && e.Message.Contains("status=GAME_ALREADY_RUNNING"))
 				{
-					Logger.Warn(e, $"{LogPrefix} [PinMAME] StartGame reported already running; stopping and retrying once.");
+					Logger.Warn(e, "[PinMAME] StartGame reported already running; stopping and retrying once.");
 					try {
 						_pinMame.StopGame();
 						await Task.Delay(100, ct);
 						_pinMame.StartGame(romId);
+						Logger.Debug($"[PinMAME] StartGame retry returned. RunState={PinMame.PinMame.RunState}");
 					}
 					catch (Exception retryEx) {
 						Logger.Error(retryEx);
@@ -525,7 +526,7 @@ namespace VisualPinball.Engine.PinMAME
 
 		public void ToggleSpeed()
 		{
-			Logger.Info($"{LogPrefix} [PinMAME] Toggle speed.");
+			Logger.Info("[PinMAME] Toggle speed.");
 
 			_pinMame.SetHandleKeyboard(true);
 			_toggleSpeed = true;
@@ -533,7 +534,7 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void OnGameStarted()
 		{
-			Logger.Info($"{LogPrefix} [PinMAME] Game started.");
+			Logger.Info("[PinMAME] Game started.");
 			_isRunning = true;
 
 			_solenoidDelayStart = DateTimeOffset.Now.ToUnixTimeMilliseconds();
@@ -544,7 +545,7 @@ namespace VisualPinball.Engine.PinMAME
 			}
 
 			catch(Exception e) {
-				Logger.Error($"{LogPrefix} [PinMAME] OnGameStarted: {e.Message}");
+				Logger.Error($"[PinMAME] OnGameStarted: {e.Message}");
 			}
 
 			lock (_dispatchQueue) {
@@ -556,7 +557,7 @@ namespace VisualPinball.Engine.PinMAME
 		{
 			// Native can report ended more than once during teardown; keep it idempotent.
 			if (_isRunning) {
-				Logger.Info($"{LogPrefix} [PinMAME] Game ended.");
+				Logger.Info("[PinMAME] Game ended.");
 			}
 			_isRunning = false;
 		}
@@ -670,6 +671,10 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void OnDisplayUpdated(int index, IntPtr framePtr, PinMameDisplayLayout displayLayout)
 		{
+			if (!_frameBuffer.ContainsKey(index)) {
+				Logger.Warn($"[PinMAME] Dropping display frame for unknown index {index} (layout: {displayLayout}).");
+				return;
+			}
 			if (displayLayout.IsDmd) {
 				UpdateDmd(index, displayLayout, framePtr);
 
@@ -954,7 +959,7 @@ namespace VisualPinball.Engine.PinMAME
 		public void SendInitialSwitches()
 		{
 			var switches = _player.SwitchStatuses;
-				Logger.Info($"{LogPrefix} [PinMAME] Sending initial switch statuses...");
+				Logger.Info("[PinMAME] Sending initial switch statuses...");
 			foreach (var id in switches.Keys) {
 				var isClosed = switches[id].IsSwitchClosed;
 				// skip open switches
