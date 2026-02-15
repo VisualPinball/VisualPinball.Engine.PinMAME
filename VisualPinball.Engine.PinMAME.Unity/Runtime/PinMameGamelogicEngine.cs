@@ -124,7 +124,7 @@ namespace VisualPinball.Engine.PinMAME
 		private Dictionary<string, GamelogicEngineLamp> _lamps = new();
 		private Dictionary<int, string> _pinMameIdToLampIdMapping = new();
 
-		private bool _isRunning;
+		private volatile bool _isRunning;
 		private int _numMechs;
 		private Dictionary<int, byte[]> _frameBuffer = new();
 		private Dictionary<int, Dictionary<byte, byte>> _dmdLevels = new();
