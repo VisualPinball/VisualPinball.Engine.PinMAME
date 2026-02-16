@@ -39,9 +39,10 @@ namespace VisualPinball.Engine.PinMAME
 	[DisallowMultipleComponent]
 	[RequireComponent(typeof(AudioSource))]
 	[AddComponentMenu("Pinball/Gamelogic Engine/PinMAME")]
-	public class PinMameGamelogicEngine : MonoBehaviour, IGamelogicEngine
+	public class PinMameGamelogicEngine : MonoBehaviour, IGamelogicEngine, IGamelogicInputThreading
 	{
 		public string Name { get; } = "PinMAME Gamelogic Engine";
+		public GamelogicInputDispatchMode SwitchDispatchMode => GamelogicInputDispatchMode.SimulationThread;
 
 		public const string DmdPrefix = "dmd";
 		public const string SegDispPrefix = "display";
@@ -149,6 +150,7 @@ namespace VisualPinball.Engine.PinMAME
 		public bool _solenoidsEnabled;
 		public long _solenoidDelayStart;
 		private Dictionary<int, PinMameMechComponent> _registeredMechs = new();
+		private Dictionary<int, string> _registeredMechNames = new();
 		private HashSet<int> _mechSwitches = new();
 
 		private bool _toggleSpeed = false;
@@ -187,7 +189,13 @@ namespace VisualPinball.Engine.PinMAME
 
 			lock (_dispatchQueue) {
 				while (_dispatchQueue.Count > 0) {
-					_dispatchQueue.Dequeue().Invoke();
+					var callback = _dispatchQueue.Dequeue();
+					try {
+						callback.Invoke();
+					}
+					catch (Exception e) {
+						Logger.Error(e, "[PinMAME] Exception while processing main-thread dispatch callback.");
+					}
 				}
 			}
 
@@ -1013,8 +1021,10 @@ namespace VisualPinball.Engine.PinMAME
 
 		public void RegisterMech(PinMameMechComponent mechComponent)
 		{
-			var id = _numMechs++;
+			// PinMAME mech numbers are 1-based.
+			var id = ++_numMechs;
 			_registeredMechs[id] = mechComponent;
+			_registeredMechNames[id] = mechComponent ? mechComponent.name : "<null-mech>";
 		}
 
 		private void OnMechAvailable(int mechNo, PinMameMechInfo mechInfo)
@@ -1038,9 +1048,11 @@ namespace VisualPinball.Engine.PinMAME
 		{
 			var max = _pinMame.GetMaxMechs();
 			foreach (var (id, mech) in _registeredMechs) {
+				var mechName = _registeredMechNames.TryGetValue(id, out var name) ? name : $"mech#{id}";
+				// GetMaxMechs() returns the count of available slots and valid mech numbers are 1..max.
 				if (id > max) {
-					Logger.Error($"PinMAME only supports up to {max} custom mechs, ignoring {mech.name}.");
-					return;
+					Logger.Error($"PinMAME supports {max} custom mech slot(s). Cannot register mech id={id} ({mechName}).");
+					continue;
 				}
 				var mechConfig = mech.Config(_player.SwitchMapping, _player.CoilMapping, _switchIdToPinMameIdMappings, _coilIdToPinMameIdMapping);
 				_pinMame.SetMech(id, mechConfig);
