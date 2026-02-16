@@ -135,7 +135,7 @@ namespace VisualPinball.Engine.PinMAME
 			foreach (var mark in Marks) {
 				var switchMapping = switchMappings.FirstOrDefault(sm => ReferenceEquals(sm.Device, this) && sm.DeviceItem == mark.SwitchId);
 				if (switchMapping == null) {
-					Logger.Error($"Switch \"{mark.Name}\" for mech {name} is not mapped in the switch manager, ignoring.");
+					Logger.Error($"Switch \"{mark.Name}\" for mech {_cachedName} is not mapped in the switch manager, ignoring.");
 					continue;
 				}
 
@@ -160,6 +160,7 @@ namespace VisualPinball.Engine.PinMAME
 		}
 
 		private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+		private string _cachedName = "<unnamed-mech>";
 
 		private const string EventNameSpeed = "Mech Speed";
 		private const string EventNamePosition = "Mech Position";
@@ -225,6 +226,7 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void Awake()
 		{
+			_cachedName = gameObject.name;
 			_gle = GetComponentInParent<PinMameGamelogicEngine>();
 			if (_gle && enabled) {
 				_gle.RegisterMech(this);
