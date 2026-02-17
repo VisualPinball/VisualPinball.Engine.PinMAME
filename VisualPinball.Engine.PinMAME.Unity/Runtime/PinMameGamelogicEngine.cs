@@ -39,7 +39,7 @@ namespace VisualPinball.Engine.PinMAME
 	[DisallowMultipleComponent]
 	[RequireComponent(typeof(AudioSource))]
 	[AddComponentMenu("Pinball/Gamelogic Engine/PinMAME")]
-	public class PinMameGamelogicEngine : MonoBehaviour, IGamelogicEngine, IGamelogicInputThreading
+	public class PinMameGamelogicEngine : MonoBehaviour, IGamelogicEngine, IGamelogicInputThreading, IGamelogicTimeFence
 	{
 		public string Name { get; } = "PinMAME Gamelogic Engine";
 		public GamelogicInputDispatchMode SwitchDispatchMode => GamelogicInputDispatchMode.SimulationThread;
@@ -99,6 +99,20 @@ namespace VisualPinball.Engine.PinMAME
 		public event EventHandler<string> OnDisplayClear;
 		public event EventHandler<DisplayFrameData> OnDisplayUpdateFrame;
 		public event EventHandler<EventArgs> OnStarted;
+
+		public void SetTimeFence(double timeInSeconds)
+		{
+			if (!_isRunning || _pinMame == null) {
+				return;
+			}
+
+			try {
+				PinMame.PinMame.SetTimeFence(timeInSeconds);
+			}
+			catch (Exception e) {
+				Logger.Warn(e, "[PinMAME] SetTimeFence call failed.");
+			}
+		}
 
 		#endregion
 
@@ -284,6 +298,7 @@ namespace VisualPinball.Engine.PinMAME
 			// Do not call into native Stop() here (it blocks); the editor hook will stop PinMAME
 			// after we unsubscribe managed callbacks.
 			Interlocked.Exchange(ref _stopRequested, 1);
+			SetTimeFence(0.0);
 			// Stop polling outputs immediately to avoid concurrent calls into pinmame.dll
 			// while a stop is in progress (pinmame APIs are not guaranteed thread-safe).
 			_isRunning = false;
@@ -317,6 +332,8 @@ namespace VisualPinball.Engine.PinMAME
 			#endif
 
 			try {
+				SetTimeFence(0.0);
+
 				if (Interlocked.Exchange(ref _stopRequested, 1) != 0) {
 					return;
 				}
