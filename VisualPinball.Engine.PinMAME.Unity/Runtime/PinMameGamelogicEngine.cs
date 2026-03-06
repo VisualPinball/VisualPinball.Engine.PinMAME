@@ -175,7 +175,11 @@ namespace VisualPinball.Engine.PinMAME
 		private readonly List<Action> _pendingDispatchCallbacks = new();
 		private readonly ConcurrentQueue<CoilEventArgs> _simulationCoilDispatchQueue = new();
 		private int _simulationCoilDispatchQueueSize;
+		private bool _dispatchQueueWarningIssued;
+		private bool _simulationCoilQueueWarningIssued;
+		private bool _simulationCoilQueueDropWarningIssued;
 		private const int MaxSimulationCoilDispatchQueueSize = 8192;
+		private const int DispatchQueueWarningThreshold = 512;
 		private const double PerfSampleWindowSeconds = 0.25;
 		private long _pinMamePerfWindowStartTicks = Stopwatch.GetTimestamp();
 		private int _pinMameCallbacksInWindow;
@@ -275,6 +279,17 @@ namespace VisualPinball.Engine.PinMAME
 			// 	OnCoilChanged.Invoke(this, new CoilEventArgs("28", true));
 			// 	OnCoilChanged.Invoke(this, new CoilEventArgs("28", false));
 			// }
+		}
+
+		private void EnqueueMainThreadDispatch(Action callback)
+		{
+			lock (_dispatchQueue) {
+				_dispatchQueue.Enqueue(callback);
+				if (!_dispatchQueueWarningIssued && _dispatchQueue.Count >= DispatchQueueWarningThreshold) {
+					_dispatchQueueWarningIssued = true;
+					Logger.Warn($"[PinMAME] Main-thread dispatch queue backlog reached {_dispatchQueue.Count} items.");
+				}
+			}
 		}
 
 		private void OnDestroy()
@@ -611,9 +626,7 @@ namespace VisualPinball.Engine.PinMAME
 				Logger.Error($"[PinMAME] OnGameStarted: {e.Message}");
 			}
 
-			lock (_dispatchQueue) {
-				_dispatchQueue.Enqueue(() => OnStarted?.Invoke(this, EventArgs.Empty));
-			}
+			EnqueueMainThreadDispatch(() => OnStarted?.Invoke(this, EventArgs.Empty));
 		}
 
 		private void OnGameEnded()
@@ -716,21 +729,17 @@ namespace VisualPinball.Engine.PinMAME
 		private void OnDisplayRequested(int index, int displayCount, PinMameDisplayLayout displayLayout)
 		{
 			if (displayLayout.IsDmd) {
-				lock (_dispatchQueue) {
-					_dispatchQueue.Enqueue(() =>
-						OnDisplaysRequested?.Invoke(this, new RequestedDisplays(
-							new DisplayConfig($"{DmdPrefix}{index}", displayLayout.Width, displayLayout.Height))));
-				}
+				EnqueueMainThreadDispatch(() =>
+					OnDisplaysRequested?.Invoke(this, new RequestedDisplays(
+						new DisplayConfig($"{DmdPrefix}{index}", displayLayout.Width, displayLayout.Height))));
 
 				_frameBuffer[index] = new byte[displayLayout.Width * displayLayout.Height];
 				_dmdLevels[index] = displayLayout.Levels;
 
 			} else {
-				lock (_dispatchQueue) {
-					_dispatchQueue.Enqueue(() =>
-						OnDisplaysRequested?.Invoke(this, new RequestedDisplays(
-							new DisplayConfig($"{SegDispPrefix}{index}", displayLayout.Length, 1))));
-				}
+				EnqueueMainThreadDispatch(() =>
+					OnDisplaysRequested?.Invoke(this, new RequestedDisplays(
+						new DisplayConfig($"{SegDispPrefix}{index}", displayLayout.Length, 1))));
 
 				_frameBuffer[index] = new byte[displayLayout.Length * 2];
 				Logger.Info($"[PinMAME] Display {SegDispPrefix}{index} is of type {displayLayout.Type} at {displayLayout.Length} wide.");
@@ -769,21 +778,17 @@ namespace VisualPinball.Engine.PinMAME
 				}
 			}
 
-			lock (_dispatchQueue) {
-				_dispatchQueue.Enqueue(() => OnDisplayUpdateFrame?.Invoke(this,
-					new DisplayFrameData($"{DmdPrefix}{index}", GetDisplayFrameFormat(displayLayout), _frameBuffer[index])));
-			}
+			EnqueueMainThreadDispatch(() => OnDisplayUpdateFrame?.Invoke(this,
+				new DisplayFrameData($"{DmdPrefix}{index}", GetDisplayFrameFormat(displayLayout), _frameBuffer[index])));
 		}
 
 		private void UpdateSegDisp(int index, PinMameDisplayLayout displayLayout, IntPtr framePtr)
 		{
 			Marshal.Copy(framePtr, _frameBuffer[index], 0, displayLayout.Length * 2);
 
-			lock (_dispatchQueue) {
-				//Logger.Info($"[PinMAME] Seg data ({index}): {BitConverter.ToString(_frameBuffer[index])}" );
-				_dispatchQueue.Enqueue(() => OnDisplayUpdateFrame?.Invoke(this,
-					new DisplayFrameData($"{SegDispPrefix}{index}", GetDisplayFrameFormat(displayLayout), _frameBuffer[index])));
-			}
+			//Logger.Info($"[PinMAME] Seg data ({index}): {BitConverter.ToString(_frameBuffer[index])}" );
+			EnqueueMainThreadDispatch(() => OnDisplayUpdateFrame?.Invoke(this,
+				new DisplayFrameData($"{SegDispPrefix}{index}", GetDisplayFrameFormat(displayLayout), _frameBuffer[index])));
 		}
 
 		public static DisplayFrameFormat GetDisplayFrameFormat(PinMameDisplayLayout layout)
@@ -998,18 +1003,25 @@ namespace VisualPinball.Engine.PinMAME
 					Logger.Info($"[PinMAME] <= coil {coil.Id} : {isActive} | {coil.Description}");
 					if (IsLowLatencySimulationCoil(coil.Id)) {
 						_simulationCoilDispatchQueue.Enqueue(new CoilEventArgs(coil.Id, isActive));
-						if (Interlocked.Increment(ref _simulationCoilDispatchQueueSize) > MaxSimulationCoilDispatchQueueSize) {
+						var simulationCoilQueueSize = Interlocked.Increment(ref _simulationCoilDispatchQueueSize);
+						if (!_simulationCoilQueueWarningIssued && simulationCoilQueueSize >= MaxSimulationCoilDispatchQueueSize / 2) {
+							_simulationCoilQueueWarningIssued = true;
+							Logger.Warn($"[PinMAME] Simulation coil dispatch backlog reached {simulationCoilQueueSize} items.");
+						}
+						if (simulationCoilQueueSize > MaxSimulationCoilDispatchQueueSize) {
 							if (_simulationCoilDispatchQueue.TryDequeue(out _)) {
 								if (Interlocked.Decrement(ref _simulationCoilDispatchQueueSize) < 0) {
 									Interlocked.Exchange(ref _simulationCoilDispatchQueueSize, 0);
+								}
+								if (!_simulationCoilQueueDropWarningIssued) {
+									_simulationCoilQueueDropWarningIssued = true;
+									Logger.Warn($"[PinMAME] Simulation coil dispatch queue exceeded {MaxSimulationCoilDispatchQueueSize} items. Dropping oldest coil callbacks.");
 								}
 							}
 						}
 					}
 
-					lock (_dispatchQueue) {
-						_dispatchQueue.Enqueue(() => OnCoilChanged?.Invoke(this, new CoilEventArgs(coil.Id, isActive)));
-					}
+					EnqueueMainThreadDispatch(() => OnCoilChanged?.Invoke(this, new CoilEventArgs(coil.Id, isActive)));
 				}
 				else {
 					Logger.Info($"[PinMAME] <= solenoids disabled, coil {coil.Id} : {isActive} | {coil.Description}");
@@ -1109,9 +1121,7 @@ namespace VisualPinball.Engine.PinMAME
 		private void OnMechUpdated(int mechNo, PinMameMechInfo mechInfo)
 		{
 			if (_registeredMechs.ContainsKey(mechNo)) {
-				lock (_dispatchQueue) {
-					_dispatchQueue.Enqueue(() => _registeredMechs[mechNo].UpdateMech(mechInfo));
-				}
+				EnqueueMainThreadDispatch(() => _registeredMechs[mechNo].UpdateMech(mechInfo));
 
 			} else {
 				Logger.Info($"[PinMAME] <= mech updated: mechNo={mechNo}, mechInfo={mechInfo}");
