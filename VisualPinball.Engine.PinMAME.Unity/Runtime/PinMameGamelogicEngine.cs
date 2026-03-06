@@ -225,6 +225,7 @@ namespace VisualPinball.Engine.PinMAME
 		private bool _dispatchQueueWarningIssued;
 		private bool _simulationCoilQueueWarningIssued;
 		private bool _simulationCoilQueueDropWarningIssued;
+		private long _solenoidDelayStartTimestampUsec;
 		private const int MaxSimulationCoilDispatchQueueSize = 8192;
 		private const int DispatchQueueWarningThreshold = 512;
 		private const double PerfSampleWindowSeconds = 0.25;
@@ -258,6 +259,8 @@ namespace VisualPinball.Engine.PinMAME
 
 		private bool _toggleSpeed = false;
 		private Keyboard _keyboard;
+
+		private static long TimestampUsec => (Stopwatch.GetTimestamp() * 1_000_000) / Stopwatch.Frequency;
 
 		private static readonly SemaphoreSlim PinMameStartStopGate = new SemaphoreSlim(1, 1);
 		private int _onInitCalled;
@@ -733,7 +736,8 @@ namespace VisualPinball.Engine.PinMAME
 			Logger.Info("[PinMAME] Game started.");
 			_isRunning = true;
 
-			_solenoidDelayStart = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+			_solenoidDelayStartTimestampUsec = TimestampUsec;
+			_solenoidDelayStart = _solenoidDelayStartTimestampUsec / 1000;
 
 			try {
 				SendInitialSwitches();
@@ -1142,7 +1146,7 @@ namespace VisualPinball.Engine.PinMAME
 
 			if (_pinMameIdToCoilIdMapping.ContainsKey(id)) {
 				if (!_solenoidsEnabled) {
-					_solenoidsEnabled = DateTimeOffset.Now.ToUnixTimeMilliseconds() - _solenoidDelayStart >= SolenoidDelay;
+					_solenoidsEnabled = TimestampUsec - _solenoidDelayStartTimestampUsec >= (long)(SolenoidDelay * 1000f);
 
 					if (_solenoidsEnabled) {
 						Logger.Info($"Solenoids enabled, {SolenoidDelay}ms passed");
@@ -1156,7 +1160,9 @@ namespace VisualPinball.Engine.PinMAME
 						_sharedCoilStates[id] = isActive;
 					}
 
-					Logger.Info($"[PinMAME] <= coil {coil.Id} : {isActive} | {coil.Description}");
+					if (Logger.IsDebugEnabled) {
+						Logger.Debug($"[PinMAME] <= coil {coil.Id} : {isActive} | {coil.Description}");
+					}
 					if (ShouldDispatchSimulationCoil(coil.Id)) {
 						_simulationCoilDispatchQueue.Enqueue(new CoilEventArgs(coil.Id, isActive));
 						var simulationCoilQueueSize = Interlocked.Increment(ref _simulationCoilDispatchQueueSize);
@@ -1180,7 +1186,9 @@ namespace VisualPinball.Engine.PinMAME
 					EnqueueMainThreadDispatch(() => OnCoilChanged?.Invoke(this, new CoilEventArgs(coil.Id, isActive)));
 				}
 				else {
-					Logger.Info($"[PinMAME] <= solenoids disabled, coil {coil.Id} : {isActive} | {coil.Description}");
+					if (Logger.IsDebugEnabled) {
+						Logger.Debug($"[PinMAME] <= solenoids disabled, coil {coil.Id} : {isActive} | {coil.Description}");
+					}
 				}
 			}
 			else {
