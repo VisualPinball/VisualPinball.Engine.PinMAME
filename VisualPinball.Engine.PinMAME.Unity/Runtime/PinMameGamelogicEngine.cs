@@ -172,6 +172,7 @@ namespace VisualPinball.Engine.PinMAME
 		private static readonly Color Tint = new(1, 0.18f, 0);
 
 		private readonly Queue<Action> _dispatchQueue = new();
+		private readonly List<Action> _pendingDispatchCallbacks = new();
 		private readonly ConcurrentQueue<CoilEventArgs> _simulationCoilDispatchQueue = new();
 		private int _simulationCoilDispatchQueueSize;
 		private const int MaxSimulationCoilDispatchQueueSize = 8192;
@@ -232,15 +233,20 @@ namespace VisualPinball.Engine.PinMAME
 				return;
 			}
 
+			_pendingDispatchCallbacks.Clear();
+
 			lock (_dispatchQueue) {
 				while (_dispatchQueue.Count > 0) {
-					var callback = _dispatchQueue.Dequeue();
-					try {
-						callback.Invoke();
-					}
-					catch (Exception e) {
-						Logger.Error(e, "[PinMAME] Exception while processing main-thread dispatch callback.");
-					}
+					_pendingDispatchCallbacks.Add(_dispatchQueue.Dequeue());
+				}
+			}
+
+			foreach (var callback in _pendingDispatchCallbacks) {
+				try {
+					callback.Invoke();
+				}
+				catch (Exception e) {
+					Logger.Error(e, "[PinMAME] Exception while processing main-thread dispatch callback.");
 				}
 			}
 
