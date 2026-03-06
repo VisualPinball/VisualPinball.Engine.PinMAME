@@ -211,10 +211,10 @@ namespace VisualPinball.Engine.PinMAME
 		private volatile bool _isRunning;
 		private int _numMechs;
 		private Dictionary<int, byte[]> _frameBuffer = new();
-		private Dictionary<int, Dictionary<byte, byte>> _dmdLevels = new();
 
 		private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 		private static readonly Color Tint = new(1, 0.18f, 0);
+		private static readonly Color UnlitTint = new(Tint.r * 0.18f, Tint.g * 0.18f, Tint.b * 0.18f, 1f);
 
 		private readonly Queue<Action> _dispatchQueue = new();
 		private readonly List<Action> _pendingDispatchCallbacks = new();
@@ -430,7 +430,6 @@ namespace VisualPinball.Engine.PinMAME
 				_pinMame.IsKeyPressed -= IsKeyPressed;
 			}
 			_frameBuffer.Clear();
-			_dmdLevels.Clear();
 			lock (_outputStateLock) {
 				_sharedCoilStates.Clear();
 				_sharedLampStates.Clear();
@@ -861,11 +860,10 @@ namespace VisualPinball.Engine.PinMAME
 			if (displayLayout.IsDmd) {
 				EnqueueMainThreadDispatch(() =>
 					OnDisplaysRequested?.Invoke(this, new RequestedDisplays(
-						new DisplayConfig($"{DmdPrefix}{index}", displayLayout.Width, displayLayout.Height))));
+						new DisplayConfig($"{DmdPrefix}{index}", displayLayout.Width, displayLayout.Height, false, Tint, UnlitTint))));
 
 				lock (_displayStateLock) {
 					_frameBuffer[index] = new byte[displayLayout.Width * displayLayout.Height];
-					_dmdLevels[index] = displayLayout.Levels;
 				}
 
 			} else {
@@ -895,31 +893,14 @@ namespace VisualPinball.Engine.PinMAME
 		private void UpdateDmd(int index, PinMameDisplayLayout displayLayout, IntPtr framePtr)
 		{
 			byte[] frameBuffer;
-			Dictionary<byte, byte> levels;
 			lock (_displayStateLock) {
 				if (!_frameBuffer.TryGetValue(index, out frameBuffer)) {
 					Logger.Warn($"[PinMAME] Dropping DMD frame for unknown index {index} (layout: {displayLayout}).");
 					return;
 				}
-				if (!_dmdLevels.TryGetValue(index, out levels) || levels == null) {
-					Logger.Warn($"[PinMAME] Dropping DMD frame for index {index} because display levels are not initialized yet.");
-					return;
-				}
 			}
 
-			unsafe {
-				var ptr = (byte*) framePtr;
-				for (var y = 0; y < displayLayout.Height; y++) {
-					for (var x = 0; x < displayLayout.Width; x++) {
-						var pos = y * displayLayout.Width + x;
-						if (!levels.ContainsKey(ptr[pos])) {
-							Logger.Error($"Display {index}: Provided levels ({BitConverter.ToString(levels.Keys.ToArray())}) don't contain level {BitConverter.ToString(new[] {ptr[pos]})}.");
-							levels[ptr[pos]] = 0x4;
-						}
-						frameBuffer[pos] = levels[ptr[pos]];
-					}
-				}
-			}
+			Marshal.Copy(framePtr, frameBuffer, 0, frameBuffer.Length);
 
 			EnqueueMainThreadDispatch(() => OnDisplayUpdateFrame?.Invoke(this,
 				new DisplayFrameData($"{DmdPrefix}{index}", GetDisplayFrameFormat(displayLayout), frameBuffer)));
@@ -945,7 +926,7 @@ namespace VisualPinball.Engine.PinMAME
 		public static DisplayFrameFormat GetDisplayFrameFormat(PinMameDisplayLayout layout)
 		{
 			if (layout.IsDmd) {
-				return layout.Depth == 4 ? DisplayFrameFormat.Dmd4 : DisplayFrameFormat.Dmd2;
+				return DisplayFrameFormat.Dmd8;
 			}
 
 			switch (layout.Type) {
