@@ -32,6 +32,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using VisualPinball.Engine.Game.Engines;
 using VisualPinball.Unity;
+using VisualPinball.Unity.Simulation;
 using Logger = NLog.Logger;
 
 namespace VisualPinball.Engine.PinMAME
@@ -40,7 +41,7 @@ namespace VisualPinball.Engine.PinMAME
 	[DisallowMultipleComponent]
 	[RequireComponent(typeof(AudioSource))]
 	[AddComponentMenu("Pinball/Gamelogic Engine/PinMAME")]
-	public class PinMameGamelogicEngine : MonoBehaviour, IGamelogicEngine, IGamelogicInputThreading, IGamelogicTimeFence, IGamelogicCoilOutputFeed, IGamelogicPerformanceStats
+	public class PinMameGamelogicEngine : MonoBehaviour, IGamelogicEngine, IGamelogicInputThreading, IGamelogicTimeFence, IGamelogicCoilOutputFeed, IGamelogicSharedStateWriter, IGamelogicPerformanceStats
 	{
 		public string Name { get; } = "PinMAME Gamelogic Engine";
 		public GamelogicInputDispatchMode SwitchDispatchMode => GamelogicInputDispatchMode.SimulationThread;
@@ -138,6 +139,15 @@ namespace VisualPinball.Engine.PinMAME
 			return true;
 		}
 
+		public void WriteSharedState(ref SimulationState.Snapshot snapshot)
+		{
+			lock (_outputStateLock) {
+				snapshot.CoilCount = CopyCoilStates(ref snapshot);
+				snapshot.LampCount = CopyLampStates(ref snapshot);
+				snapshot.GICount = CopyGiStates(ref snapshot);
+			}
+		}
+
 		#endregion
 
 		#region Internals
@@ -174,6 +184,7 @@ namespace VisualPinball.Engine.PinMAME
 		private readonly Queue<Action> _dispatchQueue = new();
 		private readonly List<Action> _pendingDispatchCallbacks = new();
 		private readonly object _displayStateLock = new();
+		private readonly object _outputStateLock = new();
 		private readonly ConcurrentQueue<CoilEventArgs> _simulationCoilDispatchQueue = new();
 		private int _simulationCoilDispatchQueueSize;
 		private bool _dispatchQueueWarningIssued;
@@ -185,6 +196,9 @@ namespace VisualPinball.Engine.PinMAME
 		private long _pinMamePerfWindowStartTicks = Stopwatch.GetTimestamp();
 		private int _pinMameCallbacksInWindow;
 		private float _pinMameCallbackRateHz;
+		private readonly Dictionary<int, bool> _sharedCoilStates = new();
+		private readonly Dictionary<int, float> _sharedLampStates = new();
+		private readonly Dictionary<int, float> _sharedGiStates = new();
 		private readonly Queue<float[]> _audioQueue = new();
 
 		private int _audioFilterChannels;
@@ -258,6 +272,9 @@ namespace VisualPinball.Engine.PinMAME
 			// lamps
 			_pinMame.GetChangedLamps(_changedLamps);
 			foreach (var changedLamp in _changedLamps) {
+				lock (_outputStateLock) {
+					_sharedLampStates[changedLamp.Id] = changedLamp.Value;
+				}
 				if (_pinMameIdToLampIdMapping.ContainsKey(changedLamp.Id)) {
 					//Logger.Info($"[PinMAME] <= lamp {changedLamp.Id}: {changedLamp.Value}");
 					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[_pinMameIdToLampIdMapping[changedLamp.Id]].Id, changedLamp.Value));
@@ -267,6 +284,9 @@ namespace VisualPinball.Engine.PinMAME
 			// gi
 			_pinMame.GetChangedGIs(_changedGIs);
 			foreach (var changedGi in _changedGIs) {
+				lock (_outputStateLock) {
+					_sharedGiStates[changedGi.Id] = changedGi.Value;
+				}
 				if (_pinMameIdToLampIdMapping.ContainsKey(changedGi.Id)) {
 					//Logger.Info($"[PinMAME] <= gi {changedGi.Id}: {changedGi.Value}");
 					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[_pinMameIdToLampIdMapping[changedGi.Id]].Id, changedGi.Value, LampSource.GI));
@@ -291,6 +311,57 @@ namespace VisualPinball.Engine.PinMAME
 					Logger.Warn($"[PinMAME] Main-thread dispatch queue backlog reached {_dispatchQueue.Count} items.");
 				}
 			}
+		}
+
+		private int CopyCoilStates(ref SimulationState.Snapshot snapshot)
+		{
+			var index = 0;
+			foreach (var entry in _sharedCoilStates) {
+				if (index >= snapshot.CoilStates.Length) {
+					break;
+				}
+
+				snapshot.CoilStates[index++] = new SimulationState.CoilState {
+					Id = entry.Key,
+					IsActive = entry.Value ? (byte)1 : (byte)0,
+				};
+			}
+
+			return index;
+		}
+
+		private int CopyLampStates(ref SimulationState.Snapshot snapshot)
+		{
+			var index = 0;
+			foreach (var entry in _sharedLampStates) {
+				if (index >= snapshot.LampStates.Length) {
+					break;
+				}
+
+				snapshot.LampStates[index++] = new SimulationState.LampState {
+					Id = entry.Key,
+					Value = entry.Value,
+				};
+			}
+
+			return index;
+		}
+
+		private int CopyGiStates(ref SimulationState.Snapshot snapshot)
+		{
+			var index = 0;
+			foreach (var entry in _sharedGiStates) {
+				if (index >= snapshot.GIStates.Length) {
+					break;
+				}
+
+				snapshot.GIStates[index++] = new SimulationState.GIState {
+					Id = entry.Key,
+					Value = entry.Value,
+				};
+			}
+
+			return index;
 		}
 
 		private void OnDestroy()
@@ -319,6 +390,11 @@ namespace VisualPinball.Engine.PinMAME
 			}
 			_frameBuffer.Clear();
 			_dmdLevels.Clear();
+			lock (_outputStateLock) {
+				_sharedCoilStates.Clear();
+				_sharedLampStates.Clear();
+				_sharedGiStates.Clear();
+			}
 		}
 
 		private void OnDisable()
@@ -641,6 +717,11 @@ namespace VisualPinball.Engine.PinMAME
 				if (Interlocked.Decrement(ref _simulationCoilDispatchQueueSize) < 0) {
 					Interlocked.Exchange(ref _simulationCoilDispatchQueueSize, 0);
 				}
+			}
+			lock (_outputStateLock) {
+				_sharedCoilStates.Clear();
+				_sharedLampStates.Clear();
+				_sharedGiStates.Clear();
 			}
 		}
 
@@ -998,6 +1079,11 @@ namespace VisualPinball.Engine.PinMAME
 
 		public void SetCoil(string n, bool value)
 		{
+			if (int.TryParse(n, out var coilId)) {
+				lock (_outputStateLock) {
+					_sharedCoilStates[coilId] = value;
+				}
+			}
 			OnCoilChanged?.Invoke(this, new CoilEventArgs(n, value));
 		}
 
@@ -1022,6 +1108,10 @@ namespace VisualPinball.Engine.PinMAME
 				var coil = _coils[_pinMameIdToCoilIdMapping[id]];
 
 				if (_solenoidsEnabled) {
+					lock (_outputStateLock) {
+						_sharedCoilStates[id] = isActive;
+					}
+
 					Logger.Info($"[PinMAME] <= coil {coil.Id} : {isActive} | {coil.Description}");
 					if (ShouldDispatchSimulationCoil(coil.Id)) {
 						_simulationCoilDispatchQueue.Enqueue(new CoilEventArgs(coil.Id, isActive));
@@ -1060,6 +1150,15 @@ namespace VisualPinball.Engine.PinMAME
 
 		public void SetLamp(string id, float value, bool isCoil = false, LampSource source = LampSource.Lamp)
 		{
+			if (int.TryParse(id, out var lampId)) {
+				lock (_outputStateLock) {
+					if (source == LampSource.GI) {
+						_sharedGiStates[lampId] = value;
+					} else {
+						_sharedLampStates[lampId] = value;
+					}
+				}
+			}
 			OnLampChanged?.Invoke(this, new LampEventArgs(id, value, isCoil, source));
 		}
 
