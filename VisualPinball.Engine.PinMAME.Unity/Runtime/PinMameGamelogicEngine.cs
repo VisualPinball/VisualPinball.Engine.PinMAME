@@ -173,6 +173,7 @@ namespace VisualPinball.Engine.PinMAME
 
 		private readonly Queue<Action> _dispatchQueue = new();
 		private readonly List<Action> _pendingDispatchCallbacks = new();
+		private readonly object _displayStateLock = new();
 		private readonly ConcurrentQueue<CoilEventArgs> _simulationCoilDispatchQueue = new();
 		private int _simulationCoilDispatchQueueSize;
 		private bool _dispatchQueueWarningIssued;
@@ -733,15 +734,19 @@ namespace VisualPinball.Engine.PinMAME
 					OnDisplaysRequested?.Invoke(this, new RequestedDisplays(
 						new DisplayConfig($"{DmdPrefix}{index}", displayLayout.Width, displayLayout.Height))));
 
-				_frameBuffer[index] = new byte[displayLayout.Width * displayLayout.Height];
-				_dmdLevels[index] = displayLayout.Levels;
+				lock (_displayStateLock) {
+					_frameBuffer[index] = new byte[displayLayout.Width * displayLayout.Height];
+					_dmdLevels[index] = displayLayout.Levels;
+				}
 
 			} else {
 				EnqueueMainThreadDispatch(() =>
 					OnDisplaysRequested?.Invoke(this, new RequestedDisplays(
 						new DisplayConfig($"{SegDispPrefix}{index}", displayLayout.Length, 1))));
 
-				_frameBuffer[index] = new byte[displayLayout.Length * 2];
+				lock (_displayStateLock) {
+					_frameBuffer[index] = new byte[displayLayout.Length * 2];
+				}
 				Logger.Info($"[PinMAME] Display {SegDispPrefix}{index} is of type {displayLayout.Type} at {displayLayout.Length} wide.");
 			}
 		}
@@ -750,10 +755,6 @@ namespace VisualPinball.Engine.PinMAME
 		{
 			MarkPinMameCallbackActivity();
 
-			if (!_frameBuffer.ContainsKey(index)) {
-				Logger.Warn($"[PinMAME] Dropping display frame for unknown index {index} (layout: {displayLayout}).");
-				return;
-			}
 			if (displayLayout.IsDmd) {
 				UpdateDmd(index, displayLayout, framePtr);
 
@@ -764,31 +765,52 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void UpdateDmd(int index, PinMameDisplayLayout displayLayout, IntPtr framePtr)
 		{
+			byte[] frameBuffer;
+			Dictionary<byte, byte> levels;
+			lock (_displayStateLock) {
+				if (!_frameBuffer.TryGetValue(index, out frameBuffer)) {
+					Logger.Warn($"[PinMAME] Dropping DMD frame for unknown index {index} (layout: {displayLayout}).");
+					return;
+				}
+				if (!_dmdLevels.TryGetValue(index, out levels) || levels == null) {
+					Logger.Warn($"[PinMAME] Dropping DMD frame for index {index} because display levels are not initialized yet.");
+					return;
+				}
+			}
+
 			unsafe {
 				var ptr = (byte*) framePtr;
 				for (var y = 0; y < displayLayout.Height; y++) {
 					for (var x = 0; x < displayLayout.Width; x++) {
 						var pos = y * displayLayout.Width + x;
-						if (!_dmdLevels[index].ContainsKey(ptr[pos])) {
-							Logger.Error($"Display {index}: Provided levels ({BitConverter.ToString(_dmdLevels[index].Keys.ToArray())}) don't contain level {BitConverter.ToString(new[] {ptr[pos]})}.");
-							_dmdLevels[index][ptr[pos]] = 0x4;
+						if (!levels.ContainsKey(ptr[pos])) {
+							Logger.Error($"Display {index}: Provided levels ({BitConverter.ToString(levels.Keys.ToArray())}) don't contain level {BitConverter.ToString(new[] {ptr[pos]})}.");
+							levels[ptr[pos]] = 0x4;
 						}
-						_frameBuffer[index][pos] = _dmdLevels[index][ptr[pos]];
+						frameBuffer[pos] = levels[ptr[pos]];
 					}
 				}
 			}
 
 			EnqueueMainThreadDispatch(() => OnDisplayUpdateFrame?.Invoke(this,
-				new DisplayFrameData($"{DmdPrefix}{index}", GetDisplayFrameFormat(displayLayout), _frameBuffer[index])));
+				new DisplayFrameData($"{DmdPrefix}{index}", GetDisplayFrameFormat(displayLayout), frameBuffer)));
 		}
 
 		private void UpdateSegDisp(int index, PinMameDisplayLayout displayLayout, IntPtr framePtr)
 		{
-			Marshal.Copy(framePtr, _frameBuffer[index], 0, displayLayout.Length * 2);
+			byte[] frameBuffer;
+			lock (_displayStateLock) {
+				if (!_frameBuffer.TryGetValue(index, out frameBuffer)) {
+					Logger.Warn($"[PinMAME] Dropping segmented display frame for unknown index {index} (layout: {displayLayout}).");
+					return;
+				}
+			}
+
+			Marshal.Copy(framePtr, frameBuffer, 0, displayLayout.Length * 2);
 
 			//Logger.Info($"[PinMAME] Seg data ({index}): {BitConverter.ToString(_frameBuffer[index])}" );
 			EnqueueMainThreadDispatch(() => OnDisplayUpdateFrame?.Invoke(this,
-				new DisplayFrameData($"{SegDispPrefix}{index}", GetDisplayFrameFormat(displayLayout), _frameBuffer[index])));
+				new DisplayFrameData($"{SegDispPrefix}{index}", GetDisplayFrameFormat(displayLayout), frameBuffer)));
 		}
 
 		public static DisplayFrameFormat GetDisplayFrameFormat(PinMameDisplayLayout layout)
