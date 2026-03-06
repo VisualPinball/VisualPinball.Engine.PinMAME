@@ -19,6 +19,7 @@
 // ReSharper disable PossibleNullReferenceException
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -39,7 +40,7 @@ namespace VisualPinball.Engine.PinMAME
 	[DisallowMultipleComponent]
 	[RequireComponent(typeof(AudioSource))]
 	[AddComponentMenu("Pinball/Gamelogic Engine/PinMAME")]
-	public class PinMameGamelogicEngine : MonoBehaviour, IGamelogicEngine, IGamelogicInputThreading, IGamelogicTimeFence
+	public class PinMameGamelogicEngine : MonoBehaviour, IGamelogicEngine, IGamelogicInputThreading, IGamelogicTimeFence, IGamelogicCoilOutputFeed, IGamelogicPerformanceStats
 	{
 		public string Name { get; } = "PinMAME Gamelogic Engine";
 		public GamelogicInputDispatchMode SwitchDispatchMode => GamelogicInputDispatchMode.SimulationThread;
@@ -102,7 +103,7 @@ namespace VisualPinball.Engine.PinMAME
 
 		public void SetTimeFence(double timeInSeconds)
 		{
-			if (!_isRunning || _pinMame == null) {
+			if (_pinMame == null) {
 				return;
 			}
 
@@ -112,6 +113,29 @@ namespace VisualPinball.Engine.PinMAME
 			catch (Exception e) {
 				Logger.Warn(e, "[PinMAME] SetTimeFence call failed.");
 			}
+		}
+
+		public bool TryDequeueCoilEvent(out CoilEventArgs coilEvent)
+		{
+			if (_simulationCoilDispatchQueue.TryDequeue(out coilEvent)) {
+				if (Interlocked.Decrement(ref _simulationCoilDispatchQueueSize) < 0) {
+					Interlocked.Exchange(ref _simulationCoilDispatchQueueSize, 0);
+				}
+				return true;
+			}
+
+			return false;
+		}
+
+		public bool TryGetPerformanceStats(out GamelogicPerformanceStats stats)
+		{
+			if (_pinMame == null) {
+				stats = default;
+				return false;
+			}
+
+			stats = new GamelogicPerformanceStats(_isRunning, Volatile.Read(ref _pinMameCallbackRateHz), PinMame.PinMame.RunState);
+			return true;
 		}
 
 		#endregion
@@ -148,6 +172,13 @@ namespace VisualPinball.Engine.PinMAME
 		private static readonly Color Tint = new(1, 0.18f, 0);
 
 		private readonly Queue<Action> _dispatchQueue = new();
+		private readonly ConcurrentQueue<CoilEventArgs> _simulationCoilDispatchQueue = new();
+		private int _simulationCoilDispatchQueueSize;
+		private const int MaxSimulationCoilDispatchQueueSize = 8192;
+		private const double PerfSampleWindowSeconds = 0.25;
+		private long _pinMamePerfWindowStartTicks = Stopwatch.GetTimestamp();
+		private int _pinMameCallbacksInWindow;
+		private float _pinMameCallbackRateHz;
 		private readonly Queue<float[]> _audioQueue = new();
 
 		private int _audioFilterChannels;
@@ -504,6 +535,7 @@ namespace VisualPinball.Engine.PinMAME
 
 				_pinMame.SetHandleKeyboard(false);
 				_pinMame.SetHandleMechanics(DisableMechs ? 0 : 0xFF);
+				SetTimeFence(0.01);
 
 				_pinMame.OnGameStarted += OnGameStarted;
 				_pinMame.OnGameEnded += OnGameEnded;
@@ -585,6 +617,11 @@ namespace VisualPinball.Engine.PinMAME
 				Logger.Info("[PinMAME] Game ended.");
 			}
 			_isRunning = false;
+			while (_simulationCoilDispatchQueue.TryDequeue(out _)) {
+				if (Interlocked.Decrement(ref _simulationCoilDispatchQueueSize) < 0) {
+					Interlocked.Exchange(ref _simulationCoilDispatchQueueSize, 0);
+				}
+			}
 		}
 
 		private void UpdateCaches()
@@ -696,6 +733,8 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void OnDisplayUpdated(int index, IntPtr framePtr, PinMameDisplayLayout displayLayout)
 		{
+			MarkPinMameCallbackActivity();
+
 			if (!_frameBuffer.ContainsKey(index)) {
 				Logger.Warn($"[PinMAME] Dropping display frame for unknown index {index} (layout: {displayLayout}).");
 				return;
@@ -936,6 +975,8 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void OnSolenoidUpdated(int id, bool isActive)
 		{
+			MarkPinMameCallbackActivity();
+
 			if (_pinMameIdToCoilIdMapping.ContainsKey(id)) {
 				if (!_solenoidsEnabled) {
 					_solenoidsEnabled = DateTimeOffset.Now.ToUnixTimeMilliseconds() - _solenoidDelayStart >= SolenoidDelay;
@@ -949,6 +990,16 @@ namespace VisualPinball.Engine.PinMAME
 
 				if (_solenoidsEnabled) {
 					Logger.Info($"[PinMAME] <= coil {coil.Id} : {isActive} | {coil.Description}");
+					if (IsLowLatencySimulationCoil(coil.Id)) {
+						_simulationCoilDispatchQueue.Enqueue(new CoilEventArgs(coil.Id, isActive));
+						if (Interlocked.Increment(ref _simulationCoilDispatchQueueSize) > MaxSimulationCoilDispatchQueueSize) {
+							if (_simulationCoilDispatchQueue.TryDequeue(out _)) {
+								if (Interlocked.Decrement(ref _simulationCoilDispatchQueueSize) < 0) {
+									Interlocked.Exchange(ref _simulationCoilDispatchQueueSize, 0);
+								}
+							}
+						}
+					}
 
 					lock (_dispatchQueue) {
 						_dispatchQueue.Enqueue(() => OnCoilChanged?.Invoke(this, new CoilEventArgs(coil.Id, isActive)));
@@ -1094,6 +1145,32 @@ namespace VisualPinball.Engine.PinMAME
 			}
 
 			return 0;
+		}
+
+		private static bool IsLowLatencySimulationCoil(string coilId)
+		{
+			return !string.IsNullOrEmpty(coilId)
+				&& coilId.StartsWith("c_flipper", StringComparison.OrdinalIgnoreCase);
+		}
+
+		private void MarkPinMameCallbackActivity()
+		{
+			Interlocked.Increment(ref _pinMameCallbacksInWindow);
+
+			var nowTicks = Stopwatch.GetTimestamp();
+			var startTicks = Volatile.Read(ref _pinMamePerfWindowStartTicks);
+			var elapsedSeconds = (double)(nowTicks - startTicks) / Stopwatch.Frequency;
+			if (elapsedSeconds < PerfSampleWindowSeconds) {
+				return;
+			}
+
+			if (Interlocked.CompareExchange(ref _pinMamePerfWindowStartTicks, nowTicks, startTicks) != startTicks) {
+				return;
+			}
+
+			var callbacks = Interlocked.Exchange(ref _pinMameCallbacksInWindow, 0);
+			var rate = elapsedSeconds > 0.0 ? callbacks / elapsedSeconds : 0.0;
+			Volatile.Write(ref _pinMameCallbackRateHz, (float)rate);
 		}
 	}
 }
