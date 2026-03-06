@@ -1023,7 +1023,7 @@ namespace VisualPinball.Engine.PinMAME
 
 				if (_solenoidsEnabled) {
 					Logger.Info($"[PinMAME] <= coil {coil.Id} : {isActive} | {coil.Description}");
-					if (IsLowLatencySimulationCoil(coil.Id)) {
+					if (ShouldDispatchSimulationCoil(coil.Id)) {
 						_simulationCoilDispatchQueue.Enqueue(new CoilEventArgs(coil.Id, isActive));
 						var simulationCoilQueueSize = Interlocked.Increment(ref _simulationCoilDispatchQueueSize);
 						if (!_simulationCoilQueueWarningIssued && simulationCoilQueueSize >= MaxSimulationCoilDispatchQueueSize / 2) {
@@ -1185,10 +1185,11 @@ namespace VisualPinball.Engine.PinMAME
 			return 0;
 		}
 
-		private static bool IsLowLatencySimulationCoil(string coilId)
+		private bool ShouldDispatchSimulationCoil(string coilId)
 		{
 			return !string.IsNullOrEmpty(coilId)
-				&& coilId.StartsWith("c_flipper", StringComparison.OrdinalIgnoreCase);
+				&& _player != null
+				&& _player.SupportsSimulationThreadCoilDispatch(coilId);
 		}
 
 		private void MarkPinMameCallbackActivity()
