@@ -41,7 +41,7 @@ namespace VisualPinball.Engine.PinMAME
 	[DisallowMultipleComponent]
 	[RequireComponent(typeof(AudioSource))]
 	[AddComponentMenu("Pinball/Gamelogic Engine/PinMAME")]
-	public class PinMameGamelogicEngine : MonoBehaviour, IGamelogicEngine, IGamelogicInputThreading, IGamelogicTimeFence, IGamelogicCoilOutputFeed, IGamelogicSharedStateWriter, IGamelogicPerformanceStats
+	public class PinMameGamelogicEngine : MonoBehaviour, IGamelogicEngine, IGamelogicInputThreading, IGamelogicTimeFence, IGamelogicCoilOutputFeed, IGamelogicSharedStateWriter, IGamelogicSharedStateApplier, IGamelogicPerformanceStats
 	{
 		public string Name { get; } = "PinMAME Gamelogic Engine";
 		public GamelogicInputDispatchMode SwitchDispatchMode => GamelogicInputDispatchMode.SimulationThread;
@@ -148,6 +148,41 @@ namespace VisualPinball.Engine.PinMAME
 			}
 		}
 
+		public void ApplySharedState(in SimulationState.Snapshot snapshot)
+		{
+			if (_player == null) {
+				return;
+			}
+
+			_sharedLampPlaybackActive = true;
+
+			for (var i = 0; i < snapshot.LampCount; i++) {
+				var lamp = snapshot.LampStates[i];
+				if (!_pinMameIdToLampIdMapping.TryGetValue(lamp.Id, out var lampId)) {
+					continue;
+				}
+				if (_lastAppliedLampStates.TryGetValue(lamp.Id, out var currentValue) && currentValue == lamp.Value) {
+					continue;
+				}
+
+				_lastAppliedLampStates[lamp.Id] = lamp.Value;
+				_player.SetLamp(lampId, lamp.Value, LampSource.Lamp);
+			}
+
+			for (var i = 0; i < snapshot.GICount; i++) {
+				var gi = snapshot.GIStates[i];
+				if (!_pinMameIdToLampIdMapping.TryGetValue(gi.Id, out var giId)) {
+					continue;
+				}
+				if (_lastAppliedGiStates.TryGetValue(gi.Id, out var currentValue) && currentValue == gi.Value) {
+					continue;
+				}
+
+				_lastAppliedGiStates[gi.Id] = gi.Value;
+				_player.SetLamp(giId, gi.Value, LampSource.GI);
+			}
+		}
+
 		#endregion
 
 		#region Internals
@@ -199,6 +234,9 @@ namespace VisualPinball.Engine.PinMAME
 		private readonly Dictionary<int, bool> _sharedCoilStates = new();
 		private readonly Dictionary<int, float> _sharedLampStates = new();
 		private readonly Dictionary<int, float> _sharedGiStates = new();
+		private readonly Dictionary<int, float> _lastAppliedLampStates = new();
+		private readonly Dictionary<int, float> _lastAppliedGiStates = new();
+		private bool _sharedLampPlaybackActive;
 		private readonly Queue<float[]> _audioQueue = new();
 
 		private int _audioFilterChannels;
@@ -275,7 +313,7 @@ namespace VisualPinball.Engine.PinMAME
 				lock (_outputStateLock) {
 					_sharedLampStates[changedLamp.Id] = changedLamp.Value;
 				}
-				if (_pinMameIdToLampIdMapping.ContainsKey(changedLamp.Id)) {
+				if (!_sharedLampPlaybackActive && _pinMameIdToLampIdMapping.ContainsKey(changedLamp.Id)) {
 					//Logger.Info($"[PinMAME] <= lamp {changedLamp.Id}: {changedLamp.Value}");
 					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[_pinMameIdToLampIdMapping[changedLamp.Id]].Id, changedLamp.Value));
 				}
@@ -287,7 +325,7 @@ namespace VisualPinball.Engine.PinMAME
 				lock (_outputStateLock) {
 					_sharedGiStates[changedGi.Id] = changedGi.Value;
 				}
-				if (_pinMameIdToLampIdMapping.ContainsKey(changedGi.Id)) {
+				if (!_sharedLampPlaybackActive && _pinMameIdToLampIdMapping.ContainsKey(changedGi.Id)) {
 					//Logger.Info($"[PinMAME] <= gi {changedGi.Id}: {changedGi.Value}");
 					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[_pinMameIdToLampIdMapping[changedGi.Id]].Id, changedGi.Value, LampSource.GI));
 				} /*else {
@@ -395,6 +433,9 @@ namespace VisualPinball.Engine.PinMAME
 				_sharedLampStates.Clear();
 				_sharedGiStates.Clear();
 			}
+			_lastAppliedLampStates.Clear();
+			_lastAppliedGiStates.Clear();
+			_sharedLampPlaybackActive = false;
 		}
 
 		private void OnDisable()
@@ -723,6 +764,9 @@ namespace VisualPinball.Engine.PinMAME
 				_sharedLampStates.Clear();
 				_sharedGiStates.Clear();
 			}
+			_lastAppliedLampStates.Clear();
+			_lastAppliedGiStates.Clear();
+			_sharedLampPlaybackActive = false;
 		}
 
 		private void UpdateCaches()
