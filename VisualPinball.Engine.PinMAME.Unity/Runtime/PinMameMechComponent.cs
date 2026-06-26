@@ -28,9 +28,10 @@ using Logger = NLog.Logger;
 
 namespace VisualPinball.Engine.PinMAME
 {
+	[PackAs("PinMameMechComponent")]
 	[AddComponentMenu("Pinball/Mechs/PinMAME Mech Handler")]
 	public class PinMameMechComponent : MonoBehaviour, IMechHandler, ISwitchDeviceComponent, ICoilDeviceComponent,
-		IPinballEventEmitter, ISerializationCallbackReceiver
+		IPinballEventEmitter, ISerializationCallbackReceiver, IPackable
 	{
 		#region Data
 
@@ -220,6 +221,49 @@ namespace VisualPinball.Engine.PinMAME
 
 		#endregion
 
+		#region Packaging
+
+		public byte[] Pack()
+		{
+			return PackageApi.Packer.Pack(new PinMameMechPackable {
+				Type = Type,
+				Repeat = Repeat,
+				LinearMovement = LinearMovement,
+				FastUpdates = FastUpdates,
+				ResultByLength = ResultByLength,
+				Length = Length,
+				Steps = Steps,
+				Marks = Marks,
+				Acceleration = Acceleration,
+				Retardation = Retardation,
+				Solenoid1 = _solenoid1,
+				Solenoid2 = _solenoid2
+			});
+		}
+
+		public byte[] PackReferences(Transform root, PackagedRefs refs, PackagedFiles files) => Array.Empty<byte>();
+
+		public void Unpack(byte[] bytes)
+		{
+			var data = PackageApi.Packer.Unpack<PinMameMechPackable>(bytes);
+			Type = data.Type;
+			Repeat = data.Repeat;
+			LinearMovement = data.LinearMovement;
+			FastUpdates = data.FastUpdates;
+			ResultByLength = data.ResultByLength;
+			Length = data.Length;
+			Steps = data.Steps;
+			Marks = data.Marks ?? Array.Empty<MechMark>();
+			Acceleration = data.Acceleration;
+			Retardation = data.Retardation;
+			_solenoid1 = data.Solenoid1;
+			_solenoid2 = data.Solenoid2;
+		}
+
+		public void UnpackReferences(byte[] data, Transform root, PackagedRefs refs, PackagedFiles files) { }
+
+		#endregion
+
 		#region Runtime
 
 		private PinMameGamelogicEngine _gle;
@@ -277,5 +321,22 @@ namespace VisualPinball.Engine.PinMAME
 		private string GenerateCoilId() => $"coil_{Guid.NewGuid().ToString()[..8]}";
 
 		#endregion
+	}
+
+	[Serializable]
+	public struct PinMameMechPackable
+	{
+		public PinMameMechType Type;
+		public PinMameRepeat Repeat;
+		public bool LinearMovement;
+		public bool FastUpdates;
+		public bool ResultByLength;
+		public int Length;
+		public int Steps;
+		public MechMark[] Marks;
+		public int Acceleration;
+		public int Retardation;
+		public string Solenoid1;
+		public string Solenoid2;
 	}
 }

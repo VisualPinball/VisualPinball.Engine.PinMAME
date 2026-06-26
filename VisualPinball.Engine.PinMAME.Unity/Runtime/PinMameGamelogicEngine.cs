@@ -23,6 +23,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -40,8 +41,9 @@ namespace VisualPinball.Engine.PinMAME
 	[Serializable]
 	[DisallowMultipleComponent]
 	[RequireComponent(typeof(AudioSource))]
+	[PackAs("PinMameGamelogicEngine")]
 	[AddComponentMenu("Pinball/Gamelogic Engine/PinMAME")]
-	public class PinMameGamelogicEngine : MonoBehaviour, IGamelogicEngine, IGamelogicInputThreading, IGamelogicTimeFence, IGamelogicCoilOutputFeed, IGamelogicSharedStateWriter, IGamelogicSharedStateApplier, IGamelogicPerformanceStats
+	public class PinMameGamelogicEngine : MonoBehaviour, IGamelogicEngine, IGamelogicInputThreading, IGamelogicTimeFence, IGamelogicCoilOutputFeed, IGamelogicSharedStateWriter, IGamelogicSharedStateApplier, IGamelogicPerformanceStats, IPackable
 	{
 		public string Name { get; } = "PinMAME Gamelogic Engine";
 		public GamelogicInputDispatchMode SwitchDispatchMode => GamelogicInputDispatchMode.SimulationThread;
@@ -65,6 +67,93 @@ namespace VisualPinball.Engine.PinMAME
 
 		[Tooltip("Disable audio")]
 		public bool DisableAudio;
+
+		#endregion
+
+		#region Packaging
+
+		public byte[] Pack()
+		{
+			return PackageApi.Packer.Pack(new PinMameGamelogicEnginePackable {
+				GameType = _game?.GetType().AssemblyQualifiedName,
+				GameId = _game?.Id,
+				RomId = romId,
+				DisableMechs = DisableMechs,
+				SolenoidDelay = SolenoidDelay,
+				DisableAudio = DisableAudio
+			});
+		}
+
+		public byte[] PackReferences(Transform root, PackagedRefs refs, PackagedFiles files) => Array.Empty<byte>();
+
+		public void Unpack(byte[] bytes)
+		{
+			var data = PackageApi.Packer.Unpack<PinMameGamelogicEnginePackable>(bytes);
+			romId = data.RomId;
+			DisableMechs = data.DisableMechs;
+			SolenoidDelay = data.SolenoidDelay;
+			DisableAudio = data.DisableAudio;
+			_game = ResolveGame(data.GameType, data.GameId);
+		}
+
+		public void UnpackReferences(byte[] data, Transform root, PackagedRefs refs, PackagedFiles files) { }
+
+		private static PinMameGame ResolveGame(string gameType, string gameId)
+		{
+			var gameFromType = CreateByTypeName(gameType);
+			if (gameFromType != null) {
+				return gameFromType;
+			}
+
+			if (string.IsNullOrWhiteSpace(gameId)) {
+				return null;
+			}
+
+			foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies()) {
+				Type[] types;
+				try {
+					types = assembly.GetTypes();
+				} catch (ReflectionTypeLoadException e) {
+					types = e.Types.Where(t => t != null).ToArray();
+				}
+
+				foreach (var type in types) {
+					if (type == null || type.IsAbstract || !typeof(PinMameGame).IsAssignableFrom(type)) {
+						continue;
+					}
+
+					if (Activator.CreateInstance(type) is PinMameGame game &&
+					    string.Equals(game.Id, gameId, StringComparison.OrdinalIgnoreCase)) {
+						return game;
+					}
+				}
+			}
+
+			return null;
+		}
+
+		private static PinMameGame CreateByTypeName(string gameType)
+		{
+			if (string.IsNullOrWhiteSpace(gameType)) {
+				return null;
+			}
+
+			var type = Type.GetType(gameType);
+			if (type == null) {
+				foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies()) {
+					type = assembly.GetType(gameType, false);
+					if (type != null) {
+						break;
+					}
+				}
+			}
+
+			if (type == null || type.IsAbstract || !typeof(PinMameGame).IsAssignableFrom(type)) {
+				return null;
+			}
+
+			return Activator.CreateInstance(type) as PinMameGame;
+		}
 
 		#endregion
 
@@ -101,6 +190,10 @@ namespace VisualPinball.Engine.PinMAME
 		public event EventHandler<string> OnDisplayClear;
 		public event EventHandler<DisplayFrameData> OnDisplayUpdateFrame;
 		public event EventHandler<EventArgs> OnStarted;
+		private int _loggedChangedLampSamples;
+		private int _loggedUnmappedLampSamples;
+		private const int MaxLoggedChangedLampSamples = 24;
+		private const int MaxLoggedUnmappedLampSamples = 24;
 
 		public void SetTimeFence(double timeInSeconds)
 		{
@@ -266,7 +359,6 @@ namespace VisualPinball.Engine.PinMAME
 		private int _onInitCalled;
 		private int _stopRequested;
 		private int _playModeExitHandled;
-		// (removed) lamp delta debug tracking
 		private const int StopTimeoutMs = 10000;
 
 		#endregion
@@ -317,8 +409,11 @@ namespace VisualPinball.Engine.PinMAME
 					_sharedLampStates[changedLamp.Id] = changedLamp.Value;
 				}
 				if (!_sharedLampPlaybackActive && _pinMameIdToLampIdMapping.ContainsKey(changedLamp.Id)) {
-					//Logger.Info($"[PinMAME] <= lamp {changedLamp.Id}: {changedLamp.Value}");
-					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[_pinMameIdToLampIdMapping[changedLamp.Id]].Id, changedLamp.Value));
+					var vpeLampId = _lamps[_pinMameIdToLampIdMapping[changedLamp.Id]].Id;
+					LogChangedLampSample("lamp", changedLamp.Id, vpeLampId, changedLamp.Value, LampSource.Lamp);
+					OnLampChanged?.Invoke(this, new LampEventArgs(vpeLampId, changedLamp.Value));
+				} else {
+					LogUnmappedLampSample("lamp", changedLamp.Id, changedLamp.Value, LampSource.Lamp);
 				}
 			}
 
@@ -329,11 +424,12 @@ namespace VisualPinball.Engine.PinMAME
 					_sharedGiStates[changedGi.Id] = changedGi.Value;
 				}
 				if (!_sharedLampPlaybackActive && _pinMameIdToLampIdMapping.ContainsKey(changedGi.Id)) {
-					//Logger.Info($"[PinMAME] <= gi {changedGi.Id}: {changedGi.Value}");
-					OnLampChanged?.Invoke(this, new LampEventArgs(_lamps[_pinMameIdToLampIdMapping[changedGi.Id]].Id, changedGi.Value, LampSource.GI));
-				} /*else {
-					Logger.Info($"No GI {changedGi.Id} found.");
-				}*/
+					var vpeLampId = _lamps[_pinMameIdToLampIdMapping[changedGi.Id]].Id;
+					LogChangedLampSample("gi", changedGi.Id, vpeLampId, changedGi.Value, LampSource.GI);
+					OnLampChanged?.Invoke(this, new LampEventArgs(vpeLampId, changedGi.Value, LampSource.GI));
+				} else {
+					LogUnmappedLampSample("gi", changedGi.Id, changedGi.Value, LampSource.GI);
+				}
 			}
 
 			// if (_keyboard != null && _keyboard.cKey.wasPressedThisFrame)
@@ -352,6 +448,30 @@ namespace VisualPinball.Engine.PinMAME
 					Logger.Warn($"[PinMAME] Main-thread dispatch queue backlog reached {_dispatchQueue.Count} items.");
 				}
 			}
+		}
+
+		private void LogChangedLampSample(string kind, int pinMameId, string vpeLampId, float value, LampSource source)
+		{
+			if (_loggedChangedLampSamples >= MaxLoggedChangedLampSamples) {
+				return;
+			}
+
+			_loggedChangedLampSamples++;
+			Logger.Info(
+				$"[PinMAME] <= {kind} sample #{_loggedChangedLampSamples}: pinmameId={pinMameId}, " +
+				$"vpeId={vpeLampId}, source={source}, value={value}, sharedLampPlaybackActive={_sharedLampPlaybackActive}.");
+		}
+
+		private void LogUnmappedLampSample(string kind, int pinMameId, float value, LampSource source)
+		{
+			if (_loggedUnmappedLampSamples >= MaxLoggedUnmappedLampSamples) {
+				return;
+			}
+
+			_loggedUnmappedLampSamples++;
+			Logger.Warn(
+				$"[PinMAME] <= {kind} UNMAPPED sample #{_loggedUnmappedLampSamples}: pinmameId={pinMameId}, " +
+				$"source={source}, value={value}, sharedLampPlaybackActive={_sharedLampPlaybackActive}.");
 		}
 
 		private int CopyCoilStates(ref SimulationState.Snapshot snapshot)
@@ -474,7 +594,7 @@ namespace VisualPinball.Engine.PinMAME
 			// Stop polling outputs immediately to avoid concurrent calls into pinmame.dll
 			// while a stop is in progress (pinmame APIs are not guaranteed thread-safe).
 			_isRunning = false;
-			Logger.Info($"[PinMAME] StopForPlayModeExit: unsubscribing callbacks ({name}#{GetInstanceID()})");
+			Logger.Info($"[PinMAME] StopForPlayModeExit: unsubscribing callbacks ({name}#{UnityObjectId.Get(this)})");
 			try {
 				if (_pinMame == null) {
 					return;
@@ -1343,5 +1463,16 @@ namespace VisualPinball.Engine.PinMAME
 			var rate = elapsedSeconds > 0.0 ? callbacks / elapsedSeconds : 0.0;
 			Volatile.Write(ref _pinMameCallbackRateHz, (float)rate);
 		}
+	}
+
+	[Serializable]
+	public struct PinMameGamelogicEnginePackable
+	{
+		public string GameType;
+		public string GameId;
+		public string RomId;
+		public bool DisableMechs;
+		public float SolenoidDelay;
+		public bool DisableAudio;
 	}
 }
