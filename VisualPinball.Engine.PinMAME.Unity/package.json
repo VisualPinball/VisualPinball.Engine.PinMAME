@@ -7,8 +7,8 @@
     "Unity",
     "PinMAME"
   ],
-  "unity": "6000.0",
-  "unityRelease": "37f1",
+  "unity": "6000.5",
+  "unityRelease": "0f1",
   "dependencies": {
     "org.visualpinball.engine.unity": "0.0.1-preview.119"
   },
