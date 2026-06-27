@@ -43,7 +43,7 @@ namespace VisualPinball.Engine.PinMAME
 	[RequireComponent(typeof(AudioSource))]
 	[PackAs("PinMameGamelogicEngine")]
 	[AddComponentMenu("Pinball/Gamelogic Engine/PinMAME")]
-	public class PinMameGamelogicEngine : MonoBehaviour, IGamelogicEngine, IGamelogicInputThreading, IGamelogicTimeFence, IGamelogicCoilOutputFeed, IGamelogicSharedStateWriter, IGamelogicSharedStateApplier, IGamelogicPerformanceStats, IPackable
+	public class PinMameGamelogicEngine : MonoBehaviour, IGamelogicEngine, IDisplayFrameFormatPreference, IRomNameProvider, IGamelogicInputThreading, IGamelogicTimeFence, IGamelogicCoilOutputFeed, IGamelogicSharedStateWriter, IGamelogicSharedStateApplier, IGamelogicPerformanceStats, IPackable
 	{
 		public string Name { get; } = "PinMAME Gamelogic Engine";
 		public GamelogicInputDispatchMode SwitchDispatchMode => GamelogicInputDispatchMode.SimulationThread;
@@ -57,6 +57,8 @@ namespace VisualPinball.Engine.PinMAME
 
 		[HideInInspector]
 		public string romId = string.Empty;
+
+		string IRomNameProvider.RomName => romId;
 
 		[Tooltip("Disable built-in mechs")]
 		public bool DisableMechs = true;
@@ -304,6 +306,7 @@ namespace VisualPinball.Engine.PinMAME
 		private volatile bool _isRunning;
 		private int _numMechs;
 		private Dictionary<int, byte[]> _frameBuffer = new();
+		private DisplayFrameFormat _requestedDmdFrameFormat = DisplayFrameFormat.Dmd8;
 
 		private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 		private static readonly Color Tint = new(1, 0.18f, 0);
@@ -796,6 +799,7 @@ namespace VisualPinball.Engine.PinMAME
 
 				_pinMame.SetHandleKeyboard(false);
 				_pinMame.SetHandleMechanics(DisableMechs ? 0 : 0xFF);
+				ApplyDmdModePreference();
 				SetTimeFence(0.01);
 
 				_pinMame.OnGameStarted += OnGameStarted;
@@ -975,6 +979,24 @@ namespace VisualPinball.Engine.PinMAME
 
 		#region Displays
 
+		public void RequestDisplayFrameFormat(string displayId, DisplayFrameFormat format)
+		{
+			if (!string.IsNullOrWhiteSpace(displayId) && !displayId.StartsWith(DmdPrefix, StringComparison.OrdinalIgnoreCase)) {
+				return;
+			}
+
+			if (format != DisplayFrameFormat.Dmd2 && format != DisplayFrameFormat.Dmd4 && format != DisplayFrameFormat.Dmd8) {
+				return;
+			}
+
+			if (_requestedDmdFrameFormat == format) {
+				return;
+			}
+
+			_requestedDmdFrameFormat = format;
+			ApplyDmdModePreference();
+		}
+
 		private void OnDisplayRequested(int index, int displayCount, PinMameDisplayLayout displayLayout)
 		{
 			if (displayLayout.IsDmd) {
@@ -1012,6 +1034,11 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void UpdateDmd(int index, PinMameDisplayLayout displayLayout, IntPtr framePtr)
 		{
+			if (framePtr == IntPtr.Zero) {
+				Logger.Warn($"[PinMAME] Dropping DMD frame for index {index} because frame pointer is null (layout: {displayLayout}).");
+				return;
+			}
+
 			byte[] frameBuffer;
 			lock (_displayStateLock) {
 				if (!_frameBuffer.TryGetValue(index, out frameBuffer)) {
@@ -1020,14 +1047,23 @@ namespace VisualPinball.Engine.PinMAME
 				}
 			}
 
-			Marshal.Copy(framePtr, frameBuffer, 0, frameBuffer.Length);
+			// Snapshot into a fresh array: the native PinMAME thread can fire UpdateDmd again before
+			// the queued dispatch runs on the main thread, so the frame handed to subscribers must not
+			// be the reused _frameBuffer (otherwise it can be overwritten / torn mid-read).
+			var frame = new byte[frameBuffer.Length];
+			Marshal.Copy(framePtr, frame, 0, frame.Length);
 
 			EnqueueMainThreadDispatch(() => OnDisplayUpdateFrame?.Invoke(this,
-				new DisplayFrameData($"{DmdPrefix}{index}", GetDisplayFrameFormat(displayLayout), frameBuffer)));
+				new DisplayFrameData($"{DmdPrefix}{index}", GetRequestedDmdDisplayFrameFormat(displayLayout), frame)));
 		}
 
 		private void UpdateSegDisp(int index, PinMameDisplayLayout displayLayout, IntPtr framePtr)
 		{
+			if (framePtr == IntPtr.Zero) {
+				Logger.Warn($"[PinMAME] Dropping segmented display frame for index {index} because frame pointer is null (layout: {displayLayout}).");
+				return;
+			}
+
 			byte[] frameBuffer;
 			lock (_displayStateLock) {
 				if (!_frameBuffer.TryGetValue(index, out frameBuffer)) {
@@ -1036,11 +1072,13 @@ namespace VisualPinball.Engine.PinMAME
 				}
 			}
 
-			Marshal.Copy(framePtr, frameBuffer, 0, displayLayout.Length * 2);
+			// Snapshot into a fresh array (see UpdateDmd) so a follow-up native callback can't
+			// overwrite a frame already queued for the main thread.
+			var frame = new byte[frameBuffer.Length];
+			Marshal.Copy(framePtr, frame, 0, displayLayout.Length * 2);
 
-			//Logger.Info($"[PinMAME] Seg data ({index}): {BitConverter.ToString(_frameBuffer[index])}" );
 			EnqueueMainThreadDispatch(() => OnDisplayUpdateFrame?.Invoke(this,
-				new DisplayFrameData($"{SegDispPrefix}{index}", GetDisplayFrameFormat(displayLayout), frameBuffer)));
+				new DisplayFrameData($"{SegDispPrefix}{index}", GetDisplayFrameFormat(displayLayout), frame)));
 		}
 
 		public static DisplayFrameFormat GetDisplayFrameFormat(PinMameDisplayLayout layout)
@@ -1092,6 +1130,53 @@ namespace VisualPinball.Engine.PinMAME
 			}
 
 			throw new NotImplementedException($"Still unsupported segmented display format: {layout}.");
+		}
+
+		private DisplayFrameFormat GetRequestedDmdDisplayFrameFormat(PinMameDisplayLayout layout)
+		{
+			if (_requestedDmdFrameFormat == DisplayFrameFormat.Dmd8) {
+				return DisplayFrameFormat.Dmd8;
+			}
+
+			return GetRawDmdDisplayFrameFormat(layout);
+		}
+
+		private static DisplayFrameFormat GetRawDmdDisplayFrameFormat(PinMameDisplayLayout layout)
+		{
+			var levels = layout.Levels?.Count ?? 0;
+			if ((levels > 0 && levels <= 4) || (layout.Depth > 0 && layout.Depth <= 2)) {
+				return DisplayFrameFormat.Dmd2;
+			}
+
+			if ((levels > 0 && levels <= 16) || (layout.Depth > 0 && layout.Depth <= 4)) {
+				return DisplayFrameFormat.Dmd4;
+			}
+
+			return DisplayFrameFormat.Dmd8;
+		}
+
+		private void ApplyDmdModePreference()
+		{
+			var rawMode = _requestedDmdFrameFormat == DisplayFrameFormat.Dmd2 || _requestedDmdFrameFormat == DisplayFrameFormat.Dmd4;
+			try {
+				SetPinMameDmdMode(rawMode);
+				Logger.Info($"[PinMAME] DMD frame mode set to {(rawMode ? "raw" : "brightness")} for {_requestedDmdFrameFormat} output.");
+			} catch (Exception exception) {
+				Logger.Warn(exception, "[PinMAME] Could not set DMD frame mode.");
+			}
+		}
+
+		private static void SetPinMameDmdMode(bool raw)
+		{
+			var apiType = typeof(PinMame.PinMame).Assembly.GetType("PinMame.PinMameApi", true);
+			var modeType = typeof(PinMame.PinMame).Assembly.GetType("PinMame.PinMameApi+DmdMode", true);
+			var setDmdMode = apiType.GetMethod("SetDmdMode", BindingFlags.NonPublic | BindingFlags.Static);
+			if (setDmdMode == null) {
+				throw new MissingMethodException(apiType.FullName, "SetDmdMode");
+			}
+
+			var mode = Enum.Parse(modeType, raw ? "RAW" : "BRIGHTNESS");
+			setDmdMode.Invoke(null, new[] { mode });
 		}
 
 		public void DisplayChanged(DisplayFrameData displayFrameData)
