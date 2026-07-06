@@ -306,7 +306,7 @@ namespace VisualPinball.Engine.PinMAME
 		private volatile bool _isRunning;
 		private int _numMechs;
 		private Dictionary<int, byte[]> _frameBuffer = new();
-		private DisplayFrameFormat _requestedDmdFrameFormat = DisplayFrameFormat.Dmd8;
+		private volatile DisplayFrameFormat _requestedDmdFrameFormat = DisplayFrameFormat.Dmd8;
 
 		private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 		private static readonly Color Tint = new(1, 0.18f, 0);
@@ -333,7 +333,7 @@ namespace VisualPinball.Engine.PinMAME
 		// (modulated) coils on WPC/SAM ROMs. We can't tell from a single value whether a
 		// "1" is "binary on" or "modulated 0.4% duty"; once any coil reports a value above
 		// 1 the game is modulating, and every coil value is then normalized by 255.
-		private bool _solenoidsModulated;
+		private volatile bool _solenoidsModulated;
 		private readonly Dictionary<int, float> _sharedLampStates = new();
 		private readonly Dictionary<int, float> _sharedGiStates = new();
 		private readonly Dictionary<int, float> _lastAppliedLampStates = new();
@@ -1164,26 +1164,17 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void ApplyDmdModePreference()
 		{
+			if (_pinMame == null) {
+				return;
+			}
+
 			var rawMode = _requestedDmdFrameFormat == DisplayFrameFormat.Dmd2 || _requestedDmdFrameFormat == DisplayFrameFormat.Dmd4;
 			try {
-				SetPinMameDmdMode(rawMode);
+				_pinMame.SetDmdMode(rawMode ? PinMameDmdMode.Raw : PinMameDmdMode.Brightness);
 				Logger.Info($"[PinMAME] DMD frame mode set to {(rawMode ? "raw" : "brightness")} for {_requestedDmdFrameFormat} output.");
 			} catch (Exception exception) {
 				Logger.Warn(exception, "[PinMAME] Could not set DMD frame mode.");
 			}
-		}
-
-		private static void SetPinMameDmdMode(bool raw)
-		{
-			var apiType = typeof(PinMame.PinMame).Assembly.GetType("PinMame.PinMameApi", true);
-			var modeType = typeof(PinMame.PinMame).Assembly.GetType("PinMame.PinMameApi+DmdMode", true);
-			var setDmdMode = apiType.GetMethod("SetDmdMode", BindingFlags.NonPublic | BindingFlags.Static);
-			if (setDmdMode == null) {
-				throw new MissingMethodException(apiType.FullName, "SetDmdMode");
-			}
-
-			var mode = Enum.Parse(modeType, raw ? "RAW" : "BRIGHTNESS");
-			setDmdMode.Invoke(null, new[] { mode });
 		}
 
 		public void DisplayChanged(DisplayFrameData displayFrameData)
