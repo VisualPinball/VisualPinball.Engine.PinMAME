@@ -329,6 +329,11 @@ namespace VisualPinball.Engine.PinMAME
 		private int _pinMameCallbacksInWindow;
 		private float _pinMameCallbackRateHz;
 		private readonly Dictionary<int, bool> _sharedCoilStates = new();
+		// Solenoid callbacks report 0/1 for binary coils, but 0-255 for PWM-integrated
+		// (modulated) coils on WPC/SAM ROMs. We can't tell from a single value whether a
+		// "1" is "binary on" or "modulated 0.4% duty"; once any coil reports a value above
+		// 1 the game is modulating, and every coil value is then normalized by 255.
+		private bool _solenoidsModulated;
 		private readonly Dictionary<int, float> _sharedLampStates = new();
 		private readonly Dictionary<int, float> _sharedGiStates = new();
 		private readonly Dictionary<int, float> _lastAppliedLampStates = new();
@@ -555,6 +560,7 @@ namespace VisualPinball.Engine.PinMAME
 			_frameBuffer.Clear();
 			lock (_outputStateLock) {
 				_sharedCoilStates.Clear();
+				_solenoidsModulated = false;
 				_sharedLampStates.Clear();
 				_sharedGiStates.Clear();
 			}
@@ -888,6 +894,7 @@ namespace VisualPinball.Engine.PinMAME
 			}
 			lock (_outputStateLock) {
 				_sharedCoilStates.Clear();
+				_solenoidsModulated = false;
 				_sharedLampStates.Clear();
 				_sharedGiStates.Clear();
 			}
@@ -1326,9 +1333,18 @@ namespace VisualPinball.Engine.PinMAME
 			return _player != null && _player.CoilStatuses.ContainsKey(id) && _player.CoilStatuses[id];
 		}
 
-		private void OnSolenoidUpdated(int id, bool isActive)
+		private void OnSolenoidUpdated(int id, int value)
 		{
 			MarkPinMameCallbackActivity();
+
+			// value is 0/1 for binary coils, 0-255 for PWM-integrated (modulated) coils
+			if (value > 1) {
+				_solenoidsModulated = true;
+			}
+			var isActive = value > 0;
+			// normalized strength for the (main-thread) coil pipeline; the sim-thread path
+			// and the shared snapshot stay boolean on/off
+			var intensity = _solenoidsModulated ? System.Math.Min(value, 255) / 255f : (isActive ? 1f : 0f);
 
 			if (_pinMameIdToCoilIdMapping.ContainsKey(id)) {
 				if (!_solenoidsEnabled) {
@@ -1347,7 +1363,7 @@ namespace VisualPinball.Engine.PinMAME
 					}
 
 					if (Logger.IsDebugEnabled) {
-						Logger.Debug($"[PinMAME] <= coil {coil.Id} : {isActive} | {coil.Description}");
+						Logger.Debug($"[PinMAME] <= coil {coil.Id} : {value} | {coil.Description}");
 					}
 					if (ShouldDispatchSimulationCoil(coil.Id)) {
 						_simulationCoilDispatchQueue.Enqueue(new CoilEventArgs(coil.Id, isActive));
@@ -1369,11 +1385,11 @@ namespace VisualPinball.Engine.PinMAME
 						}
 					}
 
-					EnqueueMainThreadDispatch(() => OnCoilChanged?.Invoke(this, new CoilEventArgs(coil.Id, isActive)));
+					EnqueueMainThreadDispatch(() => OnCoilChanged?.Invoke(this, new CoilEventArgs(coil.Id, intensity)));
 				}
 				else {
 					if (Logger.IsDebugEnabled) {
-						Logger.Debug($"[PinMAME] <= solenoids disabled, coil {coil.Id} : {isActive} | {coil.Description}");
+						Logger.Debug($"[PinMAME] <= solenoids disabled, coil {coil.Id} : {value} | {coil.Description}");
 					}
 				}
 			}
