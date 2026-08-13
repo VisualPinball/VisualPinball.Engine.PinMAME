@@ -22,8 +22,8 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -34,6 +34,7 @@ using UnityEngine.InputSystem;
 using VisualPinball.Engine.Game.Engines;
 using VisualPinball.Unity;
 using VisualPinball.Unity.Simulation;
+using ColorChannel = VisualPinball.Engine.Math.ColorChannel;
 using Logger = NLog.Logger;
 
 namespace VisualPinball.Engine.PinMAME
@@ -51,12 +52,31 @@ namespace VisualPinball.Engine.PinMAME
 		public const string DmdPrefix = "dmd";
 		public const string SegDispPrefix = "display";
 
-		public PinMameGame Game { get => _game; set => _game = value; }
-
 		#region Configuration
 
 		[HideInInspector]
+		public string machineId = string.Empty;
+
+		[HideInInspector]
 		public string romId = string.Empty;
+
+		#if UNITY_EDITOR
+		[SerializeField, HideInInspector]
+		private PinMameSwitchDefinition[] _availableSwitches = Array.Empty<PinMameSwitchDefinition>();
+		[SerializeField, HideInInspector]
+		private PinMameCoilDefinition[] _availableCoils = Array.Empty<PinMameCoilDefinition>();
+		[SerializeField, HideInInspector]
+		private PinMameLampDefinition[] _availableLamps = Array.Empty<PinMameLampDefinition>();
+		[SerializeField, HideInInspector]
+		private bool _availableHardwareInitialized;
+		[SerializeField, HideInInspector]
+		private GamelogicEngineWire[] _availableWires = Array.Empty<GamelogicEngineWire>();
+		[SerializeField, HideInInspector]
+		private bool _availableWiresInitialized;
+		#endif
+
+		[SerializeField, HideInInspector]
+		private string _legacyGameId;
 
 		string IRomNameProvider.RomName => romId;
 
@@ -76,14 +96,15 @@ namespace VisualPinball.Engine.PinMAME
 
 		public byte[] Pack()
 		{
-			return PackageApi.Packer.Pack(new PinMameGamelogicEnginePackable {
-				GameType = _game?.GetType().AssemblyQualifiedName,
-				GameId = _game?.Id,
+			var data = new PinMameGamelogicEnginePackable {
+				MachineId = machineId,
+				GameId = _legacyGameId,
 				RomId = romId,
 				DisableMechs = DisableMechs,
 				SolenoidDelay = SolenoidDelay,
 				DisableAudio = DisableAudio
-			});
+			};
+			return PackageApi.Packer.Pack(data);
 		}
 
 		public byte[] PackReferences(Transform root, PackagedRefs refs, PackagedFiles files) => Array.Empty<byte>();
@@ -91,71 +112,24 @@ namespace VisualPinball.Engine.PinMAME
 		public void Unpack(byte[] bytes)
 		{
 			var data = PackageApi.Packer.Unpack<PinMameGamelogicEnginePackable>(bytes);
+			machineId = data.MachineId ?? string.Empty;
+			_legacyGameId = data.GameId;
 			romId = data.RomId;
 			DisableMechs = data.DisableMechs;
 			SolenoidDelay = data.SolenoidDelay;
 			DisableAudio = data.DisableAudio;
-			_game = ResolveGame(data.GameType, data.GameId);
+			#if UNITY_EDITOR
+			ClearAvailableHardware();
+			UpdateCaches(false);
+			if (!Application.isPlaying) {
+				UnityEditor.EditorApplication.delayCall += () => {
+					if (this) UpdateCaches(false);
+				};
+			}
+			#endif
 		}
 
 		public void UnpackReferences(byte[] data, Transform root, PackagedRefs refs, PackagedFiles files) { }
-
-		private static PinMameGame ResolveGame(string gameType, string gameId)
-		{
-			var gameFromType = CreateByTypeName(gameType);
-			if (gameFromType != null) {
-				return gameFromType;
-			}
-
-			if (string.IsNullOrWhiteSpace(gameId)) {
-				return null;
-			}
-
-			foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies()) {
-				Type[] types;
-				try {
-					types = assembly.GetTypes();
-				} catch (ReflectionTypeLoadException e) {
-					types = e.Types.Where(t => t != null).ToArray();
-				}
-
-				foreach (var type in types) {
-					if (type == null || type.IsAbstract || !typeof(PinMameGame).IsAssignableFrom(type)) {
-						continue;
-					}
-
-					if (Activator.CreateInstance(type) is PinMameGame game &&
-					    string.Equals(game.Id, gameId, StringComparison.OrdinalIgnoreCase)) {
-						return game;
-					}
-				}
-			}
-
-			return null;
-		}
-
-		private static PinMameGame CreateByTypeName(string gameType)
-		{
-			if (string.IsNullOrWhiteSpace(gameType)) {
-				return null;
-			}
-
-			var type = Type.GetType(gameType);
-			if (type == null) {
-				foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies()) {
-					type = assembly.GetType(gameType, false);
-					if (type != null) {
-						break;
-					}
-				}
-			}
-
-			if (type == null || type.IsAbstract || !typeof(PinMameGame).IsAssignableFrom(type)) {
-				return null;
-			}
-
-			return Activator.CreateInstance(type) as PinMameGame;
-		}
 
 		#endregion
 
@@ -163,26 +137,77 @@ namespace VisualPinball.Engine.PinMAME
 
 		public GamelogicEngineSwitch[] RequestedSwitches {
 			get {
-				UpdateCaches();
-				return _game?.AvailableSwitches ?? Array.Empty<GamelogicEngineSwitch>();
+				#if UNITY_EDITOR
+				if (_availableHardwareInitialized && !_runtimeCachesBuilt) return (_availableSwitches ?? Array.Empty<PinMameSwitchDefinition>()).Select(item => item.ToEngineSwitch()).ToArray();
+				#endif
+				return _requestedSwitches;
 			}
 		}
 
 		public GamelogicEngineCoil[] RequestedCoils {
 			get {
-				UpdateCaches();
-				return _coils.Values.ToArray();
+				#if UNITY_EDITOR
+				if (_availableHardwareInitialized && !_runtimeCachesBuilt) return (_availableCoils ?? Array.Empty<PinMameCoilDefinition>()).Select(item => item.ToEngineCoil()).ToArray();
+				#endif
+				return _requestedCoils;
 			}
 		}
 
 		public GamelogicEngineLamp[] RequestedLamps {
 			get {
-				UpdateCaches();
-				return _lamps.Values.ToArray();
+				#if UNITY_EDITOR
+				if (_availableHardwareInitialized && !_runtimeCachesBuilt) return (_availableLamps ?? Array.Empty<PinMameLampDefinition>()).Select(item => item.ToEngineLamp()).ToArray();
+				#endif
+				return _requestedLamps;
 			}
 		}
 
-		public GamelogicEngineWire[] AvailableWires => _game?.AvailableWires ?? Array.Empty<GamelogicEngineWire>();
+		public GamelogicEngineWire[] AvailableWires {
+			get {
+				#if UNITY_EDITOR
+				if (_availableWiresInitialized) return _availableWires ?? Array.Empty<GamelogicEngineWire>();
+				return string.IsNullOrWhiteSpace(_legacyGameId)
+					? Array.Empty<GamelogicEngineWire>()
+					: PinMameLegacyAliasResolver.WiresFor(machineId, romId, _legacyGameId);
+				#else
+				return Array.Empty<GamelogicEngineWire>();
+				#endif
+			}
+		}
+
+		#if UNITY_EDITOR
+		public void SetMachineSelection(string selectedMachineId, string selectedRomId)
+		{
+			machineId = selectedMachineId ?? string.Empty;
+			romId = selectedRomId ?? string.Empty;
+			_legacyGameId = null;
+			ClearAvailableHardware();
+		}
+
+		private void ClearAvailableHardware()
+		{
+			_runtimeCachesBuilt = false;
+			_availableSwitches = Array.Empty<PinMameSwitchDefinition>();
+			_availableCoils = Array.Empty<PinMameCoilDefinition>();
+			_availableLamps = Array.Empty<PinMameLampDefinition>();
+			_availableHardwareInitialized = false;
+			_availableWires = Array.Empty<GamelogicEngineWire>();
+			_availableWiresInitialized = false;
+		}
+
+		public void SetAvailableHardware(IEnumerable<GamelogicEngineSwitch> switches, IEnumerable<GamelogicEngineCoil> coils,
+			IEnumerable<GamelogicEngineLamp> lamps, IEnumerable<GamelogicEngineWire> wires)
+		{
+			_runtimeCachesBuilt = false;
+			_availableSwitches = switches?.Select(item => new PinMameSwitchDefinition(item)).ToArray() ?? Array.Empty<PinMameSwitchDefinition>();
+			_availableCoils = coils?.Select(item => new PinMameCoilDefinition(item)).ToArray() ?? Array.Empty<PinMameCoilDefinition>();
+			_availableLamps = lamps?.Select(item => new PinMameLampDefinition(item)).ToArray() ?? Array.Empty<PinMameLampDefinition>();
+			_availableHardwareInitialized = true;
+			_availableWires = wires?.Select(wire => new GamelogicEngineWire(wire.SourceId, wire.DestinationId, wire.DestinationType, wire.Description)).ToArray()
+				?? Array.Empty<GamelogicEngineWire>();
+			_availableWiresInitialized = true;
+		}
+		#endif
 
 		public event EventHandler<CoilEventArgs> OnCoilChanged;
 		public event EventHandler<SwitchEventArgs2> OnSwitchChanged;
@@ -266,7 +291,7 @@ namespace VisualPinball.Engine.PinMAME
 
 			for (var i = 0; i < snapshot.GICount; i++) {
 				var gi = snapshot.GIStates[i];
-				if (!_pinMameIdToLampIdMapping.TryGetValue(gi.Id, out var giId)) {
+				if (!_pinMameIdToGiIdMapping.TryGetValue(gi.Id, out var giId)) {
 					continue;
 				}
 				if (_lastAppliedGiStates.TryGetValue(gi.Id, out var currentValue) && currentValue == gi.Value) {
@@ -290,18 +315,20 @@ namespace VisualPinball.Engine.PinMAME
 		[NonSerialized] private readonly List<PinMameLampInfo> _changedLamps = new();
 		[NonSerialized] private readonly List<PinMameLampInfo> _changedGIs = new();
 
-		[SerializeReference] private PinMameGame _game;
-
 		private Dictionary<string, GamelogicEngineSwitch> _switches = new();
+		private volatile GamelogicEngineSwitch[] _requestedSwitches = Array.Empty<GamelogicEngineSwitch>();
 		private Dictionary<int, string> _pinMameIdToSwitchIdMappings = new();
 		private Dictionary<string, int> _switchIdToPinMameIdMappings = new();
 
 		private Dictionary<string, GamelogicEngineCoil> _coils = new();
+		private volatile GamelogicEngineCoil[] _requestedCoils = Array.Empty<GamelogicEngineCoil>();
 		private Dictionary<int, string> _pinMameIdToCoilIdMapping = new();
 		private Dictionary<string, int> _coilIdToPinMameIdMapping = new();
 
-		private Dictionary<string, GamelogicEngineLamp> _lamps = new();
+		private volatile GamelogicEngineLamp[] _requestedLamps = Array.Empty<GamelogicEngineLamp>();
 		private Dictionary<int, string> _pinMameIdToLampIdMapping = new();
+		private Dictionary<int, string> _pinMameIdToGiIdMapping = new();
+		private volatile bool _runtimeCachesBuilt;
 
 		private volatile bool _isRunning;
 		private int _numMechs;
@@ -340,6 +367,7 @@ namespace VisualPinball.Engine.PinMAME
 		private readonly Dictionary<int, float> _lastAppliedGiStates = new();
 		private bool _sharedLampPlaybackActive;
 		private readonly Queue<float[]> _audioQueue = new();
+		private readonly HashSet<string> _loggedUnresolvedMappingIds = new(StringComparer.Ordinal);
 
 		private int _audioFilterChannels;
 		private PinMameAudioInfo _audioInfo;
@@ -375,17 +403,25 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void Awake()
 		{
+			// SimulationThreadComponent reads RequestedSwitches from Start(). Build these caches in Awake so
+			// their availability does not depend on Unity's undefined ordering between component Start calls.
+			UpdateCaches(true);
 			Logger.Info("Project audio sample rate: " +  AudioSettings.outputSampleRate);
 			_keyboard = Keyboard.current;
 		}
 
 		private void Start()
 		{
-			UpdateCaches();
-
 			_lastAudioFrame = Array.Empty<float>();
 			_lastAudioFrameOffset = 0;
 		}
+
+		#if UNITY_EDITOR
+		private void OnValidate()
+		{
+			if (!Application.isPlaying) UpdateCaches(false);
+		}
+		#endif
 
 		private void Update()
 		{
@@ -417,7 +453,7 @@ namespace VisualPinball.Engine.PinMAME
 					_sharedLampStates[changedLamp.Id] = changedLamp.Value;
 				}
 				if (!_sharedLampPlaybackActive && _pinMameIdToLampIdMapping.ContainsKey(changedLamp.Id)) {
-					var vpeLampId = _lamps[_pinMameIdToLampIdMapping[changedLamp.Id]].Id;
+					var vpeLampId = _pinMameIdToLampIdMapping[changedLamp.Id];
 					LogChangedLampSample("lamp", changedLamp.Id, vpeLampId, changedLamp.Value, LampSource.Lamp);
 					OnLampChanged?.Invoke(this, new LampEventArgs(vpeLampId, changedLamp.Value));
 				} else {
@@ -431,8 +467,8 @@ namespace VisualPinball.Engine.PinMAME
 				lock (_outputStateLock) {
 					_sharedGiStates[changedGi.Id] = changedGi.Value;
 				}
-				if (!_sharedLampPlaybackActive && _pinMameIdToLampIdMapping.ContainsKey(changedGi.Id)) {
-					var vpeLampId = _lamps[_pinMameIdToLampIdMapping[changedGi.Id]].Id;
+				if (!_sharedLampPlaybackActive && _pinMameIdToGiIdMapping.ContainsKey(changedGi.Id)) {
+					var vpeLampId = _pinMameIdToGiIdMapping[changedGi.Id];
 					LogChangedLampSample("gi", changedGi.Id, vpeLampId, changedGi.Value, LampSource.GI);
 					OnLampChanged?.Invoke(this, new LampEventArgs(vpeLampId, changedGi.Value, LampSource.GI));
 				} else {
@@ -591,6 +627,11 @@ namespace VisualPinball.Engine.PinMAME
 
 		public void StopForPlayModeExit()
 		{
+			#if UNITY_EDITOR
+			// With domain reload disabled this component survives the play session. Return editor callers to
+			// the complete catalog candidate snapshots instead of the runtime MappingConfig projection.
+			_runtimeCachesBuilt = false;
+			#endif
 			if (Interlocked.Exchange(ref _playModeExitHandled, 1) != 0) {
 				return;
 			}
@@ -903,81 +944,126 @@ namespace VisualPinball.Engine.PinMAME
 			_sharedLampPlaybackActive = false;
 		}
 
-		private void UpdateCaches()
+		private void UpdateCaches(bool runtime)
 		{
-			if (_game == null) {
-				return;
-			}
-
-			_lamps.Clear();
+			var requestedLamps = new List<GamelogicEngineLamp>();
+			var requestedCoils = new List<GamelogicEngineCoil>();
+			var requestedSwitches = new List<GamelogicEngineSwitch>();
+			_requestedLamps = Array.Empty<GamelogicEngineLamp>();
 			_pinMameIdToLampIdMapping.Clear();
+			_pinMameIdToGiIdMapping.Clear();
 
 			_coils.Clear();
+			_requestedCoils = Array.Empty<GamelogicEngineCoil>();
 			_pinMameIdToCoilIdMapping.Clear();
+			_coilIdToPinMameIdMapping.Clear();
 
 			_switches.Clear();
+			_requestedSwitches = Array.Empty<GamelogicEngineSwitch>();
 			_pinMameIdToSwitchIdMappings.Clear();
 			_switchIdToPinMameIdMappings.Clear();
 
-			// check aliases first (the switches/coils that aren't an integer)
-			foreach (var alias in _game.AvailableAliases) {
-				switch (alias.AliasType) {
-					case AliasType.Switch:
-						_pinMameIdToSwitchIdMappings[alias.Id] = alias.Name;
-						_switchIdToPinMameIdMappings[alias.Name] = alias.Id;
-						break;
-
-
-					case AliasType.Coil:
-						_pinMameIdToCoilIdMapping[alias.Id] = alias.Name;
-						_coilIdToPinMameIdMapping[alias.Name] = alias.Id;
-						break;
-
-					case AliasType.Lamp:
-						_pinMameIdToLampIdMapping[alias.Id] = alias.Name;
-						break;
-				}
+			var mappingConfig = GetComponentInParent<TableComponent>()?.MappingConfig;
+			if (mappingConfig == null) {
+				_runtimeCachesBuilt = runtime;
+				return;
 			}
 
-			// retrieve the game's switches
-			foreach (var @switch in _game.AvailableSwitches) {
+			foreach (var mapping in mappingConfig.Switches) {
+				var @switch = new GamelogicEngineSwitch(mapping.Id) {
+					Description = mapping.Description,
+					NormallyClosed = mapping.IsNormallyClosed,
+					InputActionHint = mapping.Source == SwitchSource.InputSystem ? mapping.InputAction : string.Empty,
+					InputMapHint = mapping.Source == SwitchSource.InputSystem ? mapping.InputActionMap : string.Empty,
+					ConstantHint = mapping.Source != SwitchSource.Constant
+						? SwitchConstantHint.None
+						: mapping.Constant == SwitchConstant.Open ? SwitchConstantHint.AlwaysOpen : SwitchConstantHint.AlwaysClosed,
+				};
+				requestedSwitches.Add(@switch);
 				_switches[@switch.Id] = @switch;
 
-				if (int.TryParse(@switch.Id, out var pinMameId)) {
+				var isNumericMappingId = int.TryParse(@switch.Id, NumberStyles.Integer, CultureInfo.InvariantCulture, out _);
+				if (TryResolveSwitchId(@switch.Id, out var pinMameId)) {
 					_pinMameIdToSwitchIdMappings[pinMameId] = @switch.Id;
 					_switchIdToPinMameIdMappings[@switch.Id] = pinMameId;
 
 					// add mappings with prefixed 0.
-					if (pinMameId < 10) {
+					if (isNumericMappingId && pinMameId is >= 0 and < 10) {
 						_switchIdToPinMameIdMappings["0" + @switch.Id] = pinMameId;
 						_switchIdToPinMameIdMappings["00" + @switch.Id] = pinMameId;
 
 						_switches["0" + @switch.Id] = @switch;
 						_switches["00" + @switch.Id] = @switch;
 					}
-					if (pinMameId < 100) {
+					if (isNumericMappingId && pinMameId is >= 0 and < 100) {
 						_switchIdToPinMameIdMappings["0" + @switch.Id] = pinMameId;
 						_switches["0" + @switch.Id] = @switch;
+					}
+				} else {
+					LogUnresolvedMappingId("switch", @switch.Id);
+				}
+			}
+
+			foreach (var mapping in mappingConfig.Coils) {
+				var coil = new GamelogicEngineCoil(mapping.Id) {
+					Description = mapping.Description,
+					IsLamp = mapping.Destination == CoilDestination.Lamp,
+				};
+				_coils[coil.Id] = coil;
+				requestedCoils.Add(coil);
+
+				if (TryResolveCoilId(coil.Id, out var pinMameId)) {
+					_pinMameIdToCoilIdMapping[pinMameId] = coil.Id;
+					_coilIdToPinMameIdMapping[coil.Id] = pinMameId;
+				} else {
+					LogUnresolvedMappingId("coil", coil.Id);
+				}
+			}
+
+			foreach (var mapping in mappingConfig.Lamps.Where(mapping => !mapping.IsCoil)) {
+				var lamp = new GamelogicEngineLamp(mapping.Id) {
+					Description = mapping.Description,
+					Channel = mapping.Channel,
+					FadingSteps = mapping.FadingSteps,
+					Source = mapping.Source,
+					Type = mapping.Type,
+				};
+				requestedLamps.Add(lamp);
+
+				if (int.TryParse(lamp.Id, NumberStyles.Integer, CultureInfo.InvariantCulture, out var pinMameId)) {
+					if (lamp.Source == LampSource.GI) {
+						_pinMameIdToGiIdMapping[pinMameId] = lamp.Id;
+					} else {
+						_pinMameIdToLampIdMapping[pinMameId] = lamp.Id;
 					}
 				}
 			}
 
-			// retrieve the game's coils
-			foreach (var coil in _game.AvailableCoils) {
-				_coils[coil.Id] = coil;
+			_requestedSwitches = requestedSwitches.GroupBy(item => item.Id, StringComparer.Ordinal).Select(group => group.Last()).ToArray();
+			_requestedCoils = requestedCoils.GroupBy(item => item.Id, StringComparer.Ordinal).Select(group => group.Last()).ToArray();
+			_requestedLamps = requestedLamps.GroupBy(item => new { item.Id, item.Source, item.Channel }).Select(group => group.Last()).ToArray();
+			_runtimeCachesBuilt = runtime;
+		}
 
-				if (int.TryParse(coil.Id, out int pinMameId)) {
-					_pinMameIdToCoilIdMapping[pinMameId] = coil.Id;
-					_coilIdToPinMameIdMapping[coil.Id] = pinMameId;
-				}
-			}
+		private bool TryResolveSwitchId(string id, out int pinMameId)
+		{
+			return int.TryParse(id, NumberStyles.Integer, CultureInfo.InvariantCulture, out pinMameId)
+				|| PinMameLegacyAliasResolver.TryResolveSwitch(machineId, romId, _legacyGameId, id, out pinMameId);
+		}
 
-			// retrieve the game's lamps
-			foreach (var lamp in _game.AvailableLamps) {
-				_lamps[lamp.Id] = lamp;
+		private bool TryResolveCoilId(string id, out int pinMameId)
+		{
+			return int.TryParse(id, NumberStyles.Integer, CultureInfo.InvariantCulture, out pinMameId)
+				|| PinMameLegacyAliasResolver.TryResolveCoil(machineId, romId, _legacyGameId, id, out pinMameId);
+		}
 
-				if (int.TryParse(lamp.Id, out int pinMameId)) {
-					_pinMameIdToLampIdMapping[pinMameId] = lamp.Id;
+		private void LogUnresolvedMappingId(string kind, string id)
+		{
+			if (_loggedUnresolvedMappingIds.Add($"{kind}:{id}")) {
+				if (string.Equals(kind, "coil", StringComparison.Ordinal) && PinMameLegacyAliasResolver.IsFlipperCoilAlias(id)) {
+					Logger.Info($"[PinMAME] Legacy flipper coil mapping '{id}' has no direct PinMAME output for machine '{machineId}' and ROM '{romId}'; a table wire may drive it instead.");
+				} else {
+					Logger.Error($"[PinMAME] Cannot resolve {kind} mapping ID '{id}' for machine '{machineId}' and ROM '{romId}'. Repopulate this table's PinMAME hardware in the editor.");
 				}
 			}
 		}
@@ -1426,10 +1512,12 @@ namespace VisualPinball.Engine.PinMAME
 				if (!isClosed) {
 					continue;
 				}
-				if (_switches.ContainsKey(id) && !_mechSwitches.Contains(_switchIdToPinMameIdMappings[_switches[id].Id])) {
-					Logger.Info($"[PinMAME] => sw {id} ({_switches[id].Id}): {true} | {_switches[id].Description}");
+				if (_switches.TryGetValue(id, out var @switch)
+				    && _switchIdToPinMameIdMappings.TryGetValue(@switch.Id, out var pinMameId)
+				    && !_mechSwitches.Contains(pinMameId)) {
+					Logger.Info($"[PinMAME] => sw {id} ({@switch.Id}): {true} | {@switch.Description}");
 
-					_pinMame.SetSwitch(_switchIdToPinMameIdMappings[_switches[id].Id], true);
+					_pinMame.SetSwitch(pinMameId, true);
 				}
 			}
 		}
@@ -1560,6 +1648,8 @@ namespace VisualPinball.Engine.PinMAME
 	[Serializable]
 	public struct PinMameGamelogicEnginePackable
 	{
+		public string MachineId;
+		// Kept so packages produced by older VPE versions still deserialize.
 		public string GameType;
 		public string GameId;
 		public string RomId;
@@ -1567,4 +1657,117 @@ namespace VisualPinball.Engine.PinMAME
 		public float SolenoidDelay;
 		public bool DisableAudio;
 	}
+
+	#if UNITY_EDITOR
+	[Serializable]
+	public struct PinMameSwitchDefinition
+	{
+		public string Id;
+		public string Description;
+		public bool NormallyClosed;
+		public bool IsPulseSwitch;
+		public string InputActionHint;
+		public string InputMapHint;
+		public string DeviceHint;
+		public string DeviceItemHint;
+		public int NumMatches;
+		public SwitchConstantHint ConstantHint;
+
+		public PinMameSwitchDefinition(GamelogicEngineSwitch item)
+		{
+			Id = item.Id;
+			Description = item.Description;
+			NormallyClosed = item.NormallyClosed;
+			IsPulseSwitch = item.IsPulseSwitch;
+			InputActionHint = item.InputActionHint;
+			InputMapHint = item.InputMapHint;
+			DeviceHint = item.DeviceHint;
+			DeviceItemHint = item.DeviceItemHint;
+			NumMatches = item.NumMatches;
+			ConstantHint = item.ConstantHint;
+		}
+
+		public GamelogicEngineSwitch ToEngineSwitch() => new(Id) {
+			Description = Description,
+			NormallyClosed = NormallyClosed,
+			IsPulseSwitch = IsPulseSwitch,
+			InputActionHint = InputActionHint,
+			InputMapHint = InputMapHint,
+			DeviceHint = DeviceHint,
+			DeviceItemHint = DeviceItemHint,
+			NumMatches = NumMatches,
+			ConstantHint = ConstantHint,
+		};
+	}
+
+	[Serializable]
+	public struct PinMameCoilDefinition
+	{
+		public string Id;
+		public string Description;
+		public string DeviceHint;
+		public string DeviceItemHint;
+		public int NumMatches;
+		public bool IsLamp;
+		public bool IsUnused;
+
+		public PinMameCoilDefinition(GamelogicEngineCoil item)
+		{
+			Id = item.Id;
+			Description = item.Description;
+			DeviceHint = item.DeviceHint;
+			DeviceItemHint = item.DeviceItemHint;
+			NumMatches = item.NumMatches;
+			IsLamp = item.IsLamp;
+			IsUnused = item.IsUnused;
+		}
+
+		public GamelogicEngineCoil ToEngineCoil() => new(Id) {
+			Description = Description,
+			DeviceHint = DeviceHint,
+			DeviceItemHint = DeviceItemHint,
+			NumMatches = NumMatches,
+			IsLamp = IsLamp,
+			IsUnused = IsUnused,
+		};
+	}
+
+	[Serializable]
+	public struct PinMameLampDefinition
+	{
+		public string Id;
+		public string Description;
+		public ColorChannel Channel;
+		public int FadingSteps;
+		public LampSource Source;
+		public LampType Type;
+		public string DeviceHint;
+		public string DeviceItemHint;
+		public int NumMatches;
+
+		public PinMameLampDefinition(GamelogicEngineLamp item)
+		{
+			Id = item.Id;
+			Description = item.Description;
+			Channel = item.Channel;
+			FadingSteps = item.FadingSteps;
+			Source = item.Source;
+			Type = item.Type;
+			DeviceHint = item.DeviceHint;
+			DeviceItemHint = item.DeviceItemHint;
+			NumMatches = item.NumMatches;
+		}
+
+		public GamelogicEngineLamp ToEngineLamp() => new(Id) {
+			Description = Description,
+			Channel = Channel,
+			FadingSteps = FadingSteps,
+			Source = Source,
+			Type = Type,
+			DeviceHint = DeviceHint,
+			DeviceItemHint = DeviceItemHint,
+			NumMatches = NumMatches,
+		};
+	}
+	#endif
 }

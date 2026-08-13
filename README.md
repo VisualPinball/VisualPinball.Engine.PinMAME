@@ -7,13 +7,15 @@
 
 ## Structure
 
-This project contains two root folders:
+This project contains three root folders:
 
-- `VisualPinball.Engine.PinMAME` wraps the [`pinmame-dotnet`](https://github.com/vpinball/pinmame-dotnet)
-  library and extends it with some meta data. It's also the project that provides
-  the Unity plugins.
-- `VisualPinball.Engine.PinMAME.Unity` is the Unity UPM package that plugs into
-  VPE and implements the gamelogic engine.
+- `VisualPinball.Engine.PinMAME` wraps the [`pinmame-dotnet`](https://github.com/vpinball/pinmame-dotnet) library and produces the managed Unity plugin.
+- `VisualPinball.Engine.PinMAME.Unity` is the Unity UPM package that plugs into VPE and implements the gamelogic engine.
+- `VisualPinball.Engine.PinMAME.Test` verifies the editor-side conversion from the public machine-definition schema to VPE hardware mappings.
+
+Machine definitions are not compiled into this package. In the Unity Editor, the PinMAME inspector loads the catalog from `https://games.visualpinball.org`, caches it under the project's `Library/PinMAME/GameDefinitions` directory, and populates the table's serialized hardware mappings. Runtime builds contain those mappings and the selected machine/ROM identifiers, but none of the fetched catalog metadata or networking code. CI converts a pinned revision of the complete curated corpus so incompatible definition changes fail before release.
+
+The published site endpoint is preferred to raw GitHub files because it exposes a stable joined index with all ROM aliases, supports CORS and conditional HTTP caching, and requires only one index request plus one detail request for the selected machine. The GitHub repository remains the canonical source from which the site is built.
 
 ### Unity Package
 
@@ -57,6 +59,6 @@ git update-index --assume-unchanged VisualPinball.Engine.PinMAME.Unity/Plugins/w
 
 ## License
 
-This plugin is licensed under the [MIT license](LICENSE). However 
+This plugin is licensed under the [MIT license](LICENSE). However
 since we link against PinMAME, the [MAME/BSD-3-Clause](https://github.com/vpinball/pinmame/blob/master/LICENSE)
-must be honored as well. 
+must be honored as well.
