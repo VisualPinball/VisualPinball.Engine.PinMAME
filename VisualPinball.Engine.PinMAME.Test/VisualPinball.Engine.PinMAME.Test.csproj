@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <LangVersion>9.0</LangVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="NUnit" Version="4.3.2" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
+    <PackageReference Include="VisualPinball.Engine" Version="0.0.1-preview.105" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\VisualPinball.Engine.PinMAME.Unity\Editor\PinMameGameDefinition.cs" Link="PinMameGameDefinition.cs" />
+    <Compile Include="..\VisualPinball.Engine.PinMAME.Unity\Editor\PinMameGameDefinitionCatalogClient.cs" Link="PinMameGameDefinitionCatalogClient.cs" />
+    <Compile Include="..\VisualPinball.Engine.PinMAME.Unity\Editor\PinMameGameDefinitionConverter.cs" Link="PinMameGameDefinitionConverter.cs" />
+    <Compile Include="..\VisualPinball.Engine.PinMAME.Unity\Runtime\PinMameLegacyAliasResolver.cs" Link="PinMameLegacyAliasResolver.cs" />
+  </ItemGroup>
+</Project>

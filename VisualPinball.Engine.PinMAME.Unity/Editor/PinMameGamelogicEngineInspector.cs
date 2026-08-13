@@ -18,11 +18,13 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Threading;
 using PinMame;
 using UnityEditor;
 using UnityEngine;
-using VisualPinball.Engine.PinMAME.Games;
+using VisualPinball.Engine.Game.Engines;
 using VisualPinball.Unity;
 using VisualPinball.Unity.Editor;
 
@@ -31,168 +33,300 @@ namespace VisualPinball.Engine.PinMAME.Editor
 	[CustomEditor(typeof(PinMameGamelogicEngine))]
 	public class PinMameGamelogicEngineInspector : UnityEditor.Editor
 	{
-		private bool IsGameSet => _gle.Game != null;
-
 		private PinMameGamelogicEngine _gle;
-		private PinMameGame[] _games;
-		private string[] _gameNames;
+		private PinMameCatalogMachine[] _machines = Array.Empty<PinMameCatalogMachine>();
+		private string[] _gameNames = { "-- loading definitions --" };
+		private PinMameCatalogMachine _selectedMachine;
+		private PinMameGameDefinition _definition;
+		private string _definitionJson;
+		private PinMameRomDefinition[] _roms = Array.Empty<PinMameRomDefinition>();
 		private string[] _romNames = Array.Empty<string>();
-
 		private int _selectedGameIndex;
 		private int _selectedRomIndex;
-
 		private TableComponent _tableComponent;
-
-		private PinMameRom Rom => _gle.Game.Roms[_selectedRomIndex];
-
 		private bool _toggleStartup = true;
-
 		private SerializedProperty _disableMechsProperty;
 		private SerializedProperty _solenoidDelayProperty;
-
 		private bool _toggleDebug = true;
-
-		int _debugSwitchId;
-
+		private int _debugSwitchId;
 		private SerializedProperty _disableAudioProperty;
-
-
+		private CancellationTokenSource _loadCancellation;
+		private bool _isLoading;
+		private string _loadError;
+		private string _loadWarning;
 
 		private void OnEnable()
 		{
 			_gle = (PinMameGamelogicEngine) target;
-
-			_games = new PinMameGame[] {
-				new AttackFromMars(),
-				new Centaur(),
-				new CreatureFromTheBlackLagoon(),
-				new FlashGordon(),
-				new MedievalMadness(),
-				new Rock(),
-				new RockEncore(),
-				new StarTrekEnterprise(),
-				new Terminator2(),
-				new TheWalkingDead(),
-				new TRONLegacy(),
-			};
-
-			_gameNames = new[] {"-- none --"}
-				.Concat(_games.Select(g => g.Name))
-				.ToArray();
-
 			if (_gle != null) {
 				_tableComponent = _gle.gameObject.GetComponentInParent<TableComponent>();
 			}
-
-			if (IsGameSet) {
-				for (var i = 0; i < _games.Length; i++) {
-					if (_games[i].Id == _gle.Game.Id) {
-						_selectedGameIndex = i + 1;
-						break;
-					}
-				}
-				_romNames = _gle.Game.Roms.Select(g => g.ToString()).ToArray();
-				if (!string.IsNullOrEmpty(_gle.romId)) {
-					for (var i = 0; i < _gle.Game.Roms.Length; i++) {
-						if (_gle.Game.Roms[i].Id == _gle.romId) {
-							_selectedRomIndex = i;
-							break;
-						}
-					}
-				}
-			}
-
 			_solenoidDelayProperty = serializedObject.FindProperty(nameof(_gle.SolenoidDelay));
 			_disableMechsProperty = serializedObject.FindProperty(nameof(_gle.DisableMechs));
 			_disableAudioProperty = serializedObject.FindProperty(nameof(_gle.DisableAudio));
+			LoadCatalog(false);
+		}
+
+		private void OnDisable()
+		{
+			_loadCancellation?.Cancel();
+			_loadCancellation?.Dispose();
+			_loadCancellation = null;
+			_isLoading = false;
+		}
+
+		private async void LoadCatalog(bool forceRefresh)
+		{
+			var load = ResetCancellation();
+			var cancellationToken = load.Token;
+			_isLoading = true;
+			_loadError = null;
+			_loadWarning = null;
+			try {
+				var result = await PinMameGameDefinitionCatalogClient.GetCatalogAsync(forceRefresh, cancellationToken);
+				EnsureCurrent(load);
+				var machines = result.Value.Machines
+					.Where(machine => machine.IsSelectable)
+					.OrderBy(machine => machine.Name, StringComparer.OrdinalIgnoreCase)
+					.ThenByDescending(machine => machine.Year)
+					.ToArray();
+				_machines = machines;
+				_gameNames = new[] { "-- none --" }.Concat(_machines.Select(machine => machine.DisplayName)).ToArray();
+				_loadWarning = result.Warning;
+
+				var selectedIndex = FindSelectedMachineIndex();
+				if (selectedIndex < 0 && !string.IsNullOrWhiteSpace(_gle.romId)) {
+					var resolvedMachineId = await PinMameGameDefinitionCatalogClient.ResolveMachineIdAsync(_gle.romId, cancellationToken);
+					EnsureCurrent(load);
+					selectedIndex = Array.FindIndex(_machines, machine => string.Equals(machine.Id, resolvedMachineId, StringComparison.Ordinal));
+				}
+				_selectedGameIndex = selectedIndex + 1;
+				if (_selectedGameIndex > 0) {
+					await SelectMachine(_selectedGameIndex, _gle.romId, forceRefresh, false, load);
+				}
+			} catch (OperationCanceledException) {
+				return;
+			} catch (Exception exception) {
+				if (ReferenceEquals(_loadCancellation, load)) _loadError = exception.Message;
+			} finally {
+				CompleteLoad(load);
+			}
+		}
+
+		private int FindSelectedMachineIndex()
+		{
+			if (!string.IsNullOrWhiteSpace(_gle.machineId)) {
+				var byId = Array.FindIndex(_machines, machine => string.Equals(machine.Id, _gle.machineId, StringComparison.Ordinal));
+				if (byId >= 0) {
+					return byId;
+				}
+			}
+			if (string.IsNullOrWhiteSpace(_gle.romId)) {
+				return -1;
+			}
+			return Array.FindIndex(_machines, machine => MachineRoms(machine).Contains(_gle.romId, StringComparer.OrdinalIgnoreCase));
+		}
+
+		private async void ChangeMachine(int selectedGameIndex)
+		{
+			var load = ResetCancellation();
+			_isLoading = true;
+			_loadError = null;
+			_loadWarning = null;
+			try {
+				await SelectMachine(selectedGameIndex, null, false, true, load);
+			} catch (OperationCanceledException) {
+				return;
+			} catch (Exception exception) {
+				if (ReferenceEquals(_loadCancellation, load)) _loadError = exception.Message;
+			} finally {
+				CompleteLoad(load);
+			}
+		}
+
+		private async System.Threading.Tasks.Task SelectMachine(int selectedGameIndex, string preferredRomId, bool forceRefresh,
+			bool applySelection, CancellationTokenSource load)
+		{
+			EnsureCurrent(load);
+			var cancellationToken = load.Token;
+			if (selectedGameIndex < 0 || selectedGameIndex > _machines.Length) {
+				throw new ArgumentOutOfRangeException(nameof(selectedGameIndex));
+			}
+
+			_selectedGameIndex = selectedGameIndex;
+			_selectedRomIndex = 0;
+			_definition = null;
+			_definitionJson = null;
+			_roms = Array.Empty<PinMameRomDefinition>();
+			_romNames = Array.Empty<string>();
+
+			if (selectedGameIndex <= 0) {
+				_selectedMachine = null;
+				if (applySelection) {
+					Undo.RecordObject(_gle, "Select PinMAME machine");
+					_gle.SetMachineSelection(null, null);
+					EditorUtility.SetDirty(_gle);
+				}
+				return;
+			}
+
+			var selectedMachine = _machines[selectedGameIndex - 1];
+			_selectedMachine = selectedMachine;
+
+			var result = await PinMameGameDefinitionCatalogClient.GetDefinitionAsync(selectedMachine, forceRefresh, cancellationToken);
+			EnsureCurrent(load);
+			_definitionJson = result.Value;
+			_loadWarning = CombineWarnings(_loadWarning, result.Warning);
+			var definition = PinMameGameDefinitionConverter.Convert(_definitionJson, preferredRomId);
+			if (!string.Equals(definition.MachineId, selectedMachine.Id, StringComparison.Ordinal)) {
+				throw new InvalidDataException($"The catalog entry {selectedMachine.Id} returned definition {definition.MachineId}.");
+			}
+			_definition = definition;
+			var selectedRomId = SetRoms(_definition.Roms, preferredRomId);
+			if (applySelection) {
+				Undo.RecordObject(_gle, "Select PinMAME machine");
+				_gle.SetMachineSelection(selectedMachine.Id, selectedRomId);
+				EditorUtility.SetDirty(_gle);
+			} else if (!string.IsNullOrWhiteSpace(preferredRomId) && selectedRomId == null) {
+				_loadWarning = CombineWarnings(_loadWarning, $"The saved ROM '{preferredRomId}' is not listed for {selectedMachine.Name}; the saved component value was left unchanged.");
+			}
+		}
+
+		private static string CombineWarnings(string first, string second)
+		{
+			if (string.IsNullOrWhiteSpace(first)) return second;
+			if (string.IsNullOrWhiteSpace(second) || string.Equals(first, second, StringComparison.Ordinal)) return first;
+			return $"{first}\n{second}";
+		}
+
+		private PinMameGameDefinition ConvertSelectedRom(string selectedRomId)
+		{
+			if (string.IsNullOrWhiteSpace(_definitionJson)) {
+				return null;
+			}
+			return PinMameGameDefinitionConverter.Convert(_definitionJson, selectedRomId);
+		}
+
+		private string SetRoms(PinMameRomDefinition[] roms, string preferredRomId)
+		{
+			_roms = roms ?? Array.Empty<PinMameRomDefinition>();
+			_romNames = _roms.Select(rom => rom.ToString()).ToArray();
+			_selectedRomIndex = Array.FindIndex(_roms, rom => string.Equals(rom.Id, preferredRomId, StringComparison.OrdinalIgnoreCase));
+			if (_selectedRomIndex < 0) {
+				_selectedRomIndex = string.IsNullOrWhiteSpace(preferredRomId) && _roms.Length > 0 ? 0 : -1;
+			}
+			return _selectedRomIndex >= 0 ? _roms[_selectedRomIndex].Id : null;
+		}
+
+		private static string[] MachineRoms(PinMameCatalogMachine machine) => machine.Roms?.Length > 0 ? machine.Roms : machine.RootDrivers ?? Array.Empty<string>();
+
+		private CancellationTokenSource ResetCancellation()
+		{
+			_loadCancellation?.Cancel();
+			_loadCancellation?.Dispose();
+			_loadCancellation = new CancellationTokenSource();
+			return _loadCancellation;
+		}
+
+		private void CompleteLoad(CancellationTokenSource load)
+		{
+			if (!ReferenceEquals(_loadCancellation, load)) return;
+			_isLoading = false;
+			if (this && target) Repaint();
+		}
+
+		private void EnsureCurrent(CancellationTokenSource load)
+		{
+			load.Token.ThrowIfCancellationRequested();
+			if (!ReferenceEquals(_loadCancellation, load)) throw new OperationCanceledException(load.Token);
 		}
 
 		public override void OnInspectorGUI()
 		{
-			// game dropdown
-			//_gle.romId = EditorGUILayout.TextField("ROM ID", _gle.romId);
+			serializedObject.Update();
+			if (_isLoading) {
+				EditorGUILayout.HelpBox("Loading PinMAME machine definitions…", MessageType.Info);
+			}
+			if (!string.IsNullOrWhiteSpace(_loadWarning)) {
+				EditorGUILayout.HelpBox(_loadWarning, MessageType.Warning);
+			}
+			if (!string.IsNullOrWhiteSpace(_loadError)) {
+				EditorGUILayout.HelpBox(_loadError, MessageType.Error);
+			}
 
+			EditorGUI.BeginDisabledGroup(_machines.Length == 0 || Application.isPlaying);
 			EditorGUI.BeginChangeCheck();
 			_selectedGameIndex = EditorGUILayout.Popup("Game", _selectedGameIndex, _gameNames);
 			if (EditorGUI.EndChangeCheck()) {
-				_selectedRomIndex = 0;
-				if (_selectedGameIndex > 0) {
-					_gle.Game = _games[_selectedGameIndex - 1];
-					_gle.romId = Rom.Id;
-					_romNames = _gle.Game.Roms.Select(g => g.ToString()).ToArray();
-
-				} else {
-					_gle.Game = null;
-					_gle.romId = string.Empty;
-					_romNames = Array.Empty<string>();
-				}
+				ChangeMachine(_selectedGameIndex);
 			}
+			EditorGUI.EndDisabledGroup();
 
-			//rom dropdown
-			EditorGUI.BeginDisabledGroup(_gle.Game == null);
+			EditorGUI.BeginDisabledGroup(_roms.Length == 0 || Application.isPlaying);
 			EditorGUI.BeginChangeCheck();
 			_selectedRomIndex = EditorGUILayout.Popup("ROM", _selectedRomIndex, _romNames);
 			if (EditorGUI.EndChangeCheck()) {
-				_gle.romId = Rom.Id;
+				var selectedRomId = _roms[_selectedRomIndex].Id;
+				try {
+					var definition = ConvertSelectedRom(selectedRomId);
+					Undo.RecordObject(_gle, "Select PinMAME ROM");
+					_definition = definition;
+					SetRoms(definition.Roms, selectedRomId);
+					_gle.SetMachineSelection(definition.MachineId, selectedRomId);
+					_loadError = null;
+					EditorUtility.SetDirty(_gle);
+				} catch (Exception exception) {
+					_loadError = exception.Message;
+					SetRoms(_definition?.Roms, _gle.romId);
+				}
 			}
-
-			// info label
+			EditorGUILayout.LabelField("Machine ID", _gle.machineId);
 			EditorGUILayout.LabelField("ROM ID", _gle.romId);
-
 			EditorGUI.EndDisabledGroup();
+
+			if (_definition != null) {
+				EditorGUILayout.LabelField("Definition", _definition.CoverageStatus == "author_ready" ? "Author-ready" : $"Partial ({_definition.CompletionScore}%)");
+				foreach (var diagnostic in _definition.Diagnostics) {
+					EditorGUILayout.HelpBox(diagnostic, MessageType.Warning);
+				}
+			}
+			if (GUILayout.Button("Refresh Definitions")) {
+				LoadCatalog(true);
+			}
+			EditorGUILayout.LabelField("Source", PinMameGameDefinitionCatalogClient.BaseUrl, EditorStyles.miniLabel);
 
 			GUILayout.BeginVertical();
 
-			if (_toggleStartup = EditorGUILayout.BeginFoldoutHeaderGroup(_toggleStartup, "Startup"))
-			{
+			if (_toggleStartup = EditorGUILayout.BeginFoldoutHeaderGroup(_toggleStartup, "Startup")) {
 				EditorGUI.indentLevel++;
-
 				EditorGUI.BeginChangeCheck();
-
 				EditorGUILayout.PropertyField(_disableMechsProperty, new GUIContent("Disable Mechs"));
-
-				if (EditorGUI.EndChangeCheck())
-				{
+				if (EditorGUI.EndChangeCheck()) {
 					serializedObject.ApplyModifiedProperties();
 				}
-
 				EditorGUI.BeginChangeCheck();
-
 				var cellRect = EditorGUILayout.GetControlRect();
-
 				var labelRect = cellRect;
 				labelRect.x += labelRect.width - 20;
 				labelRect.width = 20;
-
 				var fieldRect = cellRect;
 				fieldRect.width -= 25;
-
 				EditorGUI.PropertyField(fieldRect, _solenoidDelayProperty, new GUIContent("Solenoid Delay"));
 				GUI.Label(labelRect, "ms");
-
-				if (EditorGUI.EndChangeCheck())
-				{
+				if (EditorGUI.EndChangeCheck()) {
 					serializedObject.ApplyModifiedProperties();
 				}
-
 				EditorGUI.indentLevel--;
 			}
-
 			EditorGUILayout.EndFoldoutHeaderGroup();
 
-			if (_toggleDebug = EditorGUILayout.BeginFoldoutHeaderGroup(_toggleDebug, "Debug"))
-			{
+			if (_toggleDebug = EditorGUILayout.BeginFoldoutHeaderGroup(_toggleDebug, "Debug")) {
 				EditorGUI.indentLevel++;
-
 				EditorGUI.BeginChangeCheck();
-
 				EditorGUILayout.PropertyField(_disableAudioProperty, new GUIContent("Disable Audio"));
-
-				if (EditorGUI.EndChangeCheck())
-				{
+				if (EditorGUI.EndChangeCheck()) {
 					serializedObject.ApplyModifiedProperties();
 				}
-
 				EditorGUILayout.BeginHorizontal();
 				_debugSwitchId = EditorGUILayout.IntField("Switch", _debugSwitchId);
 				if (GUILayout.Button("ON")) {
@@ -201,19 +335,13 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				if (GUILayout.Button("OFF")) {
 					_gle.Switch(_debugSwitchId.ToString(), false);
 				}
-
 				EditorGUILayout.EndHorizontal();
-
 				EditorGUI.indentLevel--;
 			}
-
 			EditorGUILayout.EndFoldoutHeaderGroup();
-
 			GUILayout.EndVertical();
-
 			EditorGUILayout.Space();
 			EditorGUILayout.Separator();
-
 			if (Application.isPlaying) {
 				if (GUILayout.Button("Toggle Speed")) {
 					_gle.ToggleSpeed();
@@ -222,15 +350,24 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				EditorGUILayout.Space();
 				EditorGUILayout.Separator();
 			}
-	
-			//EditorGUI.BeginDisabledGroup(!IsGameSet || Application.isPlaying);
+
+			EditorGUI.BeginDisabledGroup(_definition == null || _selectedRomIndex < 0 || _tableComponent == null || Application.isPlaying || _isLoading);
 			if (GUILayout.Button("Populate Hardware")) {
-				if (EditorUtility.DisplayDialog("PinMAME", "This will clear all linked switches, coils and lamps and re-populate them. You sure you want to do that?", "Yes", "No")) {
+				if (EditorUtility.DisplayDialog("PinMAME", "This will clear all linked switches, coils and lamps and re-populate them from the selected machine definition. Continue?", "Yes", "No")) {
+					Undo.RecordObject(_gle, "Populate PinMAME hardware");
+					Undo.RecordObject(_tableComponent, "Populate PinMAME hardware");
+					_gle.SetMachineSelection(_definition.MachineId, _roms[_selectedRomIndex].Id);
+					_gle.SetAvailableHardware(_definition.Switches, _definition.Coils, _definition.Lamps, _definition.Wires);
 					_tableComponent.RepopulateHardware(_gle);
+					EditorUtility.SetDirty(_gle);
+					EditorUtility.SetDirty(_tableComponent);
 					TableSelector.Instance.TableUpdated();
 					SceneView.RepaintAll();
 				}
 			}
+			EditorGUI.EndDisabledGroup();
+
+			EditorGUI.BeginDisabledGroup(string.IsNullOrWhiteSpace(_gle.romId));
 			if (GUILayout.Button("Create Displays")) {
 				var sceneDisplays = FindObjectsOfType<DisplayComponent>();
 				if (sceneDisplays.Length > 0) {
@@ -243,7 +380,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 					SceneView.RepaintAll();
 				}
 			}
-			//EditorGUI.EndDisabledGroup();
+			EditorGUI.EndDisabledGroup();
 		}
 
 		private void CreateDisplays(IEnumerable<DisplayComponent> sceneDisplays)
