@@ -35,12 +35,10 @@ namespace VisualPinball.Engine.PinMAME.Editor
 	{
 		private PinMameGamelogicEngine _gle;
 		private PinMameCatalogMachine[] _machines = Array.Empty<PinMameCatalogMachine>();
-		private string[] _gameNames = { "-- loading definitions --" };
 		private PinMameCatalogMachine _selectedMachine;
 		private PinMameGameDefinition _definition;
 		private string _definitionJson;
 		private PinMameRomDefinition[] _roms = Array.Empty<PinMameRomDefinition>();
-		private string[] _romNames = Array.Empty<string>();
 		private int _selectedGameIndex;
 		private int _selectedRomIndex;
 		private TableComponent _tableComponent;
@@ -91,7 +89,6 @@ namespace VisualPinball.Engine.PinMAME.Editor
 					.ThenByDescending(machine => machine.Year)
 					.ToArray();
 				_machines = machines;
-				_gameNames = new[] { "-- none --" }.Concat(_machines.Select(machine => machine.DisplayName)).ToArray();
 				_loadWarning = result.Warning;
 
 				var selectedIndex = FindSelectedMachineIndex();
@@ -158,7 +155,6 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			_definition = null;
 			_definitionJson = null;
 			_roms = Array.Empty<PinMameRomDefinition>();
-			_romNames = Array.Empty<string>();
 
 			if (selectedGameIndex <= 0) {
 				_selectedMachine = null;
@@ -210,7 +206,6 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		private string SetRoms(PinMameRomDefinition[] roms, string preferredRomId)
 		{
 			_roms = roms ?? Array.Empty<PinMameRomDefinition>();
-			_romNames = _roms.Select(rom => rom.ToString()).ToArray();
 			_selectedRomIndex = Array.FindIndex(_roms, rom => string.Equals(rom.Id, preferredRomId, StringComparison.OrdinalIgnoreCase));
 			if (_selectedRomIndex < 0) {
 				_selectedRomIndex = string.IsNullOrWhiteSpace(preferredRomId) && _roms.Length > 0 ? 0 : -1;
@@ -254,46 +249,29 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				EditorGUILayout.HelpBox(_loadError, MessageType.Error);
 			}
 
-			EditorGUI.BeginDisabledGroup(_machines.Length == 0 || Application.isPlaying);
-			EditorGUI.BeginChangeCheck();
-			_selectedGameIndex = EditorGUILayout.Popup("Game", _selectedGameIndex, _gameNames);
-			if (EditorGUI.EndChangeCheck()) {
-				ChangeMachine(_selectedGameIndex);
-			}
+			EditorGUI.BeginDisabledGroup(_machines.Length == 0 || Application.isPlaying || _isLoading);
+			DrawMachinePicker();
 			EditorGUI.EndDisabledGroup();
 
-			EditorGUI.BeginDisabledGroup(_roms.Length == 0 || Application.isPlaying);
-			EditorGUI.BeginChangeCheck();
-			_selectedRomIndex = EditorGUILayout.Popup("ROM", _selectedRomIndex, _romNames);
-			if (EditorGUI.EndChangeCheck()) {
-				var selectedRomId = _roms[_selectedRomIndex].Id;
-				try {
-					var definition = ConvertSelectedRom(selectedRomId);
-					Undo.RecordObject(_gle, "Select PinMAME ROM");
-					_definition = definition;
-					SetRoms(definition.Roms, selectedRomId);
-					_gle.SetMachineSelection(definition.MachineId, selectedRomId);
-					_loadError = null;
-					EditorUtility.SetDirty(_gle);
-				} catch (Exception exception) {
-					_loadError = exception.Message;
-					SetRoms(_definition?.Roms, _gle.romId);
-				}
-			}
-			EditorGUILayout.LabelField("Machine ID", _gle.machineId);
-			EditorGUILayout.LabelField("ROM ID", _gle.romId);
+			EditorGUI.BeginDisabledGroup(_roms.Length == 0 || Application.isPlaying || _isLoading);
+			DrawRomPicker();
 			EditorGUI.EndDisabledGroup();
 
+			if (_selectedMachine != null || !string.IsNullOrWhiteSpace(_gle.machineId) || !string.IsNullOrWhiteSpace(_gle.romId)) {
+				EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+				EditorGUILayout.LabelField(SelectedMachineSummary(), EditorStyles.miniLabel);
+				EditorGUILayout.LabelField(SelectedDefinitionIds(), EditorStyles.miniLabel);
+				EditorGUILayout.EndVertical();
+			}
 			if (_definition != null) {
-				EditorGUILayout.LabelField("Definition", _definition.CoverageStatus == "author_ready" ? "Author-ready" : $"Partial ({_definition.CompletionScore}%)");
 				foreach (var diagnostic in _definition.Diagnostics) {
 					EditorGUILayout.HelpBox(diagnostic, MessageType.Warning);
 				}
 			}
-			if (GUILayout.Button("Refresh Definitions")) {
-				LoadCatalog(true);
-			}
-			EditorGUILayout.LabelField("Source", PinMameGameDefinitionCatalogClient.BaseUrl, EditorStyles.miniLabel);
+			EditorGUILayout.BeginHorizontal();
+			EditorGUILayout.LabelField(PinMameGameDefinitionCatalogClient.BaseUrl, EditorStyles.miniLabel);
+			if (GUILayout.Button("Refresh", EditorStyles.miniButton, GUILayout.Width(64f))) LoadCatalog(true);
+			EditorGUILayout.EndHorizontal();
 
 			GUILayout.BeginVertical();
 
@@ -381,6 +359,134 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				}
 			}
 			EditorGUI.EndDisabledGroup();
+		}
+
+		private void DrawMachinePicker()
+		{
+			EditorGUILayout.LabelField("Game", EditorStyles.miniLabel);
+			var fieldRect = EditorGUILayout.GetControlRect();
+			var displayName = _selectedMachine?.Name
+				?? (!string.IsNullOrWhiteSpace(_gle.machineId) ? _gle.machineId : _isLoading ? "Loading definitions…" : "Search games…");
+			var content = new GUIContent(displayName, EditorGUIUtility.IconContent("Search Icon").image, "Search the published physical-machine catalog.");
+			if (!EditorGUI.DropdownButton(fieldRect, content, FocusType.Keyboard, EditorStyles.popup)) return;
+
+			var picker = new PinMameSearchablePicker<PinMameCatalogMachine>(
+				"Select PinMAME game",
+				"game",
+				_machines,
+				_selectedGameIndex - 1,
+				machine => machine.Name,
+				MachineMetadata,
+				MachineCoverage,
+				machine => $"{machine.Name} {machine.Manufacturer} {machine.Year} {machine.Id} {machine.Status} {machine.CompletionScore}",
+				index => {
+					_selectedGameIndex = index + 1;
+					ChangeMachine(_selectedGameIndex);
+				},
+				true);
+			PopupWindow.Show(fieldRect, picker);
+		}
+
+		private void DrawRomPicker()
+		{
+			EditorGUILayout.LabelField("ROM", EditorStyles.miniLabel);
+			var fieldRect = EditorGUILayout.GetControlRect();
+			var displayName = _selectedRomIndex >= 0 && _selectedRomIndex < _roms.Length
+				? CompactRomLabel(_roms[_selectedRomIndex])
+				: !string.IsNullOrWhiteSpace(_gle.romId) ? _gle.romId : "Search ROMs…";
+			var content = new GUIContent(displayName, EditorGUIUtility.IconContent("Search Icon").image, "Search ROM revisions for the selected game.");
+			if (!EditorGUI.DropdownButton(fieldRect, content, FocusType.Keyboard, EditorStyles.popup)) return;
+
+			var picker = new PinMameSearchablePicker<PinMameRomDefinition>(
+				$"Select ROM for {_selectedMachine?.Name}",
+				"ROM",
+				_roms,
+				_selectedRomIndex,
+				rom => rom.Id,
+				CompactRomDescription,
+				null,
+				rom => $"{rom.Id} {rom.Description} {CompactRomDescription(rom)}",
+				ChangeRom);
+			PopupWindow.Show(fieldRect, picker);
+		}
+
+		private void ChangeRom(int selectedRomIndex)
+		{
+			if (selectedRomIndex < 0 || selectedRomIndex >= _roms.Length) return;
+			var selectedRomId = _roms[selectedRomIndex].Id;
+			try {
+				var definition = ConvertSelectedRom(selectedRomId);
+				Undo.RecordObject(_gle, "Select PinMAME ROM");
+				_definition = definition;
+				SetRoms(definition.Roms, selectedRomId);
+				_gle.SetMachineSelection(definition.MachineId, selectedRomId);
+				_loadError = null;
+				EditorUtility.SetDirty(_gle);
+			} catch (Exception exception) {
+				_loadError = exception.Message;
+				SetRoms(_definition?.Roms, _gle.romId);
+			}
+			Repaint();
+		}
+
+		private static string MachineMetadata(PinMameCatalogMachine machine)
+		{
+			return string.Join(" · ", new[] {
+				machine.Manufacturer,
+				machine.Year?.ToString(),
+			}.Where(value => !string.IsNullOrWhiteSpace(value)));
+		}
+
+		private static string MachineCoverage(PinMameCatalogMachine machine)
+		{
+			return string.Equals(machine.Status, "author_ready", StringComparison.Ordinal)
+				? "Author-ready"
+				: $"{machine.CompletionScore}% complete";
+		}
+
+		private string SelectedMachineSummary()
+		{
+			if (_selectedMachine == null) {
+				return _isLoading ? "Resolving saved selection…" : "Saved selection is not available in the current catalog";
+			}
+			var coverage = _definition == null
+				? MachineCoverage(_selectedMachine)
+				: string.Equals(_definition.CoverageStatus, "author_ready", StringComparison.Ordinal)
+					? "Author-ready"
+					: $"{_definition.CompletionScore}% complete";
+			return string.Join(" · ", new[] {
+				MachineMetadata(_selectedMachine),
+				coverage,
+			}.Where(value => !string.IsNullOrWhiteSpace(value)));
+		}
+
+		private string SelectedDefinitionIds()
+		{
+			var machineId = string.IsNullOrWhiteSpace(_gle.machineId) ? _selectedMachine?.Id : _gle.machineId;
+			return string.Join(" · ", new[] {
+				string.IsNullOrWhiteSpace(machineId) ? null : $"Machine: {machineId}",
+				string.IsNullOrWhiteSpace(_gle.romId) ? null : $"ROM: {_gle.romId}",
+			}.Where(value => !string.IsNullOrWhiteSpace(value)));
+		}
+
+		private string CompactRomLabel(PinMameRomDefinition rom)
+		{
+			var description = CompactRomDescription(rom);
+			return string.IsNullOrWhiteSpace(description) ? rom.Id : $"{rom.Id} · {description}";
+		}
+
+		private string CompactRomDescription(PinMameRomDefinition rom)
+		{
+			var description = rom?.Description?.Trim() ?? string.Empty;
+			foreach (var title in new[] { _selectedMachine?.Name, _definition?.Name }.Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.OrdinalIgnoreCase)) {
+				if (!description.StartsWith(title, StringComparison.OrdinalIgnoreCase)) continue;
+				description = description.Substring(title.Length).TrimStart(' ', ':', '-', '—', '·');
+				break;
+			}
+			if (description.Length >= 2 && description[0] == '(' && description.IndexOf(')') == description.Length - 1) {
+				description = description.Substring(1, description.Length - 2).Trim();
+			}
+			return description;
 		}
 
 		private void CreateDisplays(IEnumerable<DisplayComponent> sceneDisplays)
