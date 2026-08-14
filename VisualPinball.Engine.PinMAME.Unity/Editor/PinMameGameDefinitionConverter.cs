@@ -70,14 +70,18 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				diagnostics.Add($"ROM {selectedRomId} is marked as physically different from this machine definition.");
 			}
 
-			var switches = ConvertSwitches(root["inputs"] as JArray, overrides, diagnostics);
+			var spatialSwitches = new List<PinMameSpatialPlacement>();
+			var spatialCoils = new List<PinMameSpatialPlacement>();
+			var spatialLamps = new List<PinMameSpatialPlacement>();
+			var switches = ConvertSwitches(root["inputs"] as JArray, overrides, spatialSwitches, diagnostics);
 			var coils = new List<GamelogicEngineCoil>();
 			var lamps = new List<GamelogicEngineLamp>();
-			ConvertOutputs(root["outputs"] as JArray, overrides, coils, lamps, diagnostics);
+			ConvertOutputs(root["outputs"] as JArray, overrides, coils, lamps, spatialCoils, spatialLamps, diagnostics);
 			var wires = ConvertFlipperWires(root["inputs"] as JArray, root["outputs"] as JArray, overrides, diagnostics);
 
 			return new PinMameGameDefinition(machineId, name, coverageStatus, completionScore, roms,
-				switches.ToArray(), coils.ToArray(), lamps.ToArray(), wires, diagnostics.ToArray());
+				switches.ToArray(), coils.ToArray(), lamps.ToArray(), wires, spatialSwitches.ToArray(),
+				spatialCoils.ToArray(), spatialLamps.ToArray(), diagnostics.ToArray());
 		}
 
 		private static GamelogicEngineWire[] ConvertFlipperWires(JArray inputs, JArray outputs, IReadOnlyDictionary<string, JObject> overrides,
@@ -145,7 +149,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		}
 
 		private static List<GamelogicEngineSwitch> ConvertSwitches(JArray inputs, IReadOnlyDictionary<string, JObject> overrides,
-			ICollection<string> diagnostics)
+			ICollection<PinMameSpatialPlacement> spatialSwitches, ICollection<string> diagnostics)
 		{
 			var switches = new List<GamelogicEngineSwitch>();
 			var addresses = new HashSet<int>();
@@ -201,6 +205,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				};
 				ApplySwitchDeviceHint(@switch, input);
 				switches.Add(@switch);
+				AddSpatialPlacements(spatialSwitches, input, @switch.Id, label);
 			}
 
 			var orderedSwitches = switches.OrderBy(@switch => NumericId(@switch.Id)).ToList();
@@ -218,7 +223,9 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		}
 
 		private static void ConvertOutputs(JArray outputs, IReadOnlyDictionary<string, JObject> overrides,
-			ICollection<GamelogicEngineCoil> coils, ICollection<GamelogicEngineLamp> lamps, ICollection<string> diagnostics)
+			ICollection<GamelogicEngineCoil> coils, ICollection<GamelogicEngineLamp> lamps,
+			ICollection<PinMameSpatialPlacement> spatialCoils, ICollection<PinMameSpatialPlacement> spatialLamps,
+			ICollection<string> diagnostics)
 		{
 			if (outputs == null) {
 				return;
@@ -252,6 +259,11 @@ namespace VisualPinball.Engine.PinMAME.Editor
 					};
 					ApplyCoilDeviceHint(coil, output, kind, address);
 					coils.Add(coil);
+					if (coil.IsLamp) {
+						AddSpatialPlacements(spatialLamps, output, coil.Id, label, LampSource.Lamp, ColorChannel.Alpha, true);
+					} else {
+						AddSpatialPlacements(spatialCoils, output, coil.Id, label);
+					}
 					if (kind is "rgb_lamp" or "gi") {
 						diagnostics.Add($"{label} uses the solenoid callback as {kind}; VPE currently imports it as a single-channel lamp output.");
 					}
@@ -263,23 +275,55 @@ namespace VisualPinball.Engine.PinMAME.Editor
 					continue;
 				}
 
-				var colorChannel = ColorChannel.Alpha;
-				if (kind == "rgb_lamp" && !TryColorChannelFor(output, out colorChannel)) {
+				var isRgbChannel = TryColorChannelFor(output, out var colorChannel);
+				if (kind == "rgb_lamp" && !isRgbChannel) {
 					diagnostics.Add($"RGB output {output.Value<string>("id") ?? label} does not identify its red, green, or blue channel and was not imported.");
 					continue;
 				}
+				if (!isRgbChannel) colorChannel = ColorChannel.Alpha;
 				// VPE needs the raw value at maximum intensity, while the catalog's `steps` is the
 				// inclusive count of distinct values. PinMAME GI defaults to native levels 0..8.
 				var range = output["range"] as JObject;
 				var maximum = range?.Value<int?>("maximum") ?? (group == "pinmame.output.gi" ? 8 : 0);
 				var steps = range?.Value<int?>("steps") ?? (group == "pinmame.output.gi" ? 9 : 0);
-				lamps.Add(new GamelogicEngineLamp(address) {
+				var fadingSteps = maximum > 0 ? maximum : steps > 1 ? steps - 1 : 0;
+				var lamp = new GamelogicEngineLamp(address) {
 					Description = label,
 					Channel = colorChannel,
-					FadingSteps = maximum,
+					FadingSteps = fadingSteps,
 					Source = group == "pinmame.output.gi" ? LampSource.GI : LampSource.Lamp,
-					Type = kind == "rgb_lamp" ? LampType.RgbMulti : (maximum > 1 || steps > 2 ? LampType.SingleFading : LampType.SingleOnOff),
-				});
+					Type = isRgbChannel ? LampType.RgbMulti : (fadingSteps > 1 ? LampType.SingleFading : LampType.SingleOnOff),
+				};
+				lamps.Add(lamp);
+				AddSpatialPlacements(spatialLamps, output, lamp.Id, label, lamp.Source, lamp.Channel);
+			}
+		}
+
+		private static void AddSpatialPlacements(ICollection<PinMameSpatialPlacement> destination, JObject device,
+			string hardwareId, string label, LampSource source = LampSource.Lamp, ColorChannel channel = ColorChannel.Alpha,
+			bool isCoil = false)
+		{
+			if (device["spatial"]?["placements"] is not JArray placements) {
+				return;
+			}
+
+			var deviceId = device.Value<string>("id") ?? hardwareId;
+			var placementIndex = 0;
+			foreach (var placement in placements.OfType<JObject>()) {
+				if (!string.Equals(placement.Value<string>("space"), "playfield", StringComparison.Ordinal)) {
+					continue;
+				}
+				var x = placement.Value<float?>("x");
+				var y = placement.Value<float?>("y");
+				if (!x.HasValue || !y.HasValue || x.Value < 0f || x.Value > 1f || y.Value < 0f || y.Value > 1f) {
+					continue;
+				}
+				var placementId = placement.Value<string>("id");
+				if (string.IsNullOrWhiteSpace(placementId)) {
+					placementId = $"{deviceId}:{placementIndex}";
+				}
+				destination.Add(new PinMameSpatialPlacement(hardwareId, placementId, label, x.Value, y.Value, source, channel, isCoil));
+				placementIndex++;
 			}
 		}
 

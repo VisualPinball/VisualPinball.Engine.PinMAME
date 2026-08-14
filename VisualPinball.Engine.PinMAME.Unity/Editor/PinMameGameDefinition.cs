@@ -10,6 +10,7 @@
 
 using System;
 using VisualPinball.Engine.Game.Engines;
+using VisualPinball.Engine.Math;
 
 namespace VisualPinball.Engine.PinMAME.Editor
 {
@@ -24,11 +25,15 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		public GamelogicEngineCoil[] Coils { get; }
 		public GamelogicEngineLamp[] Lamps { get; }
 		public GamelogicEngineWire[] Wires { get; }
+		public PinMameSpatialPlacement[] SpatialSwitches { get; }
+		public PinMameSpatialPlacement[] SpatialCoils { get; }
+		public PinMameSpatialPlacement[] SpatialLamps { get; }
 		public string[] Diagnostics { get; }
 
 		public PinMameGameDefinition(string machineId, string name, string coverageStatus, int completionScore,
 			PinMameRomDefinition[] roms, GamelogicEngineSwitch[] switches, GamelogicEngineCoil[] coils,
-			GamelogicEngineLamp[] lamps, GamelogicEngineWire[] wires, string[] diagnostics)
+			GamelogicEngineLamp[] lamps, GamelogicEngineWire[] wires, PinMameSpatialPlacement[] spatialSwitches,
+			PinMameSpatialPlacement[] spatialCoils, PinMameSpatialPlacement[] spatialLamps, string[] diagnostics)
 		{
 			MachineId = machineId;
 			Name = name;
@@ -39,7 +44,35 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			Coils = coils ?? Array.Empty<GamelogicEngineCoil>();
 			Lamps = lamps ?? Array.Empty<GamelogicEngineLamp>();
 			Wires = wires ?? Array.Empty<GamelogicEngineWire>();
+			SpatialSwitches = spatialSwitches ?? Array.Empty<PinMameSpatialPlacement>();
+			SpatialCoils = spatialCoils ?? Array.Empty<PinMameSpatialPlacement>();
+			SpatialLamps = spatialLamps ?? Array.Empty<PinMameSpatialPlacement>();
 			Diagnostics = diagnostics ?? Array.Empty<string>();
+		}
+	}
+
+	public sealed class PinMameSpatialPlacement
+	{
+		public string HardwareId { get; }
+		public string PlacementId { get; }
+		public string Label { get; }
+		public float X { get; }
+		public float Y { get; }
+		public LampSource Source { get; }
+		public ColorChannel Channel { get; }
+		public bool IsCoil { get; }
+
+		public PinMameSpatialPlacement(string hardwareId, string placementId, string label, float x, float y,
+			LampSource source = LampSource.Lamp, ColorChannel channel = ColorChannel.Alpha, bool isCoil = false)
+		{
+			HardwareId = hardwareId;
+			PlacementId = placementId;
+			Label = label;
+			X = x;
+			Y = y;
+			Source = source;
+			Channel = channel;
+			IsCoil = isCoil;
 		}
 	}
 

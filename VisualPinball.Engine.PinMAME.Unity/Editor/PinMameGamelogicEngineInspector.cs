@@ -1,4 +1,4 @@
-﻿// Visual Pinball Engine
+// Visual Pinball Engine
 // Copyright (C) 2021 freezy and VPE Team
 //
 // This program is free software: you can redistribute it and/or modify
@@ -52,6 +52,8 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		private bool _isLoading;
 		private string _loadError;
 		private string _loadWarning;
+		private string _spatialAssignmentMessage;
+		private MessageType _spatialAssignmentMessageType = MessageType.Info;
 
 		private void OnEnable()
 		{
@@ -155,6 +157,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			_definition = null;
 			_definitionJson = null;
 			_roms = Array.Empty<PinMameRomDefinition>();
+			_spatialAssignmentMessage = null;
 
 			if (selectedGameIndex <= 0) {
 				_selectedMachine = null;
@@ -343,6 +346,18 @@ namespace VisualPinball.Engine.PinMAME.Editor
 					SceneView.RepaintAll();
 				}
 			}
+			EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+			EditorGUILayout.LabelField("Spatial Assignment", EditorStyles.boldLabel);
+			EditorGUILayout.LabelField("Fills empty playfield mappings. Existing links are preserved as layout anchors; uncertain matches stay empty.", EditorStyles.wordWrappedMiniLabel);
+			EditorGUILayout.BeginHorizontal();
+			if (GUILayout.Button("Switches")) ApplySpatialAssignments("switch", PinMameSpatialAssignmentService.AssignSwitches);
+			if (GUILayout.Button("Coils")) ApplySpatialAssignments("coil", PinMameSpatialAssignmentService.AssignCoils);
+			if (GUILayout.Button("Lamps")) ApplySpatialAssignments("lamp", PinMameSpatialAssignmentService.AssignLamps);
+			EditorGUILayout.EndHorizontal();
+			if (!string.IsNullOrWhiteSpace(_spatialAssignmentMessage)) {
+				EditorGUILayout.HelpBox(_spatialAssignmentMessage, _spatialAssignmentMessageType);
+			}
+			EditorGUILayout.EndVertical();
 			EditorGUI.EndDisabledGroup();
 
 			EditorGUI.BeginDisabledGroup(string.IsNullOrWhiteSpace(_gle.romId));
@@ -359,6 +374,19 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				}
 			}
 			EditorGUI.EndDisabledGroup();
+		}
+
+		private void ApplySpatialAssignments(string hardwareType,
+			Func<TableComponent, PinMameGameDefinition, Action, PinMameSpatialAssignmentResult> assign)
+		{
+			var result = assign(_tableComponent, _definition,
+				() => Undo.RecordObject(_tableComponent, $"Assign PinMAME {hardwareType} mappings by position"));
+			_spatialAssignmentMessage = result.ToString();
+			_spatialAssignmentMessageType = result.Changed ? MessageType.Info : MessageType.Warning;
+			if (!result.Changed) return;
+			EditorUtility.SetDirty(_tableComponent);
+			TableSelector.Instance.TableUpdated();
+			SceneView.RepaintAll();
 		}
 
 		private void DrawMachinePicker()
@@ -421,6 +449,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				SetRoms(definition.Roms, selectedRomId);
 				_gle.SetMachineSelection(definition.MachineId, selectedRomId);
 				_loadError = null;
+				_spatialAssignmentMessage = null;
 				EditorUtility.SetDirty(_gle);
 			} catch (Exception exception) {
 				_loadError = exception.Message;

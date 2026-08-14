@@ -60,6 +60,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 					{ 'id': 'lamp.one.red', 'label': 'Lamp (red)', 'kind': 'rgb_lamp', 'binding': { 'group': 'pinmame.output.lamp', 'device': 2 } },
 					{ 'id': 'gi.one', 'label': 'GI without explicit legacy range', 'kind': 'gi', 'binding': { 'group': 'pinmame.output.gi', 'device': 3 } },
 					{ 'id': 'gi.explicit', 'label': 'GI with explicit range', 'kind': 'gi', 'binding': { 'group': 'pinmame.output.gi', 'device': 4 }, 'range': { 'minimum': 0, 'maximum': 8, 'steps': 9 } },
+					{ 'id': 'lamp.degenerate-range', 'label': 'Degenerate fading range', 'kind': 'lamp', 'binding': { 'group': 'pinmame.output.lamp', 'device': 6 }, 'range': { 'minimum': 0, 'maximum': 0, 'steps': 3 } },
 					{ 'id': 'coil.lamp-transport', 'label': 'Lamp-driven coil', 'kind': 'coil', 'binding': { 'group': 'pinmame.output.lamp', 'device': 4 } },
 					{ 'id': 'state.virtual', 'label': 'Virtual state bit', 'kind': 'virtual', 'binding': { 'group': 'pinmame.output.solenoid', 'device': 5 } },
 					{ 'id': 'lamp.unused', 'label': 'Unused lamp', 'kind': 'lamp', 'binding': { 'group': 'pinmame.output.lamp', 'device': 5 }, 'availability': 'unused' }
@@ -101,6 +102,8 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			Assert.That(definition.Lamps.Single(lamp => lamp.Id == "3").FadingSteps, Is.EqualTo(8));
 			Assert.That(definition.Lamps.Single(lamp => lamp.Id == "4").Type, Is.EqualTo(LampType.SingleFading));
 			Assert.That(definition.Lamps.Single(lamp => lamp.Id == "4").FadingSteps, Is.EqualTo(8));
+			Assert.That(definition.Lamps.Single(lamp => lamp.Id == "6").Type, Is.EqualTo(LampType.SingleFading));
+			Assert.That(definition.Lamps.Single(lamp => lamp.Id == "6").FadingSteps, Is.EqualTo(2));
 			Assert.That(definition.Diagnostics, Has.Exactly(1).Contains("Lamp-driven coil"));
 
 			var catalogOnlyDefinition = PinMameGameDefinitionConverter.Convert(json, "test_3");
