@@ -30,6 +30,12 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			new("Upper Right Flipper", new[] { "flipper.upper.right", "flipper.upper.right.button", "flipper.upper-right.button" }, "flipper.upper.right"),
 		};
 
+		// PinMAME's generic lower flipper switches (core.h, column CORE_FLIPPERSWCOL): 111/113 are
+		// the end-of-stroke switches, 112/114 the cabinet buttons. The upper channels (115-118) are
+		// left to the definition, since machines reuse them (second button optos, other switches).
+		private const int FirstCoreFlipperSwitch = 111;
+		private static readonly string[] CoreFlipperSwitchRoles = { "flipper.lower.right", "flipper.lower.left" };
+
 		public static PinMameGameDefinition Convert(string json, string selectedRomId = null)
 		{
 			if (string.IsNullOrWhiteSpace(json)) {
@@ -58,7 +64,8 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			var completionScore = coverage.Value<int?>("completion_score") ?? (coverageStatus == "author_ready" ? 100 : 0);
 			var sourceDrivers = (root["drivers"] as JArray)?.OfType<JObject>().ToArray() ?? Array.Empty<JObject>();
 			var roms = ReadRoms(root, sourceDrivers);
-			var selectedDriver = SelectDriver(sourceDrivers, selectedRomId);
+			var defaultRomId = DefaultRomId(root, sourceDrivers, roms);
+			var selectedDriver = SelectDriver(sourceDrivers, string.IsNullOrWhiteSpace(selectedRomId) ? defaultRomId : selectedRomId);
 			var overrides = ReadOverrides(selectedDriver);
 			var diagnostics = new List<string>();
 			if (!string.IsNullOrWhiteSpace(selectedRomId) && selectedDriver == null
@@ -79,7 +86,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			ConvertOutputs(root["outputs"] as JArray, overrides, coils, lamps, spatialCoils, spatialLamps, diagnostics);
 			var wires = ConvertFlipperWires(root["inputs"] as JArray, root["outputs"] as JArray, overrides, diagnostics);
 
-			return new PinMameGameDefinition(machineId, name, coverageStatus, completionScore, roms,
+			return new PinMameGameDefinition(machineId, name, coverageStatus, completionScore, roms, defaultRomId,
 				switches.ToArray(), coils.ToArray(), lamps.ToArray(), wires, spatialSwitches.ToArray(),
 				spatialCoils.ToArray(), spatialLamps.ToArray(), diagnostics.ToArray());
 		}
@@ -102,15 +109,24 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				.Select(output => new { Device = output, Binding = EffectiveBinding(output, overrides) })
 				.Where(item => string.Equals(item.Binding?.Value<string>("group"), "pinmame.output.solenoid", StringComparison.Ordinal))
 				.Where(item => item.Binding?["device"]?.Type == JTokenType.Integer)
-				.Where(item => string.Equals(item.Device.Value<string>("kind"), "coil", StringComparison.Ordinal))
+				// synthetic flipper coils (e.g. pre-Fliptronic WPC) are virtual
+				.Where(item => item.Device.Value<string>("kind") is "coil" or "virtual")
 				.ToArray();
 
 			var wires = new List<GamelogicEngineWire>();
 			var ambiguousSourceIds = new HashSet<string>(StringComparer.Ordinal);
 			foreach (var role in FlipperWireRoles) {
 				var sources = inputDevices
-					.Where(item => MatchesFlipperInputRole(item.Device, role))
+					.Where(item => MatchesFlipperInputRole(item.Device, item.Binding.Value<int>("device"), role))
 					.ToArray();
+				// PinMAME copies its generic flipper buttons (112/114) into the game's matrix flipper
+				// switches, so when both are listed, the generic one is what the host drives.
+				var coreSources = sources
+					.Where(item => TryGetCoreFlipperSwitch(item.Device, item.Binding.Value<int>("device"), out _, out _))
+					.ToArray();
+				if (sources.Length > 1 && coreSources.Length == 1) {
+					sources = coreSources;
+				}
 				if (sources.Length > 1) {
 					diagnostics.Add($"The definition has ambiguous {role.Description} switch roles; its direct flipper wire was not imported.");
 					continue;
@@ -153,6 +169,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		{
 			var switches = new List<GamelogicEngineSwitch>();
 			var addresses = new HashSet<int>();
+			var coreFlipperButtonIds = new HashSet<string>(StringComparer.Ordinal);
 			if (inputs == null) {
 				return switches;
 			}
@@ -185,17 +202,20 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				}
 
 				var label = RequiredString(input, "label");
-				var flipperRoleCount = FlipperWireRoles.Count(role => MatchesFlipperInputRole(input, role));
+				var flipperRoleCount = FlipperWireRoles.Count(role => MatchesFlipperInputRole(input, address, role));
 				var inputAction = flipperRoleCount > 1
 					? string.Empty
-					: InputAction(input, label, genericCoinSlots.TryGetValue(address, out var genericCoinSlot) ? genericCoinSlot : 0);
+					: InputAction(input, label, address, genericCoinSlots.TryGetValue(address, out var genericCoinSlot) ? genericCoinSlot : 0);
+				if (TryGetCoreFlipperSwitch(input, address, out _, out var isCoreEos) && isCoreEos != IsEosByDefinition(input)) {
+					diagnostics.Add($"PinMAME switch {address} ({label}) is a flipper {(isCoreEos ? "end-of-stroke switch" : "button")} in PinMAME's numbering; the definition says otherwise, PinMAME's numbering was used.");
+				}
 				if (flipperRoleCount > 1) {
 					diagnostics.Add($"PinMAME switch {address} ({label}) represents multiple flipper buttons; its input action was left for manual mapping.");
 				}
 				var constantActive = input.Value<bool?>("constant_active");
 				var @switch = new GamelogicEngineSwitch(address) {
 					Description = label,
-					NormallyClosed = input.Value<bool?>("normally_closed") ?? false,
+					NormallyClosed = IsNormallyClosedForHost(input),
 					IsPulseSwitch = input.Value<bool?>("pulse") ?? false,
 					InputActionHint = inputAction,
 					InputMapHint = string.IsNullOrEmpty(inputAction) ? string.Empty : InputConstants.MapCabinetSwitches,
@@ -203,6 +223,9 @@ namespace VisualPinball.Engine.PinMAME.Editor
 						? constantActive.Value ? SwitchConstantHint.AlwaysClosed : SwitchConstantHint.AlwaysOpen
 						: SwitchConstantHint.None,
 				};
+				if (TryGetCoreFlipperSwitch(input, address, out _, out var isCoreFlipperEos) && !isCoreFlipperEos) {
+					coreFlipperButtonIds.Add(@switch.Id);
+				}
 				ApplySwitchDeviceHint(@switch, input);
 				switches.Add(@switch);
 				AddSpatialPlacements(spatialSwitches, input, @switch.Id, label);
@@ -210,7 +233,12 @@ namespace VisualPinball.Engine.PinMAME.Editor
 
 			var orderedSwitches = switches.OrderBy(@switch => NumericId(@switch.Id)).ToList();
 			var inputActions = new HashSet<string>(StringComparer.Ordinal);
-			foreach (var @switch in orderedSwitches.Where(@switch => !string.IsNullOrEmpty(@switch.InputActionHint))) {
+			// generic flipper buttons first: the matrix flipper switches only mirror them
+			var actionClaimOrder = orderedSwitches
+				.Where(@switch => !string.IsNullOrEmpty(@switch.InputActionHint))
+				.OrderBy(@switch => coreFlipperButtonIds.Contains(@switch.Id) ? 0 : 1)
+				.ToArray();
+			foreach (var @switch in actionClaimOrder) {
 				if (inputActions.Add(@switch.InputActionHint)) {
 					continue;
 				}
@@ -341,6 +369,31 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			return roms.Values.OrderBy(rom => rom.Id, StringComparer.OrdinalIgnoreCase).ToArray();
 		}
 
+		/// <summary>
+		/// The parent ROM: the listed driver that isn't a clone, or else the one most clones point to.
+		/// The list itself is alphabetical, so its first entry is often a prototype or a homebrew fix.
+		/// </summary>
+		private static string DefaultRomId(JObject root, IEnumerable<JObject> sourceDrivers, PinMameRomDefinition[] roms)
+		{
+			var drivers = sourceDrivers
+				.Concat((root["catalogDrivers"] as JArray)?.OfType<JObject>() ?? Enumerable.Empty<JObject>())
+				.ToArray();
+			string Listed(string id) => roms.FirstOrDefault(rom => string.Equals(rom.Id, id, StringComparison.OrdinalIgnoreCase))?.Id;
+
+			var parent = drivers
+				.Where(driver => string.IsNullOrWhiteSpace(driver.Value<string>("clone_of")))
+				.Select(driver => Listed(driver.Value<string>("id")))
+				.FirstOrDefault(id => id != null);
+			parent ??= drivers
+				.Select(driver => Listed(driver.Value<string>("root_driver") ?? driver.Value<string>("clone_of")))
+				.Where(id => id != null)
+				.GroupBy(id => id, StringComparer.OrdinalIgnoreCase)
+				.OrderByDescending(group => group.Count())
+				.Select(group => group.Key)
+				.FirstOrDefault();
+			return parent ?? roms.FirstOrDefault()?.Id;
+		}
+
 		private static void AddRom(IDictionary<string, PinMameRomDefinition> roms, JObject driver)
 		{
 			var id = driver.Value<string>("id");
@@ -381,8 +434,34 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			return id != null && overrides.TryGetValue(id, out var binding) ? binding : device["binding"] as JObject;
 		}
 
-		private static bool IsAvailable(JObject device) => !string.Equals(device.Value<string>("availability"), "unused", StringComparison.Ordinal)
-			&& !string.Equals(device.Value<string>("kind"), "virtual", StringComparison.Ordinal);
+		private static bool IsAvailable(JObject device)
+		{
+			if (string.Equals(device.Value<string>("availability"), "unused", StringComparison.Ordinal)) {
+				return false;
+			}
+			if (!string.Equals(device.Value<string>("kind"), "virtual", StringComparison.Ordinal)) {
+				return true;
+			}
+			// "virtual" is independent of availability. A virtual item with a public role is still
+			// driven by or drives the host (e.g. a flipper button outside the switch matrix, or a
+			// synthetic flipper coil). Without one, virtual inputs are host inputs too, while
+			// virtual outputs are mirrors of other outputs or internal state.
+			var roles = (device["roles"] as JArray)?.Values<string>().Where(role => role != null).ToArray() ?? Array.Empty<string>();
+			if (roles.Any(role => !role.StartsWith("internal.", StringComparison.Ordinal))) {
+				return true;
+			}
+			return roles.Length == 0 && (device["binding"] as JObject)?.Value<string>("group")?.StartsWith("pinmame.input.", StringComparison.Ordinal) == true;
+		}
+
+		/// <summary>
+		/// The definition's <c>normally_closed</c> is the physical contact (e.g. optos). PinMAME
+		/// already inverts those itself (per-game <c>invSw</c>), so passing it on would invert them
+		/// twice. Only the coin door switch is closed at rest from the host's point of view.
+		/// </summary>
+		private static bool IsNormallyClosedForHost(JObject input)
+		{
+			return HasRole(input, "cabinet.coin-door") && (input.Value<bool?>("normally_closed") ?? false);
+		}
 
 		private static bool HasRole(JObject device, params string[] roles)
 		{
@@ -398,8 +477,11 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			return binding.Value<int>("device");
 		}
 
-		private static string InputAction(JObject input, string label, int genericCoinSlot)
+		private static string InputAction(JObject input, string label, int address, int genericCoinSlot)
 		{
+			if (TryGetCoreFlipperSwitch(input, address, out var coreFlipperRole, out var isCoreEos)) {
+				return isCoreEos ? string.Empty : FlipperAction(coreFlipperRole);
+			}
 			var roles = input["roles"] as JArray;
 			if (roles == null) {
 				return string.Empty;
@@ -491,13 +573,44 @@ namespace VisualPinball.Engine.PinMAME.Editor
 
 		private static bool HasAny(ISet<string> values, params string[] candidates) => candidates.Any(values.Contains);
 
-		private static bool MatchesFlipperInputRole(JObject input, FlipperWireRole role)
+		private static bool MatchesFlipperInputRole(JObject input, int address, FlipperWireRole role)
 		{
+			if (TryGetCoreFlipperSwitch(input, address, out var coreFlipperRole, out var isCoreEos)) {
+				return !isCoreEos && string.Equals(coreFlipperRole, role.DestinationRole, StringComparison.Ordinal);
+			}
 			if (IsEosFlipperInput(input)) return false;
 			if (HasRole(input, role.SourceRoles)) return true;
 			if (!HasRole(input, "cabinet.flipper", "cabinet.flipper.button")) return false;
 			var inferredRole = FlipperRoleFromIdentity(input.Value<string>("id")) ?? FlipperRoleFromIdentity(input.Value<string>("label"));
 			return string.Equals(inferredRole, role.DestinationRole, StringComparison.Ordinal);
+		}
+
+		/// <summary>
+		/// Whether the input is one of PinMAME's generic lower flipper switches (111-114), and which
+		/// flipper it belongs to. Their meaning is fixed by PinMAME, whatever the definition's
+		/// label says. Only inputs the definition describes as flipper switches qualify.
+		/// </summary>
+		private static bool TryGetCoreFlipperSwitch(JObject input, int address, out string flipperRole, out bool isEos)
+		{
+			flipperRole = null;
+			isEos = false;
+			var offset = address - FirstCoreFlipperSwitch;
+			if (offset < 0 || offset >= CoreFlipperSwitchRoles.Length * 2) {
+				return false;
+			}
+			var roles = (input["roles"] as JArray)?.Values<string>() ?? Enumerable.Empty<string>();
+			if (!roles.Any(role => Contains(role, "flipper")) && !Contains(input.Value<string>("label"), "flipper")) {
+				return false;
+			}
+			flipperRole = CoreFlipperSwitchRoles[offset / 2];
+			isEos = offset % 2 == 0;
+			return true;
+		}
+
+		private static bool IsEosByDefinition(JObject input)
+		{
+			var roles = (input["roles"] as JArray)?.Values<string>() ?? Enumerable.Empty<string>();
+			return IsEosFlipperInput(input) || roles.Any(role => role != null && role.EndsWith(".eos", StringComparison.Ordinal));
 		}
 
 		private static bool IsEosFlipperInput(JObject input)

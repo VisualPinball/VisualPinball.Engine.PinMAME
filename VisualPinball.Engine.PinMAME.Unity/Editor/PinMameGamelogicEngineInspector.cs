@@ -36,6 +36,9 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		private PinMameGamelogicEngine _gle;
 		private PinMameCatalogMachine[] _machines = Array.Empty<PinMameCatalogMachine>();
 		private PinMameCatalogMachine _selectedMachine;
+		// the machine whose definition was last loaded successfully, which the table's mappings
+		// belong to when the component doesn't record its machine (older tables)
+		private string _loadedMachineId;
 		private PinMameGameDefinition _definition;
 		private string _definitionJson;
 		private PinMameRomDefinition[] _roms = Array.Empty<PinMameRomDefinition>();
@@ -154,6 +157,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				throw new ArgumentOutOfRangeException(nameof(selectedGameIndex));
 			}
 
+			var previousMachineId = _loadedMachineId;
 			_selectedGameIndex = selectedGameIndex;
 			_selectedRomIndex = 0;
 			_definition = null;
@@ -165,8 +169,9 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				_selectedMachine = null;
 				if (applySelection) {
 					Undo.RecordObject(_gle, "Select PinMAME machine");
-					_gle.SetMachineSelection(null, null);
+					_gle.SetMachineSelection(null, null, previousMachineId);
 					EditorUtility.SetDirty(_gle);
+					_loadedMachineId = null;
 				}
 				return;
 			}
@@ -183,10 +188,17 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				throw new InvalidDataException($"The catalog entry {selectedMachine.Id} returned definition {definition.MachineId}.");
 			}
 			_definition = definition;
-			var selectedRomId = SetRoms(_definition.Roms, preferredRomId);
+			_loadedMachineId = definition.MachineId;
+			var selectedRomId = SetRoms(_definition.Roms, preferredRomId, _definition.DefaultRomId);
 			if (applySelection) {
 				Undo.RecordObject(_gle, "Select PinMAME machine");
-				_gle.SetMachineSelection(selectedMachine.Id, selectedRomId);
+				_gle.SetMachineSelection(selectedMachine.Id, selectedRomId, previousMachineId);
+				// the converted definition used the default ROM's driver; convert again if that wasn't it
+				if (!string.Equals(selectedRomId, _definition.DefaultRomId, StringComparison.OrdinalIgnoreCase) && selectedRomId != null) {
+					_definition = ConvertSelectedRom(selectedRomId);
+				}
+				// candidates for the manager dropdowns; the table's mappings stay until Populate Hardware
+				_gle.SetAvailableHardware(_definition.Switches, _definition.Coils, _definition.Lamps, _definition.Wires);
 				EditorUtility.SetDirty(_gle);
 			} else if (!string.IsNullOrWhiteSpace(preferredRomId) && selectedRomId == null) {
 				_loadWarning = CombineWarnings(_loadWarning, $"The saved ROM '{preferredRomId}' is not listed for {selectedMachine.Name}; the saved component value was left unchanged.");
@@ -208,12 +220,12 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			return PinMameGameDefinitionConverter.Convert(_definitionJson, selectedRomId);
 		}
 
-		private string SetRoms(PinMameRomDefinition[] roms, string preferredRomId)
+		private string SetRoms(PinMameRomDefinition[] roms, string preferredRomId, string defaultRomId)
 		{
 			_roms = roms ?? Array.Empty<PinMameRomDefinition>();
 			_selectedRomIndex = Array.FindIndex(_roms, rom => string.Equals(rom.Id, preferredRomId, StringComparison.OrdinalIgnoreCase));
-			if (_selectedRomIndex < 0) {
-				_selectedRomIndex = string.IsNullOrWhiteSpace(preferredRomId) && _roms.Length > 0 ? 0 : -1;
+			if (_selectedRomIndex < 0 && string.IsNullOrWhiteSpace(preferredRomId) && _roms.Length > 0) {
+				_selectedRomIndex = System.Math.Max(0, Array.FindIndex(_roms, rom => string.Equals(rom.Id, defaultRomId, StringComparison.OrdinalIgnoreCase)));
 			}
 			return _selectedRomIndex >= 0 ? _roms[_selectedRomIndex].Id : null;
 		}
@@ -344,6 +356,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 					_gle.SetMachineSelection(_definition.MachineId, _roms[_selectedRomIndex].Id);
 					_gle.SetAvailableHardware(_definition.Switches, _definition.Coils, _definition.Lamps, _definition.Wires);
 					_tableComponent.RepopulateHardware(_gle);
+					_gle.MarkMappingsPopulated();
 					EditorUtility.SetDirty(_gle);
 					EditorUtility.SetDirty(_tableComponent);
 					TableSelector.Instance.TableUpdated();
@@ -353,11 +366,17 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			EditorGUILayout.BeginVertical(EditorStyles.helpBox);
 			EditorGUILayout.LabelField("Spatial Assignment", EditorStyles.boldLabel);
 			EditorGUILayout.LabelField("Fills empty playfield mappings. Existing links are preserved as layout anchors; uncertain matches stay empty.", EditorStyles.wordWrappedMiniLabel);
+			var mappingsMatchMachine = _gle.MappingsMatchMachine;
+			if (!mappingsMatchMachine) {
+				EditorGUILayout.HelpBox("The table's mappings were made for another machine. Populate the hardware of this machine first.", MessageType.Info);
+			}
+			EditorGUI.BeginDisabledGroup(!mappingsMatchMachine);
 			EditorGUILayout.BeginHorizontal();
 			if (GUILayout.Button("Switches")) ApplySpatialAssignments("switch", PinMameSpatialAssignmentService.AssignSwitches);
 			if (GUILayout.Button("Coils")) ApplySpatialAssignments("coil", PinMameSpatialAssignmentService.AssignCoils);
 			if (GUILayout.Button("Lamps")) ApplySpatialAssignments("lamp", PinMameSpatialAssignmentService.AssignLamps);
 			EditorGUILayout.EndHorizontal();
+			EditorGUI.EndDisabledGroup();
 			if (!string.IsNullOrWhiteSpace(_spatialAssignmentMessage)) {
 				EditorGUILayout.HelpBox(_spatialAssignmentMessage, _spatialAssignmentMessageType);
 			}
@@ -450,14 +469,16 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				var definition = ConvertSelectedRom(selectedRomId);
 				Undo.RecordObject(_gle, "Select PinMAME ROM");
 				_definition = definition;
-				SetRoms(definition.Roms, selectedRomId);
+				SetRoms(definition.Roms, selectedRomId, definition.DefaultRomId);
 				_gle.SetMachineSelection(definition.MachineId, selectedRomId);
+				// a ROM of the same machine: refresh the dropdown candidates, keep the mappings
+				_gle.SetAvailableHardware(definition.Switches, definition.Coils, definition.Lamps, definition.Wires);
 				_loadError = null;
 				_spatialAssignmentMessage = null;
 				EditorUtility.SetDirty(_gle);
 			} catch (Exception exception) {
 				_loadError = exception.Message;
-				SetRoms(_definition?.Roms, _gle.romId);
+				SetRoms(_definition?.Roms, _gle.romId, _definition?.DefaultRomId);
 			}
 			Repaint();
 		}
@@ -569,6 +590,8 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			if (!PinMame.PinMame.IsRunning) {
 				PinMameFolders.ApplyRomFolder(pinMame);
 			}
+			// probing runs the ROM, which saves NVRAM and config on exit, so bring over VPM's first
+			PinMameFolders.ImportFromVpm(_gle.romId);
 			var displayLayouts = pinMame.GetAvailableDisplays(_gle.romId);
 
 			// retrieve already existing displays from scene

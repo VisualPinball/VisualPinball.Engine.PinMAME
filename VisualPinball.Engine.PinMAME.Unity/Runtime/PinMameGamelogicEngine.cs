@@ -73,6 +73,10 @@ namespace VisualPinball.Engine.PinMAME
 		private GamelogicEngineWire[] _availableWires = Array.Empty<GamelogicEngineWire>();
 		[SerializeField, HideInInspector]
 		private bool _availableWiresInitialized;
+		// The machine the table's mappings were populated for, when it differs from machineId or is
+		// known. Empty for tables populated before this was tracked.
+		[SerializeField, HideInInspector]
+		private string _mappedMachineId;
 		#endif
 
 		[SerializeField, HideInInspector]
@@ -176,9 +180,30 @@ namespace VisualPinball.Engine.PinMAME
 		}
 
 		#if UNITY_EDITOR
-		public void SetMachineSelection(string selectedMachineId, string selectedRomId)
+		/// <summary>
+		/// Whether the table's mappings belong to the selected machine, so its positions and IDs can
+		/// be matched against them.
+		/// </summary>
+		public bool MappingsMatchMachine => string.IsNullOrEmpty(_mappedMachineId) || string.Equals(_mappedMachineId, machineId, StringComparison.Ordinal);
+
+		/// <summary>
+		/// Records that the table's mappings were just populated from the selected machine.
+		/// </summary>
+		public void MarkMappingsPopulated() => _mappedMachineId = machineId;
+
+		/// <param name="selectedMachineId">The machine to select.</param>
+		/// <param name="selectedRomId">The ROM to select.</param>
+		/// <param name="resolvedCurrentMachineId">The machine the editor resolved for the current
+		/// selection (e.g. from the ROM) when <see cref="machineId"/> isn't set, like in older tables.</param>
+		public void SetMachineSelection(string selectedMachineId, string selectedRomId, string resolvedCurrentMachineId = null)
 		{
-			machineId = selectedMachineId ?? string.Empty;
+			selectedMachineId ??= string.Empty;
+			var currentMachineId = !string.IsNullOrEmpty(machineId) ? machineId : resolvedCurrentMachineId;
+			if (string.IsNullOrEmpty(_mappedMachineId) && !string.IsNullOrEmpty(currentMachineId) && !string.Equals(currentMachineId, selectedMachineId, StringComparison.Ordinal)) {
+				// the existing mappings were made for the machine selected until now
+				_mappedMachineId = currentMachineId;
+			}
+			machineId = selectedMachineId;
 			romId = selectedRomId ?? string.Empty;
 			_legacyGameId = null;
 			ClearAvailableHardware();
@@ -278,7 +303,7 @@ namespace VisualPinball.Engine.PinMAME
 
 			for (var i = 0; i < snapshot.LampCount; i++) {
 				var lamp = snapshot.LampStates[i];
-				if (!_pinMameIdToLampIdMapping.TryGetValue(lamp.Id, out var lampId)) {
+				if (!_pinMameIdToLampIdMapping.TryGetValue(lamp.Id, out var lampIds)) {
 					continue;
 				}
 				if (_lastAppliedLampStates.TryGetValue(lamp.Id, out var currentValue) && currentValue == lamp.Value) {
@@ -286,12 +311,14 @@ namespace VisualPinball.Engine.PinMAME
 				}
 
 				_lastAppliedLampStates[lamp.Id] = lamp.Value;
-				_player.SetLamp(lampId, lamp.Value, LampSource.Lamp);
+				foreach (var lampId in lampIds) {
+					_player.SetLamp(lampId, lamp.Value, LampSource.Lamp);
+				}
 			}
 
 			for (var i = 0; i < snapshot.GICount; i++) {
 				var gi = snapshot.GIStates[i];
-				if (!_pinMameIdToGiIdMapping.TryGetValue(gi.Id, out var giId)) {
+				if (!_pinMameIdToGiIdMapping.TryGetValue(gi.Id, out var giIds)) {
 					continue;
 				}
 				if (_lastAppliedGiStates.TryGetValue(gi.Id, out var currentValue) && currentValue == gi.Value) {
@@ -299,7 +326,9 @@ namespace VisualPinball.Engine.PinMAME
 				}
 
 				_lastAppliedGiStates[gi.Id] = gi.Value;
-				_player.SetLamp(giId, gi.Value, LampSource.GI);
+				foreach (var giId in giIds) {
+					_player.SetLamp(giId, gi.Value, LampSource.GI);
+				}
 			}
 		}
 
@@ -322,12 +351,13 @@ namespace VisualPinball.Engine.PinMAME
 
 		private Dictionary<string, GamelogicEngineCoil> _coils = new();
 		private volatile GamelogicEngineCoil[] _requestedCoils = Array.Empty<GamelogicEngineCoil>();
-		private Dictionary<int, string> _pinMameIdToCoilIdMapping = new();
+		// one PinMAME output can drive several mapping rows (e.g. "19" and the "c_game_on" alias)
+		private Dictionary<int, List<string>> _pinMameIdToCoilIdMapping = new();
 		private Dictionary<string, int> _coilIdToPinMameIdMapping = new();
 
 		private volatile GamelogicEngineLamp[] _requestedLamps = Array.Empty<GamelogicEngineLamp>();
-		private Dictionary<int, string> _pinMameIdToLampIdMapping = new();
-		private Dictionary<int, string> _pinMameIdToGiIdMapping = new();
+		private Dictionary<int, List<string>> _pinMameIdToLampIdMapping = new();
+		private Dictionary<int, List<string>> _pinMameIdToGiIdMapping = new();
 		private volatile bool _runtimeCachesBuilt;
 
 		private volatile bool _isRunning;
@@ -452,10 +482,11 @@ namespace VisualPinball.Engine.PinMAME
 				lock (_outputStateLock) {
 					_sharedLampStates[changedLamp.Id] = changedLamp.Value;
 				}
-				if (!_sharedLampPlaybackActive && _pinMameIdToLampIdMapping.ContainsKey(changedLamp.Id)) {
-					var vpeLampId = _pinMameIdToLampIdMapping[changedLamp.Id];
-					LogChangedLampSample("lamp", changedLamp.Id, vpeLampId, changedLamp.Value, LampSource.Lamp);
-					OnLampChanged?.Invoke(this, new LampEventArgs(vpeLampId, changedLamp.Value));
+				if (!_sharedLampPlaybackActive && _pinMameIdToLampIdMapping.TryGetValue(changedLamp.Id, out var vpeLampIds)) {
+					foreach (var vpeLampId in vpeLampIds) {
+						LogChangedLampSample("lamp", changedLamp.Id, vpeLampId, changedLamp.Value, LampSource.Lamp);
+						OnLampChanged?.Invoke(this, new LampEventArgs(vpeLampId, changedLamp.Value));
+					}
 				} else {
 					LogUnmappedLampSample("lamp", changedLamp.Id, changedLamp.Value, LampSource.Lamp);
 				}
@@ -467,10 +498,11 @@ namespace VisualPinball.Engine.PinMAME
 				lock (_outputStateLock) {
 					_sharedGiStates[changedGi.Id] = changedGi.Value;
 				}
-				if (!_sharedLampPlaybackActive && _pinMameIdToGiIdMapping.ContainsKey(changedGi.Id)) {
-					var vpeLampId = _pinMameIdToGiIdMapping[changedGi.Id];
-					LogChangedLampSample("gi", changedGi.Id, vpeLampId, changedGi.Value, LampSource.GI);
-					OnLampChanged?.Invoke(this, new LampEventArgs(vpeLampId, changedGi.Value, LampSource.GI));
+				if (!_sharedLampPlaybackActive && _pinMameIdToGiIdMapping.TryGetValue(changedGi.Id, out var vpeGiIds)) {
+					foreach (var vpeLampId in vpeGiIds) {
+						LogChangedLampSample("gi", changedGi.Id, vpeLampId, changedGi.Value, LampSource.GI);
+						OnLampChanged?.Invoke(this, new LampEventArgs(vpeLampId, changedGi.Value, LampSource.GI));
+					}
 				} else {
 					LogUnmappedLampSample("gi", changedGi.Id, changedGi.Value, LampSource.GI);
 				}
@@ -846,9 +878,7 @@ namespace VisualPinball.Engine.PinMAME
 				}
 
 				#if !((UNITY_IOS || UNITY_ANDROID) && !UNITY_EDITOR)
-				if (!PrepareDesktopFolders()) {
-					return;
-				}
+				PrepareDesktopFolders();
 				#endif
 
 				_pinMame.SetHandleKeyboard(false);
@@ -903,8 +933,7 @@ namespace VisualPinball.Engine.PinMAME
 		/// <summary>
 		/// Points PinMAME at the ROM folder and brings over Visual PinMAME's state for the game.
 		/// </summary>
-		/// <returns>False if the ROM isn't in the ROM folder.</returns>
-		private bool PrepareDesktopFolders()
+		private void PrepareDesktopFolders()
 		{
 			try {
 				PinMameFolders.ApplyRomFolder(_pinMame);
@@ -913,17 +942,15 @@ namespace VisualPinball.Engine.PinMAME
 			}
 			PinMameFolders.ImportFromVpm(romId);
 
-			bool romFound;
+			// Only a hint: PinMAME's audit reports clones whose files are all identical to their
+			// parent's as missing, although they run. StartGame reports a ROM that really is missing.
 			try {
-				romFound = _pinMame.GetGame(romId).RomFound;
+				if (!_pinMame.GetGame(romId).RomFound) {
+					Logger.Warn($"[PinMAME] ROM \"{romId}\" may be missing from {_pinMame.RomPath}. If the game doesn't start, set the ROM folder to where your ROMs are.");
+				}
 			} catch (InvalidOperationException) {
 				// unknown game: StartGame reports it
-				return true;
 			}
-			if (!romFound) {
-				Logger.Error($"[PinMAME] ROM \"{romId}\" not found in {_pinMame.RomPath}. Set the ROM folder to where your ROMs are.");
-			}
-			return romFound;
 		}
 
 		public void ToggleSpeed()
@@ -1033,7 +1060,7 @@ namespace VisualPinball.Engine.PinMAME
 						_switches["0" + @switch.Id] = @switch;
 					}
 				} else {
-					LogUnresolvedMappingId("switch", @switch.Id);
+					if (runtime) LogUnresolvedMappingId("switch", @switch.Id);
 				}
 			}
 
@@ -1046,10 +1073,10 @@ namespace VisualPinball.Engine.PinMAME
 				requestedCoils.Add(coil);
 
 				if (TryResolveCoilId(coil.Id, out var pinMameId)) {
-					_pinMameIdToCoilIdMapping[pinMameId] = coil.Id;
+					AddMappingTarget(_pinMameIdToCoilIdMapping, pinMameId, coil.Id);
 					_coilIdToPinMameIdMapping[coil.Id] = pinMameId;
 				} else {
-					LogUnresolvedMappingId("coil", coil.Id);
+					if (runtime) LogUnresolvedMappingId("coil", coil.Id);
 				}
 			}
 
@@ -1064,19 +1091,49 @@ namespace VisualPinball.Engine.PinMAME
 				requestedLamps.Add(lamp);
 
 				if (int.TryParse(lamp.Id, NumberStyles.Integer, CultureInfo.InvariantCulture, out var pinMameId)) {
-					if (lamp.Source == LampSource.GI) {
-						_pinMameIdToGiIdMapping[pinMameId] = lamp.Id;
-					} else {
-						_pinMameIdToLampIdMapping[pinMameId] = lamp.Id;
-					}
+					AddMappingTarget(lamp.Source == LampSource.GI ? _pinMameIdToGiIdMapping : _pinMameIdToLampIdMapping, pinMameId, lamp.Id);
 				}
 			}
+
+			CollapseNumericSpellings(_pinMameIdToCoilIdMapping);
+			CollapseNumericSpellings(_pinMameIdToLampIdMapping);
+			CollapseNumericSpellings(_pinMameIdToGiIdMapping);
 
 			_requestedSwitches = requestedSwitches.GroupBy(item => item.Id, StringComparer.Ordinal).Select(group => group.Last()).ToArray();
 			_requestedCoils = requestedCoils.GroupBy(item => item.Id, StringComparer.Ordinal).Select(group => group.Last()).ToArray();
 			_requestedLamps = requestedLamps.GroupBy(item => new { item.Id, item.Source, item.Channel }).Select(group => group.Last()).ToArray();
 			_runtimeCachesBuilt = runtime;
 		}
+
+		private static void AddMappingTarget(Dictionary<int, List<string>> map, int pinMameId, string mappingId)
+		{
+			if (!map.TryGetValue(pinMameId, out var mappingIds)) {
+				map[pinMameId] = mappingIds = new List<string>(1);
+			}
+			if (!mappingIds.Contains(mappingId)) {
+				mappingIds.Add(mappingId);
+			}
+		}
+
+		/// <summary>
+		/// Output events go out with each mapping's own ID, since the players key state and wires by
+		/// it. When one output has several numeric spellings ("1" and "01"), they're sent once as
+		/// PinMAME's number instead: the coil and lamp players register "01" under "1" too, so sending
+		/// both would actuate the "01" device twice.
+		/// </summary>
+		private static void CollapseNumericSpellings(Dictionary<int, List<string>> map)
+		{
+			foreach (var (pinMameId, mappingIds) in map) {
+				var numericCount = mappingIds.Count(IsNumericId);
+				if (numericCount < 2) {
+					continue;
+				}
+				mappingIds.RemoveAll(IsNumericId);
+				mappingIds.Insert(0, pinMameId.ToString(CultureInfo.InvariantCulture));
+			}
+		}
+
+		private static bool IsNumericId(string id) => int.TryParse(id, NumberStyles.Integer, CultureInfo.InvariantCulture, out _);
 
 		private bool TryResolveSwitchId(string id, out int pinMameId)
 		{
@@ -1096,7 +1153,7 @@ namespace VisualPinball.Engine.PinMAME
 				if (string.Equals(kind, "coil", StringComparison.Ordinal) && PinMameLegacyAliasResolver.IsFlipperCoilAlias(id)) {
 					Logger.Info($"[PinMAME] Legacy flipper coil mapping '{id}' has no direct PinMAME output for machine '{machineId}' and ROM '{romId}'; a table wire may drive it instead.");
 				} else {
-					Logger.Error($"[PinMAME] Cannot resolve {kind} mapping ID '{id}' for machine '{machineId}' and ROM '{romId}'. Repopulate this table's PinMAME hardware in the editor.");
+					Logger.Warn($"[PinMAME] {kind} '{id}' isn't a PinMAME {kind} of machine '{machineId}' (ROM '{romId}'), so PinMAME won't drive it.");
 				}
 			}
 		}
@@ -1456,7 +1513,7 @@ namespace VisualPinball.Engine.PinMAME
 			// and the shared snapshot stay boolean on/off
 			var intensity = _solenoidsModulated ? System.Math.Min(value, 255) / 255f : (isActive ? 1f : 0f);
 
-			if (_pinMameIdToCoilIdMapping.ContainsKey(id)) {
+			if (_pinMameIdToCoilIdMapping.TryGetValue(id, out var coilIds)) {
 				if (!_solenoidsEnabled) {
 					_solenoidsEnabled = TimestampUsec - _solenoidDelayStartTimestampUsec >= (long)(SolenoidDelay * 1000f);
 
@@ -1465,41 +1522,41 @@ namespace VisualPinball.Engine.PinMAME
 					}
 				}
 
-				var coil = _coils[_pinMameIdToCoilIdMapping[id]];
-
 				if (_solenoidsEnabled) {
 					lock (_outputStateLock) {
 						_sharedCoilStates[id] = isActive;
 					}
 
-					if (Logger.IsDebugEnabled) {
-						Logger.Debug($"[PinMAME] <= coil {coil.Id} : {value} | {coil.Description}");
-					}
-					if (ShouldDispatchSimulationCoil(coil.Id)) {
-						_simulationCoilDispatchQueue.Enqueue(new CoilEventArgs(coil.Id, isActive));
-						var simulationCoilQueueSize = Interlocked.Increment(ref _simulationCoilDispatchQueueSize);
-						if (!_simulationCoilQueueWarningIssued && simulationCoilQueueSize >= MaxSimulationCoilDispatchQueueSize / 2) {
-							_simulationCoilQueueWarningIssued = true;
-							Logger.Warn($"[PinMAME] Simulation coil dispatch backlog reached {simulationCoilQueueSize} items.");
+					foreach (var coilId in coilIds) {
+						if (Logger.IsDebugEnabled) {
+							Logger.Debug($"[PinMAME] <= coil {coilId} : {value} | {(_coils.TryGetValue(coilId, out var coil) ? coil.Description : string.Empty)}");
 						}
-						if (simulationCoilQueueSize > MaxSimulationCoilDispatchQueueSize) {
-							if (_simulationCoilDispatchQueue.TryDequeue(out _)) {
-								if (Interlocked.Decrement(ref _simulationCoilDispatchQueueSize) < 0) {
-									Interlocked.Exchange(ref _simulationCoilDispatchQueueSize, 0);
-								}
-								if (!_simulationCoilQueueDropWarningIssued) {
-									_simulationCoilQueueDropWarningIssued = true;
-									Logger.Warn($"[PinMAME] Simulation coil dispatch queue exceeded {MaxSimulationCoilDispatchQueueSize} items. Dropping oldest coil callbacks.");
+						if (ShouldDispatchSimulationCoil(coilId)) {
+							_simulationCoilDispatchQueue.Enqueue(new CoilEventArgs(coilId, isActive));
+							var simulationCoilQueueSize = Interlocked.Increment(ref _simulationCoilDispatchQueueSize);
+							if (!_simulationCoilQueueWarningIssued && simulationCoilQueueSize >= MaxSimulationCoilDispatchQueueSize / 2) {
+								_simulationCoilQueueWarningIssued = true;
+								Logger.Warn($"[PinMAME] Simulation coil dispatch backlog reached {simulationCoilQueueSize} items.");
+							}
+							if (simulationCoilQueueSize > MaxSimulationCoilDispatchQueueSize) {
+								if (_simulationCoilDispatchQueue.TryDequeue(out _)) {
+									if (Interlocked.Decrement(ref _simulationCoilDispatchQueueSize) < 0) {
+										Interlocked.Exchange(ref _simulationCoilDispatchQueueSize, 0);
+									}
+									if (!_simulationCoilQueueDropWarningIssued) {
+										_simulationCoilQueueDropWarningIssued = true;
+										Logger.Warn($"[PinMAME] Simulation coil dispatch queue exceeded {MaxSimulationCoilDispatchQueueSize} items. Dropping oldest coil callbacks.");
+									}
 								}
 							}
 						}
-					}
 
-					EnqueueMainThreadDispatch(() => OnCoilChanged?.Invoke(this, new CoilEventArgs(coil.Id, intensity)));
+						EnqueueMainThreadDispatch(() => OnCoilChanged?.Invoke(this, new CoilEventArgs(coilId, intensity)));
+					}
 				}
 				else {
 					if (Logger.IsDebugEnabled) {
-						Logger.Debug($"[PinMAME] <= solenoids disabled, coil {coil.Id} : {value} | {coil.Description}");
+						Logger.Debug($"[PinMAME] <= solenoids disabled, coil {id} : {value}");
 					}
 				}
 			}

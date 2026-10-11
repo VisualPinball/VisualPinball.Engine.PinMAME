@@ -81,11 +81,16 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			string machineId, string romId, LoadedDefinition loaded)
 		{
 			var definition = loaded.Definition;
-			gle.SetMachineSelection(machineId, !string.IsNullOrWhiteSpace(romId) ? romId : definition.Roms.FirstOrDefault()?.Id);
+			Undo.RecordObject(gle, "Populate PinMAME hardware");
+			Undo.RecordObject(tableComponent, "Populate PinMAME hardware");
+			gle.SetMachineSelection(machineId, !string.IsNullOrWhiteSpace(romId) ? romId : definition.DefaultRomId);
 			gle.SetAvailableHardware(definition.Switches, definition.Coils, definition.Lamps, definition.Wires);
 			tableComponent.RepopulateHardware(gle);
+			gle.MarkMappingsPopulated();
 			EditorUtility.SetDirty(gle);
 			EditorUtility.SetDirty(tableComponent);
+			PrefabUtility.RecordPrefabInstancePropertyModifications(gle);
+			PrefabUtility.RecordPrefabInstancePropertyModifications(tableComponent);
 
 			if (!string.IsNullOrWhiteSpace(loaded.Warning)) Debug.LogWarning($"[PinMAME] {loaded.Warning}", gle);
 			foreach (var diagnostic in definition.Diagnostics) Debug.LogWarning($"[PinMAME] {diagnostic}", gle);

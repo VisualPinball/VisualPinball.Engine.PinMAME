@@ -21,6 +21,10 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		public string CoverageStatus { get; }
 		public int CompletionScore { get; }
 		public PinMameRomDefinition[] Roms { get; }
+		/// <summary>
+		/// The ROM to select when none is given, usually the parent ROM. Null if there are no ROMs.
+		/// </summary>
+		public string DefaultRomId { get; }
 		public GamelogicEngineSwitch[] Switches { get; }
 		public GamelogicEngineCoil[] Coils { get; }
 		public GamelogicEngineLamp[] Lamps { get; }
@@ -31,7 +35,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		public string[] Diagnostics { get; }
 
 		public PinMameGameDefinition(string machineId, string name, string coverageStatus, int completionScore,
-			PinMameRomDefinition[] roms, GamelogicEngineSwitch[] switches, GamelogicEngineCoil[] coils,
+			PinMameRomDefinition[] roms, string defaultRomId, GamelogicEngineSwitch[] switches, GamelogicEngineCoil[] coils,
 			GamelogicEngineLamp[] lamps, GamelogicEngineWire[] wires, PinMameSpatialPlacement[] spatialSwitches,
 			PinMameSpatialPlacement[] spatialCoils, PinMameSpatialPlacement[] spatialLamps, string[] diagnostics)
 		{
@@ -40,6 +44,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			CoverageStatus = coverageStatus;
 			CompletionScore = completionScore;
 			Roms = roms ?? Array.Empty<PinMameRomDefinition>();
+			DefaultRomId = defaultRomId;
 			Switches = switches ?? Array.Empty<GamelogicEngineSwitch>();
 			Coils = coils ?? Array.Empty<GamelogicEngineCoil>();
 			Lamps = lamps ?? Array.Empty<GamelogicEngineLamp>();

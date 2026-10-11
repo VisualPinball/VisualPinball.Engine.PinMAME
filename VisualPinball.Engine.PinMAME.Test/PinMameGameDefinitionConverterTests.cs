@@ -38,7 +38,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 					{ 'id': 'switch.slam-tilt-generic', 'label': 'Slam Tilt', 'kind': 'switch', 'binding': { 'group': 'pinmame.input.switch', 'device': 20 }, 'roles': ['cabinet.tilt'] },
 					{ 'id': 'switch.ball-roll-tilt', 'label': 'Ball Roll Tilt', 'kind': 'switch', 'binding': { 'group': 'pinmame.input.switch', 'device': 21 }, 'roles': ['cabinet.tilt'] },
 					{ 'id': 'switch.flipper', 'label': 'Left Main Flipper Button', 'kind': 'switch', 'binding': { 'group': 'pinmame.input.switch', 'device': 13 }, 'roles': ['cabinet.flipper'] },
-					{ 'id': 'switch.flipper-virtual', 'label': 'Virtual Left Flipper Compatibility State', 'kind': 'virtual', 'binding': { 'group': 'pinmame.input.switch', 'device': 22 }, 'roles': ['flipper.lower.left.button'] },
+					{ 'id': 'switch.flipper-virtual', 'label': 'Virtual Left Flipper Compatibility State', 'kind': 'virtual', 'binding': { 'group': 'pinmame.input.switch', 'device': 22 }, 'roles': ['internal.compatibility'] },
 					{ 'id': 'switch.flipper-right', 'label': 'Right Flipper Button', 'kind': 'switch', 'binding': { 'group': 'pinmame.input.switch', 'device': 16 }, 'roles': ['flipper.lower.right.button'] },
 					{ 'id': 'switch.flipper-upper', 'label': 'Upper Left Flipper Button', 'kind': 'switch', 'binding': { 'group': 'pinmame.input.switch', 'device': 15 }, 'roles': ['flipper.upper.left'] },
 					{ 'id': 'switch.flipper-mini', 'label': 'Lower mini-playfield left flipper button', 'kind': 'switch', 'binding': { 'group': 'pinmame.input.switch', 'device': 88 }, 'roles': ['cabinet.flipper'] },
@@ -197,6 +197,121 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			Assert.That(definition.Switches.Single(@switch => @switch.Id == "5").InputActionHint, Is.EqualTo(InputConstants.ActionInsertCoin2));
 			Assert.That(definition.Switches.Single(@switch => @switch.Id == "6").InputActionHint, Is.EqualTo(InputConstants.ActionInsertCoin1));
 			Assert.That(definition.Switches.Single(@switch => @switch.Id == "7").InputActionHint, Is.Empty);
+		}
+
+		[Test]
+		public void UsesPinMameNumberingForGenericFlipperSwitches()
+		{
+			// labels and roles of 111-114 swapped, like the published Terminator 2 definition
+			const string json = @"{
+				'format': 'pinmame-machine-definition',
+				'schema_version': 2,
+				'machine': { 'id': 'test.flipper-numbering.2026', 'name': 'Test Flipper Numbering' },
+				'coverage': { 'status': 'partial', 'completion_score': 50 },
+				'inputs': [
+					{ 'id': 'switch.matrix-11', 'label': 'Right Flipper', 'binding': { 'group': 'pinmame.input.switch', 'device': 11 }, 'roles': ['flipper.lower.right.switch'] },
+					{ 'id': 'switch.generic-111', 'label': 'Lower Right Flipper Button', 'availability': 'optional', 'binding': { 'group': 'pinmame.input.switch', 'device': 111 }, 'roles': ['flipper.lower.right.button'] },
+					{ 'id': 'switch.generic-112', 'label': 'Lower Right Flipper EOS', 'availability': 'optional', 'normally_closed': true, 'binding': { 'group': 'pinmame.input.switch', 'device': 112 }, 'roles': ['internal.flipper.lower.right.eos'] },
+					{ 'id': 'switch.generic-113', 'label': 'Lower Left Flipper Button', 'availability': 'optional', 'binding': { 'group': 'pinmame.input.switch', 'device': 113 }, 'roles': ['flipper.lower.left.button'] },
+					{ 'id': 'switch.generic-114', 'label': 'Lower Left Flipper EOS', 'availability': 'optional', 'normally_closed': true, 'binding': { 'group': 'pinmame.input.switch', 'device': 114 }, 'roles': ['internal.flipper.lower.left.eos'] }
+				],
+				'outputs': [
+					{ 'id': 'device.flipper-lower-right', 'label': 'Lower right flipper', 'kind': 'coil', 'binding': { 'group': 'pinmame.output.solenoid', 'device': 46 } },
+					{ 'id': 'device.flipper-lower-left', 'label': 'Lower left flipper', 'kind': 'coil', 'binding': { 'group': 'pinmame.output.solenoid', 'device': 48 } }
+				]
+			}";
+
+			var definition = PinMameGameDefinitionConverter.Convert(json);
+
+			Assert.That(definition.Switches.Single(@switch => @switch.Id == "112").InputActionHint, Is.EqualTo(InputConstants.ActionRightFlipper));
+			Assert.That(definition.Switches.Single(@switch => @switch.Id == "114").InputActionHint, Is.EqualTo(InputConstants.ActionLeftFlipper));
+			Assert.That(definition.Switches.Single(@switch => @switch.Id == "111").InputActionHint, Is.Empty);
+			Assert.That(definition.Switches.Single(@switch => @switch.Id == "113").InputActionHint, Is.Empty);
+			Assert.That(definition.Switches.Single(@switch => @switch.Id == "11").InputActionHint, Is.Empty);
+			Assert.That(definition.Switches.Single(@switch => @switch.Id == "112").NormallyClosed, Is.False);
+			Assert.That(definition.Wires.Select(wire => $"{wire.SourceId}->{wire.DestinationId}"), Is.EquivalentTo(new[] { "112->46", "114->48" }));
+			Assert.That(definition.Diagnostics.Count(diagnostic => diagnostic.Contains("PinMAME's numbering")), Is.EqualTo(4));
+		}
+
+		[Test]
+		public void PrefersGenericFlipperButtonsOverMatrixCopies()
+		{
+			// pre-Fliptronic WPC lists the matrix flipper switches as buttons too, like the published Bride of Pinbot
+			const string json = @"{
+				'format': 'pinmame-machine-definition',
+				'schema_version': 2,
+				'machine': { 'id': 'test.matrix-flipper-copies.2026', 'name': 'Test Matrix Flipper Copies' },
+				'coverage': { 'status': 'author_ready', 'completion_score': 100 },
+				'inputs': [
+					{ 'id': 'switch.matrix-11', 'label': 'Right Flipper', 'binding': { 'group': 'pinmame.input.switch', 'device': 11 }, 'roles': ['flipper.lower.right.button'] },
+					{ 'id': 'switch.matrix-12', 'label': 'Left Flipper', 'binding': { 'group': 'pinmame.input.switch', 'device': 12 }, 'roles': ['flipper.lower.left.button'] },
+					{ 'id': 'switch.generic-112', 'label': 'Generic Right Flipper Button State', 'binding': { 'group': 'pinmame.input.switch', 'device': 112 }, 'roles': ['flipper.lower.right.button'] },
+					{ 'id': 'switch.generic-114', 'label': 'Generic Left Flipper Button State', 'binding': { 'group': 'pinmame.input.switch', 'device': 114 }, 'roles': ['flipper.lower.left.button'] }
+				],
+				'outputs': [
+					{ 'id': 'device.flipper-lower-right', 'label': 'Lower right flipper', 'kind': 'coil', 'binding': { 'group': 'pinmame.output.solenoid', 'device': 46 } },
+					{ 'id': 'device.flipper-lower-left', 'label': 'Lower left flipper', 'kind': 'coil', 'binding': { 'group': 'pinmame.output.solenoid', 'device': 48 } }
+				]
+			}";
+
+			var definition = PinMameGameDefinitionConverter.Convert(json);
+
+			Assert.That(definition.Switches.Single(@switch => @switch.Id == "112").InputActionHint, Is.EqualTo(InputConstants.ActionRightFlipper));
+			Assert.That(definition.Switches.Single(@switch => @switch.Id == "114").InputActionHint, Is.EqualTo(InputConstants.ActionLeftFlipper));
+			Assert.That(definition.Switches.Single(@switch => @switch.Id == "11").InputActionHint, Is.Empty);
+			Assert.That(definition.Switches.Single(@switch => @switch.Id == "12").InputActionHint, Is.Empty);
+			Assert.That(definition.Wires.Select(wire => $"{wire.SourceId}->{wire.DestinationId}"), Is.EquivalentTo(new[] { "112->46", "114->48" }));
+			Assert.That(definition.Diagnostics, Has.None.Contains("not imported"));
+		}
+
+		[Test]
+		public void PassesNormallyClosedOnlyForTheCoinDoor()
+		{
+			const string json = @"{
+				'format': 'pinmame-machine-definition',
+				'schema_version': 2,
+				'machine': { 'id': 'test.normally-closed.2026', 'name': 'Test Normally Closed' },
+				'coverage': { 'status': 'partial', 'completion_score': 50 },
+				'inputs': [
+					{ 'id': 'switch.coin-door', 'label': 'Coin Door Closed', 'normally_closed': true, 'binding': { 'group': 'pinmame.input.switch', 'device': 22 }, 'roles': ['cabinet.coin-door'] },
+					{ 'id': 'switch.trough-eject', 'label': 'Trough Eject', 'normally_closed': true, 'binding': { 'group': 'pinmame.input.switch', 'device': 31 } },
+					{ 'id': 'switch.slam-tilt', 'label': 'Slam Tilt', 'normally_closed': true, 'binding': { 'group': 'pinmame.input.switch', 'device': 21 }, 'roles': ['cabinet.slam-tilt'] }
+				]
+			}";
+
+			var definition = PinMameGameDefinitionConverter.Convert(json);
+
+			Assert.That(definition.Switches.Single(@switch => @switch.Id == "22").NormallyClosed, Is.True);
+			Assert.That(definition.Switches.Single(@switch => @switch.Id == "31").NormallyClosed, Is.False);
+			Assert.That(definition.Switches.Single(@switch => @switch.Id == "21").NormallyClosed, Is.False);
+		}
+
+		[Test]
+		public void KeepsVirtualHostDevicesAndDropsVirtualMirrors()
+		{
+			const string json = @"{
+				'format': 'pinmame-machine-definition',
+				'schema_version': 2,
+				'machine': { 'id': 'test.virtual.2026', 'name': 'Test Virtual' },
+				'coverage': { 'status': 'partial', 'completion_score': 50 },
+				'inputs': [
+					{ 'id': 'switch.flipper-right', 'label': 'Right Flipper Button', 'kind': 'virtual', 'availability': 'used', 'binding': { 'group': 'pinmame.input.switch', 'device': 82 }, 'roles': ['flipper.lower.right.button'] },
+					{ 'id': 'switch.host-left', 'label': 'Left Flipper Button Host Input', 'kind': 'virtual', 'availability': 'used', 'binding': { 'group': 'pinmame.input.switch', 'device': 84 } },
+					{ 'id': 'switch.compat', 'label': 'Flipper compatibility state', 'kind': 'virtual', 'availability': 'used', 'binding': { 'group': 'pinmame.input.switch', 'device': 85 }, 'roles': ['internal.compatibility'] }
+				],
+				'outputs': [
+					{ 'id': 'device.synthetic-flipper-right', 'label': 'Synthetic Lower Right Flipper', 'kind': 'virtual', 'availability': 'used', 'binding': { 'group': 'pinmame.output.solenoid', 'device': 46 }, 'roles': ['internal.synthetic-flipper', 'flipper.lower.right'] },
+					{ 'id': 'device.mirror', 'label': 'LED Transport Mirror Of 37', 'kind': 'virtual', 'availability': 'used', 'binding': { 'group': 'pinmame.output.solenoid', 'device': 41 } },
+					{ 'id': 'device.state', 'label': 'WPC State Channel 29', 'kind': 'virtual', 'availability': 'used', 'binding': { 'group': 'pinmame.output.solenoid', 'device': 29 }, 'roles': ['internal.wpc-state'] }
+				]
+			}";
+
+			var definition = PinMameGameDefinitionConverter.Convert(json);
+
+			Assert.That(definition.Switches.Select(@switch => @switch.Id), Is.EquivalentTo(new[] { "82", "84" }));
+			Assert.That(definition.Switches.Single(@switch => @switch.Id == "82").InputActionHint, Is.EqualTo(InputConstants.ActionRightFlipper));
+			Assert.That(definition.Coils.Select(coil => coil.Id), Is.EquivalentTo(new[] { "46" }));
+			Assert.That(definition.Wires.Select(wire => $"{wire.SourceId}->{wire.DestinationId}"), Is.EquivalentTo(new[] { "82->46" }));
 		}
 
 		[Test]
