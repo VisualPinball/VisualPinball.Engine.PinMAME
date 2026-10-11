@@ -139,18 +139,22 @@ namespace VisualPinball.Engine.PinMAME
 					Logger.Error($"Switch \"{mark.Name}\" for mech {_cachedName} is not mapped in the switch manager, ignoring.");
 					continue;
 				}
+				if (!switchIdToPinMameIdMappings.TryGetValue(switchMapping.Id, out var pinMameSwitchId)) {
+					Logger.Error($"Switch \"{switchMapping.Id}\" for mech {_cachedName} is not a PinMAME switch, ignoring.");
+					continue;
+				}
 
 				switch (mark.Type) {
 					case MechMarkSwitchType.EnableBetween:
-						mechConfig.AddSwitch(new PinMameMechSwitchConfig(switchIdToPinMameIdMappings[switchMapping.Id], mark.StepBeginning, mark.StepEnd));
+						mechConfig.AddSwitch(new PinMameMechSwitchConfig(pinMameSwitchId, mark.StepBeginning, mark.StepEnd));
 						break;
 
 					case MechMarkSwitchType.AlwaysPulse:
-						mechConfig.AddSwitch(new PinMameMechSwitchConfig(switchIdToPinMameIdMappings[switchMapping.Id], -mark.PulseFreq, mark.PulseDuration));
+						mechConfig.AddSwitch(new PinMameMechSwitchConfig(pinMameSwitchId, -mark.PulseFreq, mark.PulseDuration));
 						break;
 
 					case MechMarkSwitchType.PulseBetween:
-						mechConfig.AddSwitch(new PinMameMechSwitchConfig(switchIdToPinMameIdMappings[switchMapping.Id], mark.StepBeginning, mark.StepEnd, mark.PulseFreq));
+						mechConfig.AddSwitch(new PinMameMechSwitchConfig(pinMameSwitchId, mark.StepBeginning, mark.StepEnd, mark.PulseFreq));
 						break;
 
 					default:

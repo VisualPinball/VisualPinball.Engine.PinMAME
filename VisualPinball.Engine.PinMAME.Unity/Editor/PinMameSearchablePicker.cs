@@ -75,7 +75,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 
 		public override void OnGUI(Rect rect)
 		{
-			var noneMatches = _allowNone && MatchesQuery(NoneSearchText);
+			var noneMatches = NoneMatches();
 			HandleKeyboard(noneMatches);
 
 			GUILayout.Space(6f);
@@ -85,8 +85,9 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				_query = nextQuery;
 				FilterItems();
 				_scrollPosition = Vector2.zero;
-				_highlightedRow = 0;
-				noneMatches = _allowNone && MatchesQuery(NoneSearchText);
+				noneMatches = NoneMatches();
+				// a typed query highlights the first match, never "None"
+				_highlightedRow = noneMatches && _query.Trim().Length > 0 && _filteredIndices.Count > 0 ? 1 : 0;
 			}
 
 			var resultCount = _filteredIndices.Count + (noneMatches ? 1 : 0);
@@ -156,6 +157,14 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			_filteredIndices = Enumerable.Range(0, _items.Count)
 				.Where(index => MatchesQuery(_searchText(_items[index])))
 				.ToList();
+		}
+
+		// Only offer "None" for an empty query or one that starts spelling it out, so a search such as
+		// "elect" (Electra) never puts it on top, where Enter would clear the selection.
+		private bool NoneMatches()
+		{
+			var query = _query.Trim();
+			return _allowNone && (query.Length == 0 || NoneSearchText.Split(' ').Any(word => word.StartsWith(query, StringComparison.OrdinalIgnoreCase)));
 		}
 
 		private bool MatchesQuery(string value)

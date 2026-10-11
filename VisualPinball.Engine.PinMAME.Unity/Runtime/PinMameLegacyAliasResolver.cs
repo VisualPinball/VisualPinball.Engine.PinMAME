@@ -119,11 +119,11 @@ namespace VisualPinball.Engine.PinMAME
 		{
 			if (IsAny(machineId, legacyGameId, "bally.attack-from-mars.1995", "bally.creature-from-the-black-lagoon.1992", "williams.medieval-madness.1997", "williams.terminator-2-judgment-day.1991", "afm", "cftbl", "mm", "t2")
 			    || StartsWithAny(romId, "afm_", "cftbl_", "mm_", "t2_")) return LegacyPlatform.Wpc;
-			if (IsAny(machineId, legacyGameId, "bally.centaur.1981", "bally.flash-gordon.1981", "centaur", "fg")
+			if (IsAny(machineId, legacyGameId, "bally.centaur.1981", "bally.flash-gordon.1980", "centaur", "fg")
 			    || StartsWithAny(romId, "centaur", "flashg")) return LegacyPlatform.Bally;
 			if (IsAny(machineId, legacyGameId, "premier.rock.1985", "premier.rock-encore.1986", "rock", "rock_enc")
 			    || StartsWithAny(romId, "rock", "clash")) return LegacyPlatform.System80;
-			if (IsAny(machineId, legacyGameId, "stern.star-trek.2013", "stern.tron-legacy.2011", "stern.the-walking-dead.2014", "star-trek-stern", "trn", "twd")
+			if (IsAny(machineId, legacyGameId, "stern.star-trek-pro.2013", "stern.star-trek-premium-limited-edition.2013", "stern.tron-legacy-pro.2011", "stern.tron-legacy-limited-edition.2011", "stern.the-walking-dead-pro.2014", "stern.the-walking-dead-premium-limited-edition.2014", "star-trek-stern", "trn", "twd")
 			    || StartsWithAny(romId, "st_", "trn_", "twd_")) return LegacyPlatform.Sam;
 			return LegacyPlatform.Unknown;
 		}

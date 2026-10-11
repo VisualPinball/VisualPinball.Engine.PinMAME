@@ -223,11 +223,32 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				}
 			}
 
-			var targetItems = indexedPlacements
+			var representedItems = indexedPlacements
 				.Where(item => !anchoredTargetKeys.Contains(item.Key))
 				.Where(item => mappings.Any(mapping => isInPartition(mapping) && mappingMatchesPlacement(mapping, item.Placement)))
 				.ToArray();
-			var unrepresented = indexedPlacements.Length - anchoredTargetKeys.Count - targetItems.Length;
+			var unrepresented = indexedPlacements.Length - anchoredTargetKeys.Count - representedItems.Length;
+
+			// Hardware that already has a device for each of its placements keeps its links, even when
+			// they couldn't serve as anchors (off the playfield, or far from the curated position).
+			// Otherwise a second device would be linked to it.
+			// one hardware number can be several outputs (e.g. matrix lamp 17 and solenoid flasher 17)
+			static string HardwareKey(PinMameSpatialPlacement placement) =>
+				$"{placement.HardwareId}|{placement.Source}|{placement.Channel}|{placement.IsCoil}";
+			var placementCounts = indexedPlacements
+				.GroupBy(item => HardwareKey(item.Placement), StringComparer.Ordinal)
+				.ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+			var openPlacements = new Dictionary<string, int>(StringComparer.Ordinal);
+			foreach (var item in representedItems) {
+				var hardwareId = HardwareKey(item.Placement);
+				if (openPlacements.ContainsKey(hardwareId)) continue;
+				var linkedCount = mappings.Count(mapping => isInPartition(mapping) && mappingMatchesPlacement(mapping, item.Placement) && IsAlive(getDevice(mapping)));
+				openPlacements[hardwareId] = System.Math.Max(0, placementCounts[hardwareId] - linkedCount);
+			}
+			var targetItems = representedItems
+				.Where(item => openPlacements[HardwareKey(item.Placement)] > 0)
+				.ToArray();
+			var keptCount = representedItems.Length - targetItems.Length;
 			var candidateSlots = allSlots
 				.Where(slot => !usedSlotKeys.Contains(slot.Match.Key) && mayAssign(slot.Device))
 				.ToArray();
@@ -237,11 +258,16 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				anchors);
 
 			var assigned = 0;
+			var keptInMatch = 0;
 			var rejectionReasons = new List<string>();
 			foreach (var decision in result.Decisions) {
 				var target = targetItems.First(item => item.Key == decision.Target.Key);
 				if (!decision.IsAccepted) {
 					rejectionReasons.Add($"{target.Placement.Label}: {decision.Reason}");
+					continue;
+				}
+				if (openPlacements[HardwareKey(target.Placement)] <= 0) {
+					keptInMatch++;
 					continue;
 				}
 				var slot = candidateSlots.First(item => item.Match.Key == decision.Candidate.Key);
@@ -256,11 +282,13 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				}
 				beginMutation();
 				setDevice(mapping, slot.Device, slot.DeviceItem);
+				openPlacements[HardwareKey(target.Placement)]--;
 				assigned++;
 			}
 
-			return new PinMameSpatialAssignmentResult(placements.Count, assigned, anchors.Count,
-				result.Decisions.Length - assigned, unrepresented, rejectionReasons.Take(3).ToArray(), null);
+			// kept links count as preserved assignments, like anchors
+			return new PinMameSpatialAssignmentResult(placements.Count, assigned, anchors.Count + keptCount + keptInMatch,
+				result.Decisions.Length - assigned - keptInMatch, unrepresented, rejectionReasons.Take(3).ToArray(), null);
 		}
 
 		private static SceneSlot<TDevice> CreateSlot<TDevice>(TDevice device, string deviceItem, PlayfieldComponent playfield)
