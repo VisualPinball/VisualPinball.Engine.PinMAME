@@ -763,6 +763,8 @@ namespace VisualPinball.Engine.PinMAME
 				#endif
 
 				File.WriteAllBytes(Path.Combine(vpmPath, "roms", $"{romId}.zip"), data);
+			#else
+				vpmPath = PinMameFolders.DataFolder;
 			#endif
 
 			await PinMameStartStopGate.WaitAsync(ct);
@@ -807,7 +809,6 @@ namespace VisualPinball.Engine.PinMAME
 				}
 				Logger.Debug($"[PinMAME] Pre-start wait: {swStop.ElapsedMilliseconds}ms (WasRunning={wasRunning}, WasStopping={wasStopping}, IsRunning={PinMame.PinMame.IsRunning}, RunState={PinMame.PinMame.RunState}, StopInProgress={PinMame.PinMame.IsStopInProgress})");
 
-				// ReSharper disable once ExpressionIsAlwaysNull
 				_pinMame = PinMame.PinMame.Instance(PinMameAudioFormat.AudioFormatFloat, AudioSettings.outputSampleRate, vpmPath);
 				// Re-apply config each init (important when Domain Reload is disabled).
 				_pinMame.ApplyConfig();
@@ -843,6 +844,12 @@ namespace VisualPinball.Engine.PinMAME
 						Logger.Warn("[PinMAME] Failed to stop running game within timeout; attempting StartGame anyway.");
 					}
 				}
+
+				#if !((UNITY_IOS || UNITY_ANDROID) && !UNITY_EDITOR)
+				if (!PrepareDesktopFolders()) {
+					return;
+				}
+				#endif
 
 				_pinMame.SetHandleKeyboard(false);
 				_pinMame.SetHandleMechanics(DisableMechs ? 0 : 0xFF);
@@ -891,6 +898,32 @@ namespace VisualPinball.Engine.PinMAME
 			} finally {
 				PinMameStartStopGate.Release();
 			}
+		}
+
+		/// <summary>
+		/// Points PinMAME at the ROM folder and brings over Visual PinMAME's state for the game.
+		/// </summary>
+		/// <returns>False if the ROM isn't in the ROM folder.</returns>
+		private bool PrepareDesktopFolders()
+		{
+			try {
+				PinMameFolders.ApplyRomFolder(_pinMame);
+			} catch (InvalidOperationException e) {
+				Logger.Error(e, "[PinMAME] Could not set the ROM folder.");
+			}
+			PinMameFolders.ImportFromVpm(romId);
+
+			bool romFound;
+			try {
+				romFound = _pinMame.GetGame(romId).RomFound;
+			} catch (InvalidOperationException) {
+				// unknown game: StartGame reports it
+				return true;
+			}
+			if (!romFound) {
+				Logger.Error($"[PinMAME] ROM \"{romId}\" not found in {_pinMame.RomPath}. Set the ROM folder to where your ROMs are.");
+			}
+			return romFound;
 		}
 
 		public void ToggleSpeed()
