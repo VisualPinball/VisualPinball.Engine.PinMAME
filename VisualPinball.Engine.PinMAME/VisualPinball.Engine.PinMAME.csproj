@@ -5,8 +5,8 @@
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <LangVersion>9.0</LangVersion>
-    <PinMameVersion>1.0.4</PinMameVersion>
-    <PinMameNativeVersion>3.7.0-beta1</PinMameNativeVersion>
+    <PinMameVersion>1.1.0</PinMameVersion>
+    <PinMameNativeVersion>3.7.0-beta2</PinMameNativeVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(RuntimeIdentifier)' == ''">
     <RuntimeIdentifier Condition="$([MSBuild]::IsOSPlatform('Windows')) And '$(PlatformTarget)' != 'x86'">win-x64</RuntimeIdentifier>
