@@ -69,18 +69,30 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			_solenoidDelayProperty = serializedObject.FindProperty(nameof(_gle.SolenoidDelay));
 			_disableMechsProperty = serializedObject.FindProperty(nameof(_gle.DisableMechs));
 			_disableAudioProperty = serializedObject.FindProperty(nameof(_gle.DisableAudio));
+			Undo.undoRedoPerformed += OnUndoRedo;
 			LoadCatalog(false);
 		}
 
 		private void OnDisable()
 		{
+			Undo.undoRedoPerformed -= OnUndoRedo;
 			_loadCancellation?.Cancel();
 			_loadCancellation?.Dispose();
 			_loadCancellation = null;
 			_isLoading = false;
 		}
 
-		private async void LoadCatalog(bool forceRefresh)
+		// An undone or redone machine or ROM change only restores the component; reload what the
+		// inspector derived from it, so it never works with the other machine's definition.
+		private void OnUndoRedo()
+		{
+			if (!_gle) return;
+			// no candidate fill here, or undoing a fill would be refilled right away
+			LoadCatalog(false, false);
+			Repaint();
+		}
+
+		private async void LoadCatalog(bool forceRefresh, bool fillCandidates = true)
 		{
 			var load = ResetCancellation();
 			var cancellationToken = load.Token;
@@ -106,7 +118,16 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				}
 				_selectedGameIndex = selectedIndex + 1;
 				if (_selectedGameIndex > 0) {
-					await SelectMachine(_selectedGameIndex, _gle.romId, forceRefresh, false, load);
+					await SelectMachine(_selectedGameIndex, _gle.romId, forceRefresh, false, load, fillCandidates);
+				} else {
+					// nothing selected (e.g. after undoing a selection): drop what was derived from before
+					_selectedMachine = null;
+					_loadedMachineId = null;
+					_definition = null;
+					_definitionJson = null;
+					_roms = Array.Empty<PinMameRomDefinition>();
+					_selectedRomIndex = 0;
+					_spatialAssignmentMessage = null;
 				}
 			} catch (OperationCanceledException) {
 				return;
@@ -149,7 +170,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		}
 
 		private async System.Threading.Tasks.Task SelectMachine(int selectedGameIndex, string preferredRomId, bool forceRefresh,
-			bool applySelection, CancellationTokenSource load)
+			bool applySelection, CancellationTokenSource load, bool fillCandidates = false)
 		{
 			EnsureCurrent(load);
 			var cancellationToken = load.Token;
@@ -202,6 +223,13 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				EditorUtility.SetDirty(_gle);
 			} else if (!string.IsNullOrWhiteSpace(preferredRomId) && selectedRomId == null) {
 				_loadWarning = CombineWarnings(_loadWarning, $"The saved ROM '{preferredRomId}' is not listed for {selectedMachine.Name}; the saved component value was left unchanged.");
+			} else if (fillCandidates && selectedRomId != null && (forceRefresh || !_gle.HasAvailableHardware)) {
+				// The component's own machine and ROM: give the managers' dropdowns this definition's
+				// hardware when the component has none yet (older or unpacked tables) or on Refresh.
+				// The selection and the table's mappings stay as they are.
+				if (forceRefresh) Undo.RecordObject(_gle, "Refresh PinMAME hardware candidates");
+				_gle.SetAvailableHardware(_definition.Switches, _definition.Coils, _definition.Lamps, _definition.Wires);
+				EditorUtility.SetDirty(_gle);
 			}
 		}
 
@@ -366,7 +394,8 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			EditorGUILayout.BeginVertical(EditorStyles.helpBox);
 			EditorGUILayout.LabelField("Spatial Assignment", EditorStyles.boldLabel);
 			EditorGUILayout.LabelField("Fills empty playfield mappings. Existing links are preserved as layout anchors; uncertain matches stay empty.", EditorStyles.wordWrappedMiniLabel);
-			var mappingsMatchMachine = _gle.MappingsMatchMachine;
+			var mappingsMatchMachine = _gle.MappingsMatchMachine && _definition != null
+				&& (string.IsNullOrEmpty(_gle.machineId) || string.Equals(_definition.MachineId, _gle.machineId, StringComparison.Ordinal));
 			if (!mappingsMatchMachine) {
 				EditorGUILayout.HelpBox("The table's mappings were made for another machine. Populate the hardware of this machine first.", MessageType.Info);
 			}
