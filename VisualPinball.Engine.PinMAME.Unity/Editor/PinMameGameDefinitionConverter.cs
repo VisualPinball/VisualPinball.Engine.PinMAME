@@ -213,9 +213,16 @@ namespace VisualPinball.Engine.PinMAME.Editor
 					diagnostics.Add($"PinMAME switch {address} ({label}) represents multiple flipper buttons; its input action was left for manual mapping.");
 				}
 				var constantActive = input.Value<bool?>("constant_active");
+				var normallyClosed = IsNormallyClosedForHost(input);
+				if (normallyClosed && string.IsNullOrEmpty(inputAction) && !constantActive.HasValue) {
+					// nothing operates it (e.g. a playfield glass or memory-protect switch), so it keeps its
+					// rest state; a normally closed mapping without a source would never be sent
+					constantActive = true;
+					normallyClosed = false;
+				}
 				var @switch = new GamelogicEngineSwitch(address) {
 					Description = label,
-					NormallyClosed = IsNormallyClosedForHost(input),
+					NormallyClosed = normallyClosed,
 					IsPulseSwitch = input.Value<bool?>("pulse") ?? false,
 					InputActionHint = inputAction,
 					InputMapHint = string.IsNullOrEmpty(inputAction) ? string.Empty : InputConstants.MapCabinetSwitches,
@@ -464,10 +471,17 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		/// <summary>
 		/// The definition's <c>normally_closed</c> is the physical contact (e.g. optos). PinMAME
 		/// already inverts those itself (per-game <c>invSw</c>), so passing it on would invert them
-		/// twice. Only the coin door switch is closed at rest from the host's point of view.
+		/// twice. What the host establishes at rest is <c>initial_active</c>; for a cabinet input
+		/// (coin door, memory protect, playfield glass) that's the state it keeps until operated.
+		/// Elsewhere it's only a startup state, e.g. balls resting in the trough.
 		/// </summary>
 		private static bool IsNormallyClosedForHost(JObject input)
 		{
+			var roles = (input["roles"] as JArray)?.Values<string>() ?? Enumerable.Empty<string>();
+			if (input.Value<bool?>("initial_active") == true && roles.Any(role => role != null && role.StartsWith("cabinet.", StringComparison.Ordinal))) {
+				return true;
+			}
+			// definitions that don't declare initial_active yet
 			return HasRole(input, "cabinet.coin-door") && (input.Value<bool?>("normally_closed") ?? false);
 		}
 

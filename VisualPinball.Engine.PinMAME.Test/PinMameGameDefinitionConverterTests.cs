@@ -265,6 +265,81 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		}
 
 		[Test]
+		public void DefaultsToTheParentRomListedAfterItsClones()
+		{
+			const string json = @"{
+				'format': 'pinmame-machine-definition',
+				'schema_version': 2,
+				'machine': { 'id': 'test.parent-rom.2026', 'name': 'Test Parent ROM' },
+				'coverage': { 'status': 'partial', 'completion_score': 50 },
+				'drivers': [
+					{ 'id': 'tst_d2', 'clone_of': 'tst_l8' },
+					{ 'id': 'tst_l8', 'overrides': [
+						{ 'target': 'switch.start', 'binding': { 'group': 'pinmame.input.switch', 'device': 14 } }
+					] },
+					{ 'id': 'tst_l6', 'clone_of': 'tst_l8', 'overrides': [
+						{ 'target': 'switch.start', 'binding': { 'group': 'pinmame.input.switch', 'device': 15 } }
+					] }
+				],
+				'inputs': [
+					{ 'id': 'switch.start', 'label': 'Start Button', 'binding': { 'group': 'pinmame.input.switch', 'device': 13 } }
+				]
+			}";
+
+			var definition = PinMameGameDefinitionConverter.Convert(json);
+
+			Assert.That(definition.Roms.First().Id, Is.EqualTo("tst_d2"), "the list itself stays alphabetical");
+			Assert.That(definition.DefaultRomId, Is.EqualTo("tst_l8"));
+			// without a ROM, the parent's driver overrides apply
+			Assert.That(definition.Switches.Select(@switch => @switch.Id), Is.EqualTo(new[] { "14" }));
+		}
+
+		[Test]
+		public void DefaultsToTheMostReferencedParentWhenEveryDriverIsAClone()
+		{
+			const string json = @"{
+				'format': 'pinmame-machine-definition',
+				'schema_version': 2,
+				'machine': { 'id': 'test.clone-parent.2026', 'name': 'Test Clone Parent' },
+				'coverage': { 'status': 'partial', 'completion_score': 50 },
+				'drivers': [
+					{ 'id': 'tst_a1', 'clone_of': 'tst_b2' },
+					{ 'id': 'tst_a2', 'clone_of': 'tst_b2' },
+					{ 'id': 'tst_b2', 'clone_of': 'tst_z9' }
+				],
+				'inputs': []
+			}";
+
+			var definition = PinMameGameDefinitionConverter.Convert(json);
+
+			Assert.That(definition.DefaultRomId, Is.EqualTo("tst_b2"));
+		}
+
+		[Test]
+		public void TakesTheRestStateOfCabinetInputsFromInitialActive()
+		{
+			const string json = @"{
+				'format': 'pinmame-machine-definition',
+				'schema_version': 2,
+				'machine': { 'id': 'test.initial-active.2026', 'name': 'Test Initial Active' },
+				'coverage': { 'status': 'partial', 'completion_score': 50 },
+				'inputs': [
+					{ 'id': 'switch.memory-protect', 'label': 'Coin Door Memory Protect', 'initial_active': true, 'binding': { 'group': 'pinmame.input.switch', 'device': -3 }, 'roles': ['cabinet.memory-protect'] },
+					{ 'id': 'switch.trough-4', 'label': 'Trough 4', 'initial_active': true, 'binding': { 'group': 'pinmame.input.switch', 'device': 18 }, 'roles': ['ball.position'] },
+					{ 'id': 'switch.coin-door', 'label': 'Coin Door Closed', 'normally_closed': true, 'binding': { 'group': 'pinmame.input.switch', 'device': 22 }, 'roles': ['cabinet.coin-door'] }
+				]
+			}";
+
+			var definition = PinMameGameDefinitionConverter.Convert(json);
+
+			// nothing operates the memory-protect switch, so it's constant at its rest state
+			Assert.That(definition.Switches.Single(@switch => @switch.Id == "-3").ConstantHint, Is.EqualTo(SwitchConstantHint.AlwaysClosed));
+			Assert.That(definition.Switches.Single(@switch => @switch.Id == "-3").NormallyClosed, Is.False);
+			Assert.That(definition.Switches.Single(@switch => @switch.Id == "18").NormallyClosed, Is.False);
+			Assert.That(definition.Switches.Single(@switch => @switch.Id == "22").NormallyClosed, Is.True, "coin door without initial_active");
+		}
+
+		[Test]
 		public void PassesNormallyClosedOnlyForTheCoinDoor()
 		{
 			const string json = @"{

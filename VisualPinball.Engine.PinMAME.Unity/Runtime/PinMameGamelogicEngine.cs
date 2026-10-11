@@ -187,6 +187,11 @@ namespace VisualPinball.Engine.PinMAME
 		public bool MappingsMatchMachine => string.IsNullOrEmpty(_mappedMachineId) || string.Equals(_mappedMachineId, machineId, StringComparison.Ordinal);
 
 		/// <summary>
+		/// Whether the component holds hardware candidates from a machine definition.
+		/// </summary>
+		public bool HasAvailableHardware => _availableHardwareInitialized;
+
+		/// <summary>
 		/// Records that the table's mappings were just populated from the selected machine.
 		/// </summary>
 		public void MarkMappingsPopulated() => _mappedMachineId = machineId;
