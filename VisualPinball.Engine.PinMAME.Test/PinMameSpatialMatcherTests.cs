@@ -131,5 +131,87 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			Assert.That(decision.IsAccepted, Is.True);
 			Assert.That(decision.Score, Is.EqualTo(0.02).Within(0.0001));
 		}
+		[Test]
+		public void SkipsPlacementsOfConflictedAndCabinetDevices()
+		{
+			const string json = @"{
+				'format': 'pinmame-machine-definition',
+				'schema_version': 2,
+				'machine': { 'id': 'test.spatial-filters.2026', 'name': 'Spatial Filters' },
+				'coverage': { 'status': 'partial', 'completion_score': 50 },
+				'inputs': [
+					{ 'id': 'switch.matrix-11', 'label': 'Right Flipper', 'binding': { 'group': 'pinmame.input.switch', 'device': 11 },
+					  'roles': ['flipper.lower.right.switch'],
+					  'spatial': { 'placements': [{ 'id': 'sensor', 'space': 'playfield', 'x': 0.63, 'y': 0.85 }] } },
+					{ 'id': 'switch.start', 'label': 'Start Button', 'binding': { 'group': 'pinmame.input.switch', 'device': 13 },
+					  'roles': ['cabinet.start'],
+					  'spatial': { 'placements': [{ 'id': 'sensor', 'space': 'playfield', 'x': 0.9, 'y': 0.95 }] } },
+					{ 'id': 'switch.outlane', 'label': 'Left Outlane', 'binding': { 'group': 'pinmame.input.switch', 'device': 25 },
+					  'spatial': { 'placements': [{ 'id': 'sensor', 'space': 'playfield', 'x': 0.1, 'y': 0.7 }] } }
+				],
+				'outputs': [
+					{ 'id': 'gi.string-3', 'label': 'GI 3', 'kind': 'gi', 'binding': { 'group': 'pinmame.output.gi', 'device': 2 },
+					  'spatial': { 'status': 'conflicted', 'placements': [{ 'id': 'bulb', 'space': 'playfield', 'x': 0.75, 'y': 0.81 }] } },
+					{ 'id': 'flasher.sling', 'label': 'Right Sling Flashlamps', 'kind': 'flasher', 'binding': { 'group': 'pinmame.output.solenoid', 'device': 18 },
+					  'spatial': { 'status': 'validated', 'placements': [{ 'id': 'emitter', 'space': 'playfield', 'x': 0.756, 'y': 0.812 }] } }
+				]
+			}";
+
+			var definition = PinMameGameDefinitionConverter.Convert(json);
+
+			Assert.That(definition.SpatialSwitches.Select(item => item.HardwareId), Is.EqualTo(new[] { "25" }));
+			Assert.That(definition.SpatialLamps.Select(item => item.HardwareId), Is.EqualTo(new[] { "18" }));
+		}
+
+		[Test]
+		public void AcceptsEachItemOfAnOffsetRow()
+		{
+			// the table's row is shifted by less than the row spacing, so each target also lies close
+			// to its neighbour's item, but each item clearly belongs to one target
+			var targets = Enumerable.Range(0, 4).Select(i => new PinMameSpatialMatchTarget($"t{i}", 0.2f + 0.025f * i, 0.5f)).ToArray();
+			var candidates = Enumerable.Range(0, 4).Select(i => new PinMameSpatialMatchCandidate($"c{i}", 0.21f + 0.025f * i, 0.5f)).ToArray();
+
+			var result = PinMameSpatialMatcher.Match(targets, candidates);
+
+			Assert.That(result.Decisions.All(decision => decision.IsAccepted), Is.True);
+			Assert.That(result.Decisions.Select(decision => decision.Candidate.Key), Is.EqualTo(new[] { "c0", "c1", "c2", "c3" }));
+		}
+
+		[Test]
+		public void TellsItemsAtTheSamePositionApartByName()
+		{
+			var targets = new[] {
+				new PinMameSpatialMatchTarget("32", 0.9f, 0.48f, "Gun Mark"),
+				new PinMameSpatialMatchTarget("33", 0.9f, 0.48f, "Gun Home"),
+			};
+			var candidates = new[] {
+				new PinMameSpatialMatchCandidate("home", 0.9f, 0.48f, "Gun Home"),
+				new PinMameSpatialMatchCandidate("mark", 0.9f, 0.48f, "gun mark"),
+			};
+
+			var result = PinMameSpatialMatcher.Match(targets, candidates);
+
+			Assert.That(result.Decisions.Single(decision => decision.Target.Key == "32").Candidate?.Key, Is.EqualTo("mark"));
+			Assert.That(result.Decisions.Single(decision => decision.Target.Key == "33").Candidate?.Key, Is.EqualTo("home"));
+		}
+
+		[Test]
+		public void ATargetMissingFromTheTableDoesNotPushAMatchAway()
+		{
+			// "eyes" has no item of its own on the table; the nearest one belongs to "drop"
+			var targets = new[] {
+				new PinMameSpatialMatchTarget("drop", 0.317f, 0.184f),
+				new PinMameSpatialMatchTarget("eyes", 0.302f, 0.138f),
+			};
+			var candidates = new[] {
+				new PinMameSpatialMatchCandidate("drop-insert", 0.311f, 0.168f),
+				new PinMameSpatialMatchCandidate("gi-bulb", 0.266f, 0.216f),
+			};
+
+			var result = PinMameSpatialMatcher.Match(targets, candidates);
+
+			Assert.That(result.Decisions.Single(decision => decision.Target.Key == "drop").Candidate?.Key, Is.EqualTo("drop-insert"));
+			Assert.That(result.Decisions.Single(decision => decision.Target.Key == "eyes").IsAccepted, Is.False);
+		}
 	}
 }

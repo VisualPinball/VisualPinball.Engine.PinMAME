@@ -228,7 +228,11 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				}
 				ApplySwitchDeviceHint(@switch, input);
 				switches.Add(@switch);
-				AddSpatialPlacements(spatialSwitches, input, @switch.Id, label);
+				// cabinet inputs (buttons, and the matrix switches PinMAME mirrors them into) aren't
+				// playfield devices, even when the definition gives them a position
+				if (string.IsNullOrEmpty(inputAction) && !IsCabinetInput(input)) {
+					AddSpatialPlacements(spatialSwitches, input, @switch.Id, label);
+				}
 			}
 
 			var orderedSwitches = switches.OrderBy(@switch => NumericId(@switch.Id)).ToList();
@@ -332,6 +336,10 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			bool isCoil = false)
 		{
 			if (device["spatial"]?["placements"] is not JArray placements) {
+				return;
+			}
+			// the definition itself doesn't trust these positions
+			if (string.Equals(device["spatial"]?.Value<string>("status"), "conflicted", StringComparison.Ordinal)) {
 				return;
 			}
 
@@ -605,6 +613,13 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			flipperRole = CoreFlipperSwitchRoles[offset / 2];
 			isEos = offset % 2 == 0;
 			return true;
+		}
+
+		private static bool IsCabinetInput(JObject input)
+		{
+			var roles = (input["roles"] as JArray)?.Values<string>() ?? Enumerable.Empty<string>();
+			return roles.Any(role => role != null && (role.StartsWith("cabinet.", StringComparison.Ordinal)
+				|| role.StartsWith("flipper.", StringComparison.Ordinal) && !role.EndsWith(".eos", StringComparison.Ordinal)));
 		}
 
 		private static bool IsEosByDefinition(JObject input)

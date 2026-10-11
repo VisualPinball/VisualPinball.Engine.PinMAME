@@ -25,6 +25,9 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		private const double AbsoluteWeight = 0.65;
 		private const double RelationWeight = 0.35;
 		private const double ImpossibleCost = 1000.0;
+		// Bonus when a candidate's name equals the target's label, e.g. the "Gun Home" item of a mech
+		// whose items all sit at the same position. Larger than MinimumMargin, so it settles such ties.
+		private const double LabelMatchBonus = 0.02;
 
 		internal static PinMameSpatialMatchResult Match(IReadOnlyList<PinMameSpatialMatchTarget> targets,
 			IReadOnlyList<PinMameSpatialMatchCandidate> candidates, IReadOnlyList<PinMameSpatialMatchAnchor> anchors = null)
@@ -54,16 +57,24 @@ namespace VisualPinball.Engine.PinMAME.Editor
 					var relationError = RelationError(targets[targetIndex], candidates[candidateIndex], relationAnchors,
 						relationScratch, out var usableAnchors);
 					relationErrors[targetIndex, candidateIndex] = relationError;
-					costs[targetIndex, candidateIndex] = usableAnchors == 0
+					var cost = usableAnchors == 0
 							? distance
 							: AbsoluteWeight * distance + RelationWeight * relationError;
+					if (LabelsMatch(targets[targetIndex].Label, candidates[candidateIndex].Label)) {
+						cost -= LabelMatchBonus;
+					}
+					costs[targetIndex, candidateIndex] = cost;
 				}
 				for (var dummyIndex = candidates.Count; dummyIndex < columnCount; dummyIndex++) {
 					costs[targetIndex, dummyIndex] = UnassignedCost;
 				}
 			}
 
-			var assignment = Assign(costs);
+			var assignment = AssignStable(costs, candidates.Count);
+			var owners = Enumerable.Repeat(-1, candidates.Count).ToArray();
+			for (var targetIndex = 0; targetIndex < targets.Count; targetIndex++) {
+				if (assignment[targetIndex] >= 0 && assignment[targetIndex] < candidates.Count) owners[assignment[targetIndex]] = targetIndex;
+			}
 			var decisions = new PinMameSpatialMatchDecision[targets.Count];
 			for (var targetIndex = 0; targetIndex < targets.Count; targetIndex++) {
 				var candidateIndex = assignment[targetIndex];
@@ -76,37 +87,52 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				var distance = distances[targetIndex, candidateIndex];
 				var relationError = relationErrors[targetIndex, candidateIndex];
 				if (distance > MaximumDistance || score >= UnassignedCost) {
-					decisions[targetIndex] = PinMameSpatialMatchDecision.Rejected(targets[targetIndex], "The closest playfield item is too far from the curated position.", distance, score);
+					decisions[targetIndex] = PinMameSpatialMatchDecision.Rejected(targets[targetIndex], "The closest playfield item is too far from the curated position.", distance, score, candidates[candidateIndex]);
 					continue;
 				}
 
-				var alternative = UnassignedCost;
-				for (var otherCandidateIndex = 0; otherCandidateIndex < candidates.Count; otherCandidateIndex++) {
-					if (otherCandidateIndex == candidateIndex) continue;
-					alternative = System.Math.Min(alternative, costs[targetIndex, otherCandidateIndex]);
+				// Ambiguous when another item fits this target about as well, and it's either free or its
+				// owner would fit this target's item about as well too, so the two could swap. A neighbour
+				// that clearly fits its own item better (e.g. the next insert of a row) doesn't count.
+				// A target pushed off its own best item by another one isn't trusted either.
+				var ambiguous = UnassignedCost - score < MinimumMargin;
+				for (var otherCandidateIndex = 0; !ambiguous && otherCandidateIndex < candidates.Count; otherCandidateIndex++) {
+					if (otherCandidateIndex == candidateIndex || costs[targetIndex, otherCandidateIndex] >= ImpossibleCost) continue;
+					var otherCost = costs[targetIndex, otherCandidateIndex];
+					if (otherCost < score) {
+						ambiguous = true;
+						break;
+					}
+					if (otherCost - score >= MinimumMargin) continue;
+					var owner = owners[otherCandidateIndex];
+					ambiguous = owner < 0 || costs[owner, candidateIndex] - costs[owner, otherCandidateIndex] < MinimumMargin;
 				}
-				if (alternative - score < MinimumMargin) {
-					decisions[targetIndex] = PinMameSpatialMatchDecision.Rejected(targets[targetIndex], "Two playfield items are equally plausible.", distance, score);
+				if (ambiguous) {
+					decisions[targetIndex] = PinMameSpatialMatchDecision.Rejected(targets[targetIndex], "Two playfield items are equally plausible.", distance, score, candidates[candidateIndex]);
 					continue;
 				}
 
 				if (relationAnchors.Count > 0 && relationError > MaximumRelationError) {
-					decisions[targetIndex] = PinMameSpatialMatchDecision.Rejected(targets[targetIndex], "The item is nearby, but its position relative to trusted matches is inconsistent.", distance, score);
+					decisions[targetIndex] = PinMameSpatialMatchDecision.Rejected(targets[targetIndex], "The item is nearby, but its position relative to trusted matches is inconsistent.", distance, score, candidates[candidateIndex]);
 					continue;
 				}
 
+				// Contested when another target would rather have this item and fits it about as well or
+				// better. One that merely wants it (e.g. because it got nothing) but fits it clearly worse
+				// doesn't make this match doubtful.
 				var contested = false;
 				for (var otherTargetIndex = 0; otherTargetIndex < targets.Count; otherTargetIndex++) {
 					if (otherTargetIndex == targetIndex) continue;
 					var otherAssignedColumn = assignment[otherTargetIndex];
 					var otherAssignedCost = otherAssignedColumn >= 0 ? costs[otherTargetIndex, otherAssignedColumn] : UnassignedCost;
-					if (costs[otherTargetIndex, candidateIndex] + MinimumMargin < otherAssignedCost) {
+					var otherCost = costs[otherTargetIndex, candidateIndex];
+					if (otherCost + MinimumMargin < otherAssignedCost && otherCost < score + MinimumMargin) {
 						contested = true;
 						break;
 					}
 				}
 				if (contested) {
-					decisions[targetIndex] = PinMameSpatialMatchDecision.Rejected(targets[targetIndex], "Another machine item is a better fit for this playfield item.", distance, score);
+					decisions[targetIndex] = PinMameSpatialMatchDecision.Rejected(targets[targetIndex], "Another machine item is a better fit for this playfield item.", distance, score, candidates[candidateIndex]);
 					continue;
 				}
 
@@ -155,6 +181,14 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			}
 		}
 
+		private static bool LabelsMatch(string targetLabel, string candidateLabel)
+		{
+			if (string.IsNullOrWhiteSpace(targetLabel) || string.IsNullOrWhiteSpace(candidateLabel)) return false;
+			return string.Equals(NormalizeLabel(targetLabel), NormalizeLabel(candidateLabel), StringComparison.Ordinal);
+		}
+
+		private static string NormalizeLabel(string label) => new string(label.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
+
 		private static double RelationError(PinMameSpatialMatchTarget target, PinMameSpatialMatchCandidate candidate,
 			IReadOnlyList<PinMameSpatialMatchAnchor> anchors, double[] scratch, out int usableAnchors)
 		{
@@ -173,58 +207,31 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			return scratch[count / 2];
 		}
 
-		private static int[] Assign(double[,] costs)
+		/// <summary>
+		/// Pairs targets and items in order of increasing cost, so each item goes to the target that
+		/// fits it best. Unlike a minimum-cost assignment, a target without a matching item on the
+		/// table (it isn't modelled) doesn't take a neighbour's item and push that one away.
+		/// </summary>
+		private static int[] AssignStable(double[,] costs, int candidateCount)
 		{
-			var rowCount = costs.GetLength(0);
-			var columnCount = costs.GetLength(1);
-			var rowPotential = new double[rowCount + 1];
-			var columnPotential = new double[columnCount + 1];
-			var matching = new int[columnCount + 1];
-			var path = new int[columnCount + 1];
-			var minimum = new double[columnCount + 1];
-			var used = new bool[columnCount + 1];
-			for (var row = 1; row <= rowCount; row++) {
-				matching[0] = row;
-				var column0 = 0;
-				Array.Fill(minimum, double.PositiveInfinity);
-				Array.Clear(used, 0, used.Length);
-				do {
-					used[column0] = true;
-					var currentRow = matching[column0];
-					var delta = double.PositiveInfinity;
-					var column1 = 0;
-					for (var column = 1; column <= columnCount; column++) {
-						if (used[column]) continue;
-						var current = costs[currentRow - 1, column - 1] - rowPotential[currentRow] - columnPotential[column];
-						if (current < minimum[column]) {
-							minimum[column] = current;
-							path[column] = column0;
-						}
-						if (minimum[column] < delta) {
-							delta = minimum[column];
-							column1 = column;
-						}
+			var targetCount = costs.GetLength(0);
+			var pairs = new List<(double Cost, int Target, int Candidate)>();
+			for (var targetIndex = 0; targetIndex < targetCount; targetIndex++) {
+				for (var candidateIndex = 0; candidateIndex < candidateCount; candidateIndex++) {
+					if (costs[targetIndex, candidateIndex] < UnassignedCost) {
+						pairs.Add((costs[targetIndex, candidateIndex], targetIndex, candidateIndex));
 					}
-					for (var column = 0; column <= columnCount; column++) {
-						if (used[column]) {
-							rowPotential[matching[column]] += delta;
-							columnPotential[column] -= delta;
-						} else {
-							minimum[column] -= delta;
-						}
-					}
-					column0 = column1;
-				} while (matching[column0] != 0);
-				do {
-					var column1 = path[column0];
-					matching[column0] = matching[column1];
-					column0 = column1;
-				} while (column0 != 0);
+				}
 			}
+			pairs.Sort((a, b) => a.Cost != b.Cost ? a.Cost.CompareTo(b.Cost)
+				: a.Target != b.Target ? a.Target.CompareTo(b.Target) : a.Candidate.CompareTo(b.Candidate));
 
-			var assignment = Enumerable.Repeat(-1, rowCount).ToArray();
-			for (var column = 1; column <= columnCount; column++) {
-				if (matching[column] > 0) assignment[matching[column] - 1] = column - 1;
+			var assignment = Enumerable.Repeat(-1, targetCount).ToArray();
+			var taken = new bool[candidateCount];
+			foreach (var (_, targetIndex, candidateIndex) in pairs) {
+				if (assignment[targetIndex] >= 0 || taken[candidateIndex]) continue;
+				assignment[targetIndex] = candidateIndex;
+				taken[candidateIndex] = true;
 			}
 			return assignment;
 		}
@@ -242,12 +249,14 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		internal string Key { get; }
 		internal float X { get; }
 		internal float Y { get; }
+		internal string Label { get; }
 
-		internal PinMameSpatialMatchTarget(string key, float x, float y)
+		internal PinMameSpatialMatchTarget(string key, float x, float y, string label = null)
 		{
 			Key = key;
 			X = x;
 			Y = y;
+			Label = label;
 		}
 	}
 
@@ -256,12 +265,14 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		internal string Key { get; }
 		internal float X { get; }
 		internal float Y { get; }
+		internal string Label { get; }
 
-		internal PinMameSpatialMatchCandidate(string key, float x, float y)
+		internal PinMameSpatialMatchCandidate(string key, float x, float y, string label = null)
 		{
 			Key = key;
 			X = x;
 			Y = y;
+			Label = label;
 		}
 	}
 
@@ -292,24 +303,29 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		internal string Reason { get; }
 		internal double Distance { get; }
 		internal double Score { get; }
+		/// <summary>
+		/// The item the target got in the best overall assignment, also when that wasn't trusted.
+		/// </summary>
+		internal PinMameSpatialMatchCandidate Assigned { get; }
 
 		private PinMameSpatialMatchDecision(PinMameSpatialMatchTarget target, PinMameSpatialMatchCandidate candidate,
-			string reason, double distance, double score)
+			string reason, double distance, double score, PinMameSpatialMatchCandidate assigned)
 		{
 			Target = target;
 			Candidate = candidate;
 			Reason = reason;
 			Distance = distance;
 			Score = score;
+			Assigned = assigned;
 		}
 
 		internal static PinMameSpatialMatchDecision Accepted(PinMameSpatialMatchTarget target,
 			PinMameSpatialMatchCandidate candidate, double distance, double score)
-			=> new(target, candidate, null, distance, score);
+			=> new(target, candidate, null, distance, score, candidate);
 
 		internal static PinMameSpatialMatchDecision Rejected(PinMameSpatialMatchTarget target, string reason,
-			double distance = double.NaN, double score = double.NaN)
-			=> new(target, null, reason, distance, score);
+			double distance = double.NaN, double score = double.NaN, PinMameSpatialMatchCandidate assigned = null)
+			=> new(target, null, reason, distance, score, assigned);
 	}
 
 	internal sealed class PinMameSpatialMatchResult

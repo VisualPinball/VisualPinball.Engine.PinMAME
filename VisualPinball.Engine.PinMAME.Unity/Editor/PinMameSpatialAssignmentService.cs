@@ -178,7 +178,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		{
 			var indexedPlacements = placements.Select((placement, index) => new IndexedPlacement(placement,
 				$"{placement.HardwareId}:{placement.PlacementId}:{index}")).ToArray();
-			var allSlots = devices.SelectMany(device => getItems(device).Select(item => CreateSlot(device, item.Id, playfield)))
+			var allSlots = devices.SelectMany(device => getItems(device).Select(item => CreateSlot(device, item.Id, item.Description, playfield)))
 				.Where(slot => slot != null).ToArray();
 			var usedSlotKeys = new HashSet<string>(StringComparer.Ordinal);
 			var anchoredTargetKeys = new HashSet<string>(StringComparer.Ordinal);
@@ -253,7 +253,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				.Where(slot => !usedSlotKeys.Contains(slot.Match.Key) && mayAssign(slot.Device))
 				.ToArray();
 			var result = PinMameSpatialMatcher.Match(
-				targetItems.Select(item => new PinMameSpatialMatchTarget(item.Key, item.Placement.X, item.Placement.Y)).ToArray(),
+				targetItems.Select(item => new PinMameSpatialMatchTarget(item.Key, item.Placement.X, item.Placement.Y, item.Placement.Label)).ToArray(),
 				candidateSlots.Select(slot => slot.Match).ToArray(),
 				anchors);
 
@@ -291,7 +291,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				result.Decisions.Length - assigned - keptInMatch, unrepresented, rejectionReasons.Take(3).ToArray(), null);
 		}
 
-		private static SceneSlot<TDevice> CreateSlot<TDevice>(TDevice device, string deviceItem, PlayfieldComponent playfield)
+		private static SceneSlot<TDevice> CreateSlot<TDevice>(TDevice device, string deviceItem, string itemDescription, PlayfieldComponent playfield)
 			where TDevice : class, IMainComponent
 		{
 			var position = DevicePosition(device, playfield);
@@ -299,7 +299,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			var component = device as MonoBehaviour;
 			var entityId = UnityObjectId.Get(component ? (UnityEngine.Object)component : device.gameObject);
 			var key = $"{entityId}:{deviceItem}";
-			return new SceneSlot<TDevice>(device, deviceItem, new PinMameSpatialMatchCandidate(key, position.Value.x, position.Value.y));
+			return new SceneSlot<TDevice>(device, deviceItem, new PinMameSpatialMatchCandidate(key, position.Value.x, position.Value.y, itemDescription));
 		}
 
 		private static Vector2? DevicePosition<TDevice>(TDevice device, PlayfieldComponent playfield)
