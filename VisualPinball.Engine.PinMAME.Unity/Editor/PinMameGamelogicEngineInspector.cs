@@ -54,6 +54,8 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		private string _loadWarning;
 		private string _spatialAssignmentMessage;
 		private MessageType _spatialAssignmentMessageType = MessageType.Info;
+		private string _romStatusKey;
+		private bool _romZipFound;
 
 		private void OnEnable()
 		{
@@ -275,6 +277,8 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			EditorGUILayout.LabelField(PinMameGameDefinitionCatalogClient.BaseUrl, EditorStyles.miniLabel);
 			if (GUILayout.Button("Refresh", EditorStyles.miniButton, GUILayout.Width(64f))) LoadCatalog(true);
 			EditorGUILayout.EndHorizontal();
+
+			DrawRomFolder();
 
 			GUILayout.BeginVertical();
 
@@ -518,10 +522,53 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			return description;
 		}
 
+		private void DrawRomFolder()
+		{
+			EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+			EditorGUILayout.BeginHorizontal();
+			EditorGUI.BeginChangeCheck();
+			var custom = EditorGUILayout.DelayedTextField(new GUIContent("ROM Folder",
+				"Where PinMAME looks for ROMs when playing in the editor. Separate several folders with ';'. "
+				+ "Leave empty to use Visual PinMAME's ROM folder. Saved on this machine, not in the project."), PinMameEditorRomFolder.Custom);
+			if (EditorGUI.EndChangeCheck()) {
+				PinMameEditorRomFolder.Custom = custom;
+			}
+			if (GUILayout.Button("...", EditorStyles.miniButton, GUILayout.Width(24f))) {
+				var current = PinMameEditorRomFolder.Effective?.Split(';')[0] ?? string.Empty;
+				var folder = EditorUtility.OpenFolderPanel("PinMAME ROM Folder", current, string.Empty);
+				if (!string.IsNullOrEmpty(folder)) {
+					PinMameEditorRomFolder.Custom = folder.Replace('/', Path.DirectorySeparatorChar);
+				}
+				GUIUtility.ExitGUI();
+			}
+			EditorGUILayout.EndHorizontal();
+
+			var effective = PinMameEditorRomFolder.Effective;
+			if (string.IsNullOrWhiteSpace(PinMameEditorRomFolder.Custom)) {
+				EditorGUILayout.LabelField(effective != null
+					? $"Using Visual PinMAME's ROM folder: {effective}"
+					: "Set the folder with your ROMs. Visual PinMAME's isn't available to fall back to.", EditorStyles.wordWrappedMiniLabel);
+			}
+			if (effective != null && !string.IsNullOrWhiteSpace(_gle.romId)) {
+				var key = effective + "|" + _gle.romId;
+				if (key != _romStatusKey) {
+					_romStatusKey = key;
+					_romZipFound = PinMameFolders.HasRomZip(effective, _gle.romId);
+				}
+				if (!_romZipFound) {
+					EditorGUILayout.HelpBox($"{_gle.romId}.zip isn't in the ROM folder.", MessageType.Warning);
+				}
+			}
+			EditorGUILayout.EndVertical();
+		}
+
 		private void CreateDisplays(IEnumerable<DisplayComponent> sceneDisplays)
 		{
 			// retrieve layouts from pinmame
-			var pinMame = PinMame.PinMame.Instance(PinMameAudioFormat.AudioFormatFloat, AudioSettings.outputSampleRate);
+			var pinMame = PinMame.PinMame.Instance(PinMameAudioFormat.AudioFormatFloat, AudioSettings.outputSampleRate, PinMameFolders.DataFolder);
+			if (!PinMame.PinMame.IsRunning) {
+				PinMameFolders.ApplyRomFolder(pinMame);
+			}
 			var displayLayouts = pinMame.GetAvailableDisplays(_gle.romId);
 
 			// retrieve already existing displays from scene
