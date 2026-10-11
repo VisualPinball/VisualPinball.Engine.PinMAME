@@ -28,8 +28,8 @@ namespace VisualPinball.Engine.PinMAME.Editor
 	/// VPM setup don't need to configure anything.
 	/// </summary>
 	/// <remarks>
-	/// A host can still set <see cref="GamelogicPaths.RomFolder"/> itself before loading a table,
-	/// like the player app does with its own setting.
+	/// It's the host's ROM folder (<see cref="GamelogicPaths.HostRomFolder"/>). A player app running
+	/// in the editor can still override it with its own setting for its play session.
 	/// </remarks>
 	[InitializeOnLoad]
 	public static class PinMameEditorRomFolder
@@ -41,6 +41,16 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		static PinMameEditorRomFolder()
 		{
 			Apply();
+			EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+		}
+
+		// A player app's ROM folder only applies to its play session; editor actions like Create
+		// Displays use the editor's folder again. The domain isn't necessarily reloaded on exit.
+		private static void OnPlayModeStateChanged(PlayModeStateChange change)
+		{
+			if (change == PlayModeStateChange.EnteredEditMode) {
+				GamelogicPaths.RomFolderOverride = null;
+			}
 		}
 
 		/// <summary>
@@ -50,7 +60,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		{
 			get => EditorPrefs.GetString(PrefKey, string.Empty);
 			set {
-				EditorPrefs.SetString(PrefKey, value?.Trim() ?? string.Empty);
+				EditorPrefs.SetString(PrefKey, GamelogicPaths.NormalizeFolderList(value) ?? string.Empty);
 				Apply();
 			}
 		}
@@ -69,7 +79,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		private static void Apply()
 		{
 			_vpmRomFolder = PinMame.PinMame.FindVpmPath(PinMameFileType.Roms);
-			GamelogicPaths.RomFolder = Effective;
+			GamelogicPaths.HostRomFolder = Effective;
 		}
 	}
 }
