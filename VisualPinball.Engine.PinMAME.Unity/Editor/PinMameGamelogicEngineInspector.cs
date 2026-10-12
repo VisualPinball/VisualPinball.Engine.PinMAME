@@ -51,6 +51,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		private bool _toggleDebug = true;
 		private int _debugSwitchId;
 		private SerializedProperty _disableAudioProperty;
+		private SerializedProperty _physicalOutputsProperty;
 		private CancellationTokenSource _loadCancellation;
 		private bool _isLoading;
 		private string _loadError;
@@ -69,6 +70,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			_solenoidDelayProperty = serializedObject.FindProperty(nameof(_gle.SolenoidDelay));
 			_disableMechsProperty = serializedObject.FindProperty(nameof(_gle.DisableMechs));
 			_disableAudioProperty = serializedObject.FindProperty(nameof(_gle.DisableAudio));
+			_physicalOutputsProperty = serializedObject.FindProperty(nameof(_gle.PhysicalOutputs));
 			Undo.undoRedoPerformed += OnUndoRedo;
 			LoadCatalog(false);
 		}
@@ -338,6 +340,11 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				fieldRect.width -= 25;
 				EditorGUI.PropertyField(fieldRect, _solenoidDelayProperty, new GUIContent("Solenoid Delay"));
 				GUI.Label(labelRect, "ms");
+				if (EditorGUI.EndChangeCheck()) {
+					serializedObject.ApplyModifiedProperties();
+				}
+				EditorGUI.BeginChangeCheck();
+				EditorGUILayout.PropertyField(_physicalOutputsProperty, new GUIContent("Physical Outputs", _physicalOutputsProperty.tooltip));
 				if (EditorGUI.EndChangeCheck()) {
 					serializedObject.ApplyModifiedProperties();
 				}
