@@ -72,4 +72,30 @@ namespace VisualPinball.Engine.PinMAME
 		/// </summary>
 		StopAtEnd,
 	}
+
+	/// <summary>
+	/// Outputs PinMAME reports as physical, PWM-integrated levels. The values are PinMAME's
+	/// <c>CORE_MODOUT_ENABLE_PHYSOUT_*</c> bits, i.e. the mask of <c>PinmameSetSolenoidMask(2, mask)</c>.
+	/// </summary>
+	[System.Flags]
+	public enum PinMamePhysicalOutputFlags
+	{
+		None = 0,
+
+		/// <summary>
+		/// Lamp matrix: 0-255 through the driver's bulb model (e.g. #44 on WPC) instead of 0/1.
+		/// </summary>
+		Lamps = 0x04,
+
+		/// <summary>
+		/// GI strings: 0-255 through the driver's bulb model instead of 0-8.
+		/// </summary>
+		GI = 0x08,
+
+		/// <summary>
+		/// Solenoids: 0-255. Flashers get their bulb model (e.g. #89), plain coils PinMAME's
+		/// two-state model, which releases 60 ms after the last pulse.
+		/// </summary>
+		Solenoids = 0x10,
+	}
 }

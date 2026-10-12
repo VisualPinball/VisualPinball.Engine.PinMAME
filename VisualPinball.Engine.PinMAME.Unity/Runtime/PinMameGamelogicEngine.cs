@@ -94,6 +94,9 @@ namespace VisualPinball.Engine.PinMAME
 		[Tooltip("Disable audio")]
 		public bool DisableAudio;
 
+		[Tooltip("Outputs PinMAME reports as physical, PWM-integrated levels (incandescent bulb, LED and solenoid models), like UseVPMModSol = 2 in VPX. Off by default.")]
+		public PinMamePhysicalOutputFlags PhysicalOutputs;
+
 		#endregion
 
 		#region Packaging
@@ -106,7 +109,8 @@ namespace VisualPinball.Engine.PinMAME
 				RomId = romId,
 				DisableMechs = DisableMechs,
 				SolenoidDelay = SolenoidDelay,
-				DisableAudio = DisableAudio
+				DisableAudio = DisableAudio,
+				PhysicalOutputs = PhysicalOutputs,
 			};
 			return PackageApi.Packer.Pack(data);
 		}
@@ -122,6 +126,7 @@ namespace VisualPinball.Engine.PinMAME
 			DisableMechs = data.DisableMechs;
 			SolenoidDelay = data.SolenoidDelay;
 			DisableAudio = data.DisableAudio;
+			PhysicalOutputs = data.PhysicalOutputs;
 			#if UNITY_EDITOR
 			ClearAvailableHardware();
 			UpdateCaches(false);
@@ -264,6 +269,38 @@ namespace VisualPinball.Engine.PinMAME
 			catch (Exception e) {
 				Logger.Warn(e, "[PinMAME] SetTimeFence call failed.");
 			}
+
+			UpdatePhysicalSolenoids();
+		}
+
+		/// <summary>
+		/// libpinmame integrates physical outputs on request only (core.c, VIDEO_UPDATE(core_gen):
+		/// "LibPinMAME: on request"). Lamps and GI get integrated by the per-frame GetChangedLamps/GetChangedGIs
+		/// poll, but solenoids reach us through the callback only, which compares the last integrated levels.
+		/// Without this call physical solenoids never change and no coil fires at all.
+		///
+		/// The simulation thread moves the time fence once per tick, so this keeps the added latency below
+		/// one tick. The changes it returns are dropped: the callback reports the same ones.
+		/// </summary>
+		private void UpdatePhysicalSolenoids()
+		{
+			if (!_isRunning || (_physicalOutputs & PinMamePhysicalOutputFlags.Solenoids) == 0 || _physicalSolenoidStates == null) {
+				return;
+			}
+			// the stop paths also move the fence (from the main thread), possibly during a tick
+			if (Interlocked.Exchange(ref _updatingPhysicalSolenoids, 1) != 0) {
+				return;
+			}
+			try {
+				PinMameNative.GetChangedSolenoids(_physicalSolenoidStates);
+			}
+			catch (Exception e) {
+				Logger.Error(e, "[PinMAME] Updating physical solenoids failed, turning them off.");
+				_physicalOutputs &= ~PinMamePhysicalOutputFlags.Solenoids;
+			}
+			finally {
+				Volatile.Write(ref _updatingPhysicalSolenoids, 0);
+			}
 		}
 
 		public bool TryDequeueCoilEvent(out CoilEventArgs coilEvent)
@@ -317,7 +354,7 @@ namespace VisualPinball.Engine.PinMAME
 
 				_lastAppliedLampStates[lamp.Id] = lamp.Value;
 				foreach (var lampId in lampIds) {
-					_player.SetLamp(lampId, lamp.Value, LampSource.Lamp);
+					_player.SetLamp(lampId, PhysicalLampValue(lampId, LampSource.Lamp, lamp.Value), LampSource.Lamp);
 				}
 			}
 
@@ -332,7 +369,7 @@ namespace VisualPinball.Engine.PinMAME
 
 				_lastAppliedGiStates[gi.Id] = gi.Value;
 				foreach (var giId in giIds) {
-					_player.SetLamp(giId, gi.Value, LampSource.GI);
+					_player.SetLamp(giId, PhysicalLampValue(giId, LampSource.GI, gi.Value), LampSource.GI);
 				}
 			}
 		}
@@ -396,6 +433,13 @@ namespace VisualPinball.Engine.PinMAME
 		// "1" is "binary on" or "modulated 0.4% duty"; once any coil reports a value above
 		// 1 the game is modulating, and every coil value is then normalized by 255.
 		private volatile bool _solenoidsModulated;
+		// physical outputs applied to the running game, see ApplyPhysicalOutputs()
+		private volatile PinMamePhysicalOutputFlags _physicalOutputs;
+		private int[] _physicalSolenoidStates;
+		private int _updatingPhysicalSolenoids;
+		// FadingSteps of SingleFading lamp/GI mappings, to scale physical 0-255 levels into their range
+		private readonly Dictionary<string, int> _physicalLampSteps = new(StringComparer.Ordinal);
+		private readonly Dictionary<string, int> _physicalGiSteps = new(StringComparer.Ordinal);
 		private readonly Dictionary<int, float> _sharedLampStates = new();
 		private readonly Dictionary<int, float> _sharedGiStates = new();
 		private readonly Dictionary<int, float> _lastAppliedLampStates = new();
@@ -490,7 +534,7 @@ namespace VisualPinball.Engine.PinMAME
 				if (!_sharedLampPlaybackActive && _pinMameIdToLampIdMapping.TryGetValue(changedLamp.Id, out var vpeLampIds)) {
 					foreach (var vpeLampId in vpeLampIds) {
 						LogChangedLampSample("lamp", changedLamp.Id, vpeLampId, changedLamp.Value, LampSource.Lamp);
-						OnLampChanged?.Invoke(this, new LampEventArgs(vpeLampId, changedLamp.Value));
+						OnLampChanged?.Invoke(this, new LampEventArgs(vpeLampId, PhysicalLampValue(vpeLampId, LampSource.Lamp, changedLamp.Value)));
 					}
 				} else {
 					LogUnmappedLampSample("lamp", changedLamp.Id, changedLamp.Value, LampSource.Lamp);
@@ -498,6 +542,9 @@ namespace VisualPinball.Engine.PinMAME
 			}
 
 			// gi
+			// PinMame 1.1.0's GetChangedGIs(List) appends without clearing (GetChangedLamps clears), so every
+			// GI change since the game started was dispatched again on every frame.
+			_changedGIs.Clear();
 			_pinMame.GetChangedGIs(_changedGIs);
 			foreach (var changedGi in _changedGIs) {
 				lock (_outputStateLock) {
@@ -506,7 +553,7 @@ namespace VisualPinball.Engine.PinMAME
 				if (!_sharedLampPlaybackActive && _pinMameIdToGiIdMapping.TryGetValue(changedGi.Id, out var vpeGiIds)) {
 					foreach (var vpeLampId in vpeGiIds) {
 						LogChangedLampSample("gi", changedGi.Id, vpeLampId, changedGi.Value, LampSource.GI);
-						OnLampChanged?.Invoke(this, new LampEventArgs(vpeLampId, changedGi.Value, LampSource.GI));
+						OnLampChanged?.Invoke(this, new LampEventArgs(vpeLampId, PhysicalLampValue(vpeLampId, LampSource.GI, changedGi.Value), LampSource.GI));
 					}
 				} else {
 					LogUnmappedLampSample("gi", changedGi.Id, changedGi.Value, LampSource.GI);
@@ -849,6 +896,8 @@ namespace VisualPinball.Engine.PinMAME
 				_pinMame = PinMame.PinMame.Instance(PinMameAudioFormat.AudioFormatFloat, AudioSettings.outputSampleRate, vpmPath);
 				// Re-apply config each init (important when Domain Reload is disabled).
 				_pinMame.ApplyConfig();
+				// after ApplyConfig, which resets PinMAME's options
+				ApplyPhysicalOutputs();
 
 				// Prevent duplicate subscriptions if OnInit is invoked more than once.
 				_pinMame.OnGameStarted -= OnGameStarted;
@@ -936,6 +985,112 @@ namespace VisualPinball.Engine.PinMAME
 		}
 
 		/// <summary>
+		/// Switches the selected outputs to PinMAME's physical mode (PWM integrated through the game driver's
+		/// device models: #44 lamps, #89 flashers, LEDs, ...), like <c>UseVPMModSol = 2</c> in VPX.
+		/// </summary>
+		private void ApplyPhysicalOutputs()
+		{
+			// the inspector's "Everything" is -1, which would also set PinMAME's legacy and internal bits
+			var requested = PhysicalOutputs & (PinMamePhysicalOutputFlags.Lamps | PinMamePhysicalOutputFlags.GI | PinMamePhysicalOutputFlags.Solenoids);
+			_physicalOutputs = requested;
+			if (requested == PinMamePhysicalOutputFlags.None) {
+				return;
+			}
+			try {
+				PinMameNative.SetSolenoidMask(2, (uint)requested);
+				_physicalOutputs = (PinMamePhysicalOutputFlags)PinMameNative.GetSolenoidMask(2) & requested;
+				_physicalSolenoidStates = new int[PinMameNative.GetMaxSolenoids() * 2];
+			}
+			catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) {
+				Logger.Error(e, "[PinMAME] This PinMAME can't switch to physical outputs, keeping binary outputs.");
+				_physicalOutputs = PinMamePhysicalOutputFlags.None;
+				return;
+			}
+			Logger.Info($"[PinMAME] Physical outputs: {_physicalOutputs}.");
+			DisableLightFades();
+		}
+
+		/// <summary>
+		/// Physical lamps and GI report 0-255, where 255 is the bulb's rated brightness. Fading mappings divide by
+		/// their FadingSteps (PinMAME GI defaults to 8 for its native 0-8), so scale into that range: the light
+		/// gets the bulb's level at full resolution without remapping the table. Other mapping types get 0-255.
+		/// </summary>
+		private float PhysicalLampValue(string vpeLampId, LampSource source, float value)
+		{
+			var physical = source == LampSource.GI ? PinMamePhysicalOutputFlags.GI : PinMamePhysicalOutputFlags.Lamps;
+			if ((_physicalOutputs & physical) == 0) {
+				return value;
+			}
+			var steps = source == LampSource.GI ? _physicalGiSteps : _physicalLampSteps;
+			return steps.TryGetValue(vpeLampId, out var fadingSteps) ? value * fadingSteps / 255f : value;
+		}
+
+		/// <summary>
+		/// PinMAME's bulb model already fades physical outputs. A light's own linear fade on top of it would
+		/// fade twice, so it's turned off for this session (not saved) on the lights driven by physical outputs.
+		/// </summary>
+		private void DisableLightFades()
+		{
+			var mappingConfig = GetComponentInParent<TableComponent>()?.MappingConfig;
+			if (mappingConfig == null) {
+				return;
+			}
+			var lights = new HashSet<LightComponent>();
+			foreach (var mapping in mappingConfig.Lamps) {
+				var physical = mapping.IsCoil
+					? PinMamePhysicalOutputFlags.Solenoids
+					: mapping.Source == LampSource.GI ? PinMamePhysicalOutputFlags.GI : PinMamePhysicalOutputFlags.Lamps;
+				if ((_physicalOutputs & physical) == 0 || mapping.Device is not Component device || !device) {
+					continue;
+				}
+				foreach (var light in device.GetComponentsInChildren<LightComponent>(true)) {
+					if (light.FadeSpeedUp > 0f || light.FadeSpeedDown > 0f) {
+						light.FadeSpeedUp = 0f;
+						light.FadeSpeedDown = 0f;
+						lights.Add(light);
+					}
+				}
+			}
+			if (lights.Count > 0) {
+				Logger.Info($"[PinMAME] Physical outputs: turned off the fades of {lights.Count} lights for this session, PinMAME's bulb model fades them.");
+			}
+		}
+
+		/// <summary>
+		/// libpinmame calls that PinMame (pinmame-dotnet) 1.1.0 doesn't expose.
+		/// TODO: replace with PinMame.SetPhysicalOutputs / GetPhysicalOutputs / GetChangedSolenoids once a
+		/// pinmame-dotnet release has them (vpinball/pinmame-dotnet, feat/physical-outputs-api).
+		/// The library names match pinmame-dotnet's, so these bind to the same loaded library.
+		/// </summary>
+		private static class PinMameNative
+		{
+			#if (UNITY_IOS || UNITY_TVOS) && !UNITY_EDITOR
+			private const string Lib = "__Internal";
+			#elif UNITY_EDITOR_WIN || (UNITY_STANDALONE_WIN && !UNITY_EDITOR)
+			private const string Lib = "pinmame";
+			#elif UNITY_EDITOR_OSX || (UNITY_STANDALONE_OSX && !UNITY_EDITOR)
+			private const string Lib = "libpinmame.dylib";
+			#else
+			private const string Lib = "libpinmame.so";
+			#endif
+
+			[DllImport(Lib, CallingConvention = CallingConvention.Cdecl, EntryPoint = "PinmameSetSolenoidMask")]
+			internal static extern void SetSolenoidMask(int low, uint mask);
+
+			[DllImport(Lib, CallingConvention = CallingConvention.Cdecl, EntryPoint = "PinmameGetSolenoidMask")]
+			internal static extern uint GetSolenoidMask(int low);
+
+			[DllImport(Lib, CallingConvention = CallingConvention.Cdecl, EntryPoint = "PinmameGetMaxSolenoids")]
+			internal static extern int GetMaxSolenoids();
+
+			/// <summary>
+			/// Fills id/state pairs; with physical solenoids it also integrates them up to now.
+			/// </summary>
+			[DllImport(Lib, CallingConvention = CallingConvention.Cdecl, EntryPoint = "PinmameGetChangedSolenoids")]
+			internal static extern int GetChangedSolenoids(int[] changedStates);
+		}
+
+		/// <summary>
 		/// Points PinMAME at the ROM folder and brings over Visual PinMAME's state for the game.
 		/// </summary>
 		private void PrepareDesktopFolders()
@@ -1017,6 +1172,8 @@ namespace VisualPinball.Engine.PinMAME
 			_requestedLamps = Array.Empty<GamelogicEngineLamp>();
 			_pinMameIdToLampIdMapping.Clear();
 			_pinMameIdToGiIdMapping.Clear();
+			_physicalLampSteps.Clear();
+			_physicalGiSteps.Clear();
 
 			_coils.Clear();
 			_requestedCoils = Array.Empty<GamelogicEngineCoil>();
@@ -1086,6 +1243,9 @@ namespace VisualPinball.Engine.PinMAME
 			}
 
 			foreach (var mapping in mappingConfig.Lamps.Where(mapping => !mapping.IsCoil)) {
+				if (mapping.Type == LampType.SingleFading && mapping.FadingSteps > 0) {
+					(mapping.Source == LampSource.GI ? _physicalGiSteps : _physicalLampSteps)[mapping.Id] = mapping.FadingSteps;
+				}
 				var lamp = new GamelogicEngineLamp(mapping.Id) {
 					Description = mapping.Description,
 					Channel = mapping.Channel,
@@ -1509,8 +1669,9 @@ namespace VisualPinball.Engine.PinMAME
 		{
 			MarkPinMameCallbackActivity();
 
-			// value is 0/1 for binary coils, 0-255 for PWM-integrated (modulated) coils
-			if (value > 1) {
+			// value is 0/1 for binary coils, 0-255 for PWM-integrated (modulated) coils and for all coils
+			// with physical solenoids, where a single 1 is a faint level, not "on"
+			if (value > 1 || (_physicalOutputs & PinMamePhysicalOutputFlags.Solenoids) != 0) {
 				_solenoidsModulated = true;
 			}
 			var isActive = value > 0;
@@ -1751,6 +1912,7 @@ namespace VisualPinball.Engine.PinMAME
 		public bool DisableMechs;
 		public float SolenoidDelay;
 		public bool DisableAudio;
+		public PinMamePhysicalOutputFlags PhysicalOutputs;
 	}
 
 	#if UNITY_EDITOR
