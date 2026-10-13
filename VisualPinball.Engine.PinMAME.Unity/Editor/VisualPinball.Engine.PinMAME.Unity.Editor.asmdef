@@ -4,6 +4,7 @@
 	"references": [
 		"VisualPinball.Engine",
 		"VisualPinball.Unity",
+		"VisualPinball.Plugins",
 		"VisualPinball.Unity.Editor",
 		"VisualPinball.Engine.PinMAME.Unity",
 		"Newtonsoft.Json"

@@ -1,4 +1,4 @@
-﻿// Visual Pinball Engine
+// Visual Pinball Engine
 // Copyright (C) 2021 freezy and VPE Team
 //
 // This program is free software: you can redistribute it and/or modify
@@ -34,6 +34,7 @@ using UnityEngine.InputSystem;
 using VisualPinball.Engine.Game.Engines;
 using VisualPinball.Unity;
 using VisualPinball.Unity.Simulation;
+using VisualPinball.Plugins;
 using ColorChannel = VisualPinball.Engine.Math.ColorChannel;
 using Logger = NLog.Logger;
 
@@ -44,7 +45,7 @@ namespace VisualPinball.Engine.PinMAME
 	[RequireComponent(typeof(AudioSource))]
 	[PackAs("PinMameGamelogicEngine")]
 	[AddComponentMenu("Pinball/Gamelogic Engine/PinMAME")]
-	public class PinMameGamelogicEngine : MonoBehaviour, IGamelogicEngine, IDisplayFrameFormatPreference, IRomNameProvider, IGamelogicInputThreading, IGamelogicTimeFence, IGamelogicCoilOutputFeed, IGamelogicSharedStateWriter, IGamelogicSharedStateApplier, IGamelogicPerformanceStats, IPackable
+	public class PinMameGamelogicEngine : MonoBehaviour, IGamelogicEngine, IDisplayFrameFormatPreference, IDisplayResourceMetadata, IGamelogicAudioResourceProvider, IGameIdentityProvider, IRomNameProvider, IGamelogicInputThreading, IGamelogicTimeFence, IGamelogicCoilOutputFeed, IGamelogicSharedStateWriter, IGamelogicSharedStateApplier, IGamelogicPerformanceStats, IPackable
 	{
 		public string Name { get; } = "PinMAME Gamelogic Engine";
 		public GamelogicInputDispatchMode SwitchDispatchMode => GamelogicInputDispatchMode.SimulationThread;
@@ -83,6 +84,11 @@ namespace VisualPinball.Engine.PinMAME
 		private string _legacyGameId;
 
 		string IRomNameProvider.RomName => romId;
+		GameIdentity? IGameIdentityProvider.GameIdentity => string.IsNullOrWhiteSpace(romId) ? null : new GameIdentity("pinmame", romId);
+		DisplayEncoding IDisplayResourceMetadata.DisplayFormats => DisplayEncoding.Gray2 | DisplayEncoding.Gray4 | DisplayEncoding.Luminance8;
+		DisplayEncoding IDisplayResourceMetadata.DefaultDisplayFormat => DisplayEncoding.Luminance8;
+		bool IDisplayResourceMetadata.FormatAppliesToAllDisplays => true;
+		IPluginAudioSource IGamelogicAudioResourceProvider.AudioSource => _pluginAudio;
 
 		[Tooltip("Disable built-in mechs")]
 		public bool DisableMechs = true;
@@ -402,6 +408,9 @@ namespace VisualPinball.Engine.PinMAME
 		private readonly Dictionary<int, float> _lastAppliedGiStates = new();
 		private bool _sharedLampPlaybackActive;
 		private readonly Queue<float[]> _audioQueue = new();
+		private readonly AudioResourceSource _pluginAudio = new(error => Logger.Warn(error, "[PinMAME] Plugin audio subscriber failed."));
+		private byte[] _pluginAudioBuffer = Array.Empty<byte>();
+		private long _pluginAudioSequence;
 		private readonly HashSet<string> _loggedUnresolvedMappingIds = new(StringComparer.Ordinal);
 
 		private int _audioFilterChannels;
@@ -896,7 +905,7 @@ namespace VisualPinball.Engine.PinMAME
 				_pinMame.OnDisplayAvailable += OnDisplayRequested;
 				_pinMame.OnDisplayUpdated += OnDisplayUpdated;
 
-				if (!DisableAudio) {
+				if (!DisableAudio || _pluginAudio.HasSubscribers) {
 					_pinMame.OnAudioAvailable += OnAudioAvailable;
 					_pinMame.OnAudioUpdated += OnAudioUpdated;
 				}
@@ -1222,6 +1231,7 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void UpdateDmd(int index, PinMameDisplayLayout displayLayout, IntPtr framePtr)
 		{
+			var format = GetRequestedDmdDisplayFrameFormat(displayLayout);
 			if (framePtr == IntPtr.Zero) {
 				Logger.Warn($"[PinMAME] Dropping DMD frame for index {index} because frame pointer is null (layout: {displayLayout}).");
 				return;
@@ -1241,8 +1251,9 @@ namespace VisualPinball.Engine.PinMAME
 			var frame = new byte[frameBuffer.Length];
 			Marshal.Copy(framePtr, frame, 0, frame.Length);
 
+			// Preserve the encoding at capture time: another consumer can change the provider mode before dispatch.
 			EnqueueMainThreadDispatch(() => OnDisplayUpdateFrame?.Invoke(this,
-				new DisplayFrameData($"{DmdPrefix}{index}", GetRequestedDmdDisplayFrameFormat(displayLayout), frame)));
+				new DisplayFrameData($"{DmdPrefix}{index}", format, frame)));
 		}
 
 		private void UpdateSegDisp(int index, PinMameDisplayLayout displayLayout, IntPtr framePtr)
@@ -1376,6 +1387,13 @@ namespace VisualPinball.Engine.PinMAME
 
 		private int OnAudioUpdated(IntPtr framePtr, int frameSize)
 		{
+			if (_pluginAudio.HasSubscribers && framePtr != IntPtr.Zero && frameSize > 0) {
+				int length = checked(frameSize * _audioInfo.Channels * sizeof(float));
+				if (_pluginAudioBuffer.Length < length) _pluginAudioBuffer = new byte[length];
+				Marshal.Copy(framePtr, _pluginAudioBuffer, 0, length);
+				_pluginAudio.Publish(new PluginPcmFrame(_pluginAudioBuffer.AsMemory(0, length), PcmEncoding.Float32, (int)_audioInfo.SampleRate, _audioInfo.Channels, frameSize, ++_pluginAudioSequence));
+			}
+			if (_pluginAudio.PlaybackReplaced || DisableAudio) return _audioInfo.SamplesPerFrame;
 			if (_audioFilterChannels == 0) {
 				// don't know how many channels yet
 				return _audioInfo.SamplesPerFrame;
@@ -1431,6 +1449,15 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void OnAudioFilterRead(float[] data, int channels)
 		{
+			if (_pluginAudio.PlaybackReplaced) {
+				Array.Clear(data, 0, data.Length);
+				lock (_audioQueue) {
+					_audioQueue.Clear();
+				}
+				_lastAudioFrame = Array.Empty<float>();
+				_lastAudioFrameOffset = 0;
+				return;
+			}
 			_audioNumSamplesOutput += data.Length / channels;
 			if (_audioNumSamplesOutput > 100000) {
 				//var delta = AudioSettings.dspTime - _audioOutputStart;

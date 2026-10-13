@@ -4,6 +4,8 @@
 	"references": [
 		"VisualPinball.Engine",
 		"VisualPinball.Unity",
+		"VisualPinball.Plugins",
+		"Newtonsoft.Json",
 		"Unity.InputSystem"
 	],
 	"includePlatforms": [],
