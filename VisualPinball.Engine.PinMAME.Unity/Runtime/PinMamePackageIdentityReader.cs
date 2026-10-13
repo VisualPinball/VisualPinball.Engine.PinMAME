@@ -1,4 +1,9 @@
+// Visual Pinball Engine
+// Copyright (C) 2026 freezy and VPE Team
+//
 // SPDX-License-Identifier: MIT
+// Licensed under MIT. See https://opensource.org/license/mit.
+
 using System;
 using System.Text;
 using Newtonsoft.Json.Linq;
