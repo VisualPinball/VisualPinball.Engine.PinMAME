@@ -1,6 +1,6 @@
 {
   "name": "org.visualpinball.engine.pinmame",
-  "version": "0.0.1-preview.48",
+  "version": "0.0.1-preview.49",
   "displayName": "Visual Pinball Engine (PinMAME)",
   "description": "PinMAME support",
   "keywords": [
@@ -11,7 +11,7 @@
   "unityRelease": "0f1",
   "dependencies": {
     "com.unity.nuget.newtonsoft-json": "3.2.1",
-    "org.visualpinball.engine.unity": "0.0.1-preview.119"
+    "org.visualpinball.engine.unity": "0.0.1-preview.212"
   },
   "author": "freezy <freezy@vpdb.io>",
   "contributors": [
