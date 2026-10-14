@@ -12,6 +12,8 @@ This package adds a new gamelogic engine called *PinMAME*. Add the component to 
 
 The catalog and cache are editor-only. A player build receives the serialized hardware mappings and machine/ROM identifiers; it does not fetch or contain the source metadata. Display layouts continue to be queried directly from the selected ROM through PinMAME.
 
+In the Player, this package contributes a **PinMAME** settings section with a global **Volume** slider, also exposed in the **Sound** mixer. The default is 100%; zero mutes playback while the ROM continues running. Both surfaces edit the same plugin-owned value. Gain is applied before the first ROM audio frame and can change during playback, independently of ROM volume and NVRAM. Raw PCM published to other integrations is unaffected; a plugin replacing audio playback owns its output gain. The settings adapter applies only to tables using PinMAME, and cannot be disabled independently of the existing gamelogic engine.
+
 Existing scenes and packages that used the retired class-based definitions remain compatible through a small runtime alias resolver. New and repopulated tables serialize numeric PinMAME IDs and populated flipper-wire mappings on the table. Candidate hardware snapshots stay in the editor scene and are omitted from packaged gamelogic data, so no machine-definition classes or catalog records are shipped with the player.
 
 ## Developer Setup
