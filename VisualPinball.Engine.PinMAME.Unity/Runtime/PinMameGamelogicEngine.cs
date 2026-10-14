@@ -521,7 +521,8 @@ namespace VisualPinball.Engine.PinMAME
 				}
 			}
 
-			// gi
+			// gi (pinmame-dotnet's list overload appends without clearing, unlike the lamp one, which would replay every change so far)
+			_changedGIs.Clear();
 			_pinMame.GetChangedGIs(_changedGIs);
 			foreach (var changedGi in _changedGIs) {
 				lock (_outputStateLock) {
