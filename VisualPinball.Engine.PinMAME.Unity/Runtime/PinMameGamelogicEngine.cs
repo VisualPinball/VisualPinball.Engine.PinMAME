@@ -408,6 +408,15 @@ namespace VisualPinball.Engine.PinMAME
 		private readonly Dictionary<int, float> _lastAppliedGiStates = new();
 		private bool _sharedLampPlaybackActive;
 		private readonly Queue<float[]> _audioQueue = new();
+		private float _outputGain = 1f, _queuedGain = 1f;
+		/// <summary>User output gain, applied after raw PCM publication without changing ROM or device settings.</summary>
+		public float OutputGain {
+			get => Volatile.Read(ref _outputGain);
+			set {
+				if (float.IsNaN(value) || float.IsInfinity(value) || value < 0 || value > 1) throw new ArgumentOutOfRangeException(nameof(value));
+				Volatile.Write(ref _outputGain, value);
+			}
+		}
 		private readonly AudioResourceSource _pluginAudio = new(error => Logger.Warn(error, "[PinMAME] Plugin audio subscriber failed."));
 		private byte[] _pluginAudioBuffer = Array.Empty<byte>();
 		private long _pluginAudioSequence;
@@ -1382,6 +1391,7 @@ namespace VisualPinball.Engine.PinMAME
 			Logger.Info("Game audio available: " + audioInfo);
 
 			_audioInfo = audioInfo;
+			_queuedGain = OutputGain; // A saved mute applies to the first produced frame, including boot audio.
 			return _audioInfo.SamplesPerFrame;
 		}
 
@@ -1408,13 +1418,15 @@ namespace VisualPinball.Engine.PinMAME
 				_audioNumSamplesInput = 0;
 			}
 
+			float targetGain = OutputGain, previousGain = _queuedGain;
+			float Gain(int sample) => previousGain == targetGain ? targetGain : previousGain + (targetGain - previousGain) * ((sample + 1f) / frameSize);
 			float[] frame;
 			if (_audioFilterChannels == _audioInfo.Channels) { // n channels -> n channels
 				frame = new float[frameSize * 2];
 				unsafe {
 					var src = (float*)framePtr;
 					for (var i = 0; i < frameSize * 2; i++) {
-						frame[i] = src[i];
+						frame[i] = targetGain == 1f && previousGain == 1f ? src[i] : src[i] * Gain(i / _audioInfo.Channels);
 					}
 				}
 			} else if (_audioFilterChannels > _audioInfo.Channels) { // 1 channel -> 2 channels
@@ -1422,7 +1434,7 @@ namespace VisualPinball.Engine.PinMAME
 				unsafe {
 					var src = (float*)framePtr;
 					for (var i = 0; i < frameSize; i++) {
-						frame[i * 2] = src[i];
+						frame[i * 2] = targetGain == 1f && previousGain == 1f ? src[i] : src[i] * Gain(i);
 						frame[i * 2 + 1] = frame[i * 2];
 					}
 				}
@@ -1431,11 +1443,12 @@ namespace VisualPinball.Engine.PinMAME
 				unsafe {
 					var src = (float*)framePtr;
 					for (var i = 0; i < frameSize; i += 2) {
-						frame[i] = src[i];
+						frame[i] = targetGain == 1f && previousGain == 1f ? src[i] : src[i] * Gain(i / _audioInfo.Channels);
 					}
 				}
 			}
 
+			_queuedGain = targetGain;
 			lock (_audioQueue) {
 				if (_audioQueue.Count >= _maximalQueueSize) {
 					_audioQueue.Clear();
