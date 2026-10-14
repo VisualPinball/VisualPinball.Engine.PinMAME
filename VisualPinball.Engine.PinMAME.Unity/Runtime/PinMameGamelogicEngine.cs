@@ -45,7 +45,7 @@ namespace VisualPinball.Engine.PinMAME
 	[RequireComponent(typeof(AudioSource))]
 	[PackAs("PinMameGamelogicEngine")]
 	[AddComponentMenu("Pinball/Gamelogic Engine/PinMAME")]
-	public class PinMameGamelogicEngine : MonoBehaviour, IGamelogicEngine, IDisplayFrameFormatPreference, IDisplayResourceMetadata, IGamelogicAudioResourceProvider, IGameIdentityProvider, IRomNameProvider, IGamelogicInputThreading, IGamelogicTimeFence, IGamelogicCoilOutputFeed, IGamelogicSharedStateWriter, IGamelogicSharedStateApplier, IGamelogicPerformanceStats, IPackable
+	public class PinMameGamelogicEngine : MonoBehaviour, IGamelogicEngine, IDisplayFrameFormatPreference, IDisplayResourceMetadata, IGamelogicAudioResourceProvider, IGameIdentityProvider, IRomNameProvider, IGamelogicInputThreading, IGamelogicTimeFence, IGamelogicCoilOutputFeed, IGamelogicSharedStateWriter, IGamelogicSharedStateApplier, IGamelogicPerformanceStats, IGamelogicNativeOutputs, ISegmentDisplayMetadata, IPackable
 	{
 		public string Name { get; } = "PinMAME Gamelogic Engine";
 		public GamelogicInputDispatchMode SwitchDispatchMode => GamelogicInputDispatchMode.SimulationThread;
@@ -407,6 +407,14 @@ namespace VisualPinball.Engine.PinMAME
 		private readonly Dictionary<int, float> _lastAppliedLampStates = new();
 		private readonly Dictionary<int, float> _lastAppliedGiStates = new();
 		private bool _sharedLampPlaybackActive;
+
+		// Native outputs for plugins: every lamp, GI string, solenoid and mech by PinMAME number, mapped or not.
+		private INativeOutputListener _nativeOutputs;
+		private readonly ConcurrentQueue<(int id, int value)> _nativeSolenoids = new ConcurrentQueue<(int, int)>();
+		private readonly ConcurrentQueue<(int id, int position)> _nativeMechs = new ConcurrentQueue<(int, int)>();
+		private readonly Dictionary<string, (string layout, string hardware)> _segmentLayouts = new Dictionary<string, (string, string)>();
+		// libpinmame's output encoding per hardware generation (pinmame/src/wpc/core.c and vpintf.c).
+		private const ulong GenAllWpc = 0xff, GenAllS80 = 0x0000600000000, GenSam = 0x0100000000000, GenP2K = 0x8000000000000, GenPinHeck = 0x10000000000000, GenCapcom = 0x20000000000000;
 		private readonly Queue<float[]> _audioQueue = new();
 		private float _outputGain = 1f, _queuedGain = 1f;
 		/// <summary>User output gain, applied after raw PCM publication without changing ROM or device settings.</summary>
@@ -530,6 +538,8 @@ namespace VisualPinball.Engine.PinMAME
 					LogUnmappedLampSample("gi", changedGi.Id, changedGi.Value, LampSource.GI);
 				}
 			}
+
+			DispatchNativeOutputs();
 
 			// if (_keyboard != null && _keyboard.cKey.wasPressedThisFrame)
 			// {
@@ -1215,6 +1225,11 @@ namespace VisualPinball.Engine.PinMAME
 				}
 
 			} else {
+				lock (_segmentLayouts) {
+					// Gottlieb System 80 glass displays are upright; the technology is left to the consumer.
+					var hardware = ((ulong)PinMame.PinMame.CurrentHardwareGen & GenAllS80) != 0 ? "gottlieb" : string.Empty;
+					_segmentLayouts[$"{SegDispPrefix}{index}"] = (SegmentLayout(displayLayout.Type), hardware);
+				}
 				EnqueueMainThreadDispatch(() =>
 					OnDisplaysRequested?.Invoke(this, new RequestedDisplays(
 						new DisplayConfig($"{SegDispPrefix}{index}", displayLayout.Length, 1))));
@@ -1548,6 +1563,9 @@ namespace VisualPinball.Engine.PinMAME
 		private void OnSolenoidUpdated(int id, int value)
 		{
 			MarkPinMameCallbackActivity();
+			if (_nativeOutputs != null) {
+				_nativeSolenoids.Enqueue((id, value));
+			}
 
 			// value is 0/1 for binary coils, 0-255 for PWM-integrated (modulated) coils
 			if (value > 1) {
@@ -1692,6 +1710,82 @@ namespace VisualPinball.Engine.PinMAME
 
 		#endregion
 
+		#region Native outputs
+
+		public void SetNativeOutputListener(INativeOutputListener listener)
+		{
+			_nativeOutputs = listener;
+			if (listener == null) {
+				while (_nativeSolenoids.TryDequeue(out _)) { }
+				while (_nativeMechs.TryDequeue(out _)) { }
+			}
+		}
+
+		/// <summary>Forwards this poll's changes by PinMAME number, including outputs the table does not map.</summary>
+		private void DispatchNativeOutputs()
+		{
+			var listener = _nativeOutputs;
+			if (listener == null) {
+				return;
+			}
+			// The encoding is fixed by the hardware generation, so every address keeps one meaning from its first value:
+			// lamps are 0/1 except on Pinball 2000 and SAM's modulated LEDs above 80 (0..255); solenoids are 0..255 where
+			// PWM integration is forced (SAM, Capcom, PinHeck, Pinball 2000); GI is 0..8 on WPC and 0 or 9 elsewhere.
+			var gen = (ulong)PinMame.PinMame.CurrentHardwareGen;
+			bool p2k = (gen & GenP2K) != 0, sam = (gen & GenSam) != 0;
+			bool physicalSolenoids = (gen & (GenSam | GenCapcom | GenPinHeck | GenP2K)) != 0;
+			int giMaximum = (gen & GenAllWpc) != 0 ? 8 : 9;
+			foreach (var lamp in _changedLamps) {
+				var physical = p2k || sam && lamp.Id > 80;
+				listener.NativeOutputChanged(ControllerEventKind.Lamp, lamp.Id, lamp.Value, physical ? ControllerValueSemantics.Physical : ControllerValueSemantics.Binary, physical ? 255 : 1);
+			}
+			foreach (var gi in _changedGIs) {
+				listener.NativeOutputChanged(ControllerEventKind.GeneralIllumination, gi.Id, gi.Value, ControllerValueSemantics.Levels, giMaximum);
+			}
+			while (_nativeSolenoids.TryDequeue(out var solenoid)) {
+				listener.NativeOutputChanged(ControllerEventKind.Coil, solenoid.id, solenoid.value, physicalSolenoids ? ControllerValueSemantics.Physical : ControllerValueSemantics.Binary, physicalSolenoids ? 255 : 1);
+			}
+			while (_nativeMechs.TryDequeue(out var mech)) {
+				listener.NativeOutputChanged(ControllerEventKind.Mech, mech.id, mech.position, ControllerValueSemantics.Position, 1);
+			}
+			listener.NativeOutputPollEnd();
+		}
+
+		public bool TryGetSegmentLayout(string displayId, out string layout, out string hardware)
+		{
+			lock (_segmentLayouts) {
+				if (_segmentLayouts.TryGetValue(displayId, out var known)) {
+					(layout, hardware) = known;
+					return true;
+				}
+			}
+			layout = hardware = string.Empty;
+			return false;
+		}
+
+		/// <summary>Maps PinMAME's display types onto the plugin segment layouts.</summary>
+		private static string SegmentLayout(PinMameDisplayType type)
+		{
+			switch (type) {
+				case PinMameDisplayType.Seg9:
+				case PinMameDisplayType.Seg10:
+				case PinMameDisplayType.Seg98:
+				case PinMameDisplayType.Seg98F:
+					return "seg9";
+				case PinMameDisplayType.Seg16:
+				case PinMameDisplayType.Seg16R:
+				case PinMameDisplayType.Seg16N:
+				case PinMameDisplayType.Seg16D:
+					return "seg14";
+				case PinMameDisplayType.Seg16S:
+					return "seg16";
+				default:
+					return "seg7";
+			}
+		}
+
+		#endregion
+
 		#region Mechs
 
 		public void RegisterMech(PinMameMechComponent mechComponent)
@@ -1709,6 +1803,9 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void OnMechUpdated(int mechNo, PinMameMechInfo mechInfo)
 		{
+			if (_nativeOutputs != null) {
+				_nativeMechs.Enqueue((mechNo, mechInfo.Pos));
+			}
 			if (_registeredMechs.ContainsKey(mechNo)) {
 				EnqueueMainThreadDispatch(() => _registeredMechs[mechNo].UpdateMech(mechInfo));
 
