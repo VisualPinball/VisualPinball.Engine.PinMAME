@@ -17,5 +17,6 @@
     <Compile Include="..\VisualPinball.Engine.PinMAME.Unity\Editor\PinMameGameDefinitionConverter.cs" Link="PinMameGameDefinitionConverter.cs" />
     <Compile Include="..\VisualPinball.Engine.PinMAME.Unity\Editor\PinMameSpatialMatcher.cs" Link="PinMameSpatialMatcher.cs" />
     <Compile Include="..\VisualPinball.Engine.PinMAME.Unity\Runtime\PinMameLegacyAliasResolver.cs" Link="PinMameLegacyAliasResolver.cs" />
+    <Compile Include="..\VisualPinball.Engine.PinMAME.Unity\Runtime\PinMameOutputModel.cs" Link="PinMameOutputModel.cs" />
   </ItemGroup>
 </Project>

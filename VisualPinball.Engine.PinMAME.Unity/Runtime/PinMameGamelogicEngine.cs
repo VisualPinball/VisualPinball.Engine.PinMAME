@@ -413,8 +413,6 @@ namespace VisualPinball.Engine.PinMAME
 		private readonly ConcurrentQueue<(int id, int value)> _nativeSolenoids = new ConcurrentQueue<(int, int)>();
 		private readonly ConcurrentQueue<(int id, int position)> _nativeMechs = new ConcurrentQueue<(int, int)>();
 		private readonly Dictionary<string, (string layout, string hardware)> _segmentLayouts = new Dictionary<string, (string, string)>();
-		// libpinmame's output encoding per hardware generation (pinmame/src/wpc/core.c and vpintf.c).
-		private const ulong GenAllWpc = 0xff, GenAllS80 = 0x0000600000000, GenSam = 0x0100000000000, GenP2K = 0x8000000000000, GenPinHeck = 0x10000000000000, GenCapcom = 0x20000000000000;
 		private readonly Queue<float[]> _audioQueue = new();
 		private float _outputGain = 1f, _queuedGain = 1f;
 		/// <summary>User output gain, applied after raw PCM publication without changing ROM or device settings.</summary>
@@ -1227,7 +1225,7 @@ namespace VisualPinball.Engine.PinMAME
 			} else {
 				lock (_segmentLayouts) {
 					// Gottlieb System 80 glass displays are upright; the technology is left to the consumer.
-					var hardware = ((ulong)PinMame.PinMame.CurrentHardwareGen & GenAllS80) != 0 ? "gottlieb" : string.Empty;
+					var hardware = new PinMameOutputModel((ulong)PinMame.PinMame.CurrentHardwareGen).UprightSegments ? "gottlieb" : string.Empty;
 					_segmentLayouts[$"{SegDispPrefix}{index}"] = (SegmentLayout(displayLayout.Type), hardware);
 				}
 				EnqueueMainThreadDispatch(() =>
@@ -1728,22 +1726,17 @@ namespace VisualPinball.Engine.PinMAME
 			if (listener == null) {
 				return;
 			}
-			// The encoding is fixed by the hardware generation, so every address keeps one meaning from its first value:
-			// lamps are 0/1 except on Pinball 2000 and SAM's modulated LEDs above 80 (0..255); solenoids are 0..255 where
-			// PWM integration is forced (SAM, Capcom, PinHeck, Pinball 2000); GI is 0..8 on WPC and 0 or 9 elsewhere.
-			var gen = (ulong)PinMame.PinMame.CurrentHardwareGen;
-			bool p2k = (gen & GenP2K) != 0, sam = (gen & GenSam) != 0;
-			bool physicalSolenoids = (gen & (GenSam | GenCapcom | GenPinHeck | GenP2K)) != 0;
-			int giMaximum = (gen & GenAllWpc) != 0 ? 8 : 9;
+			// The encoding is fixed by the hardware generation, so every address keeps one meaning from its first value.
+			var model = new PinMameOutputModel((ulong)PinMame.PinMame.CurrentHardwareGen);
 			foreach (var lamp in _changedLamps) {
-				var physical = p2k || sam && lamp.Id > 80;
-				listener.NativeOutputChanged(ControllerEventKind.Lamp, lamp.Id, lamp.Value, physical ? ControllerValueSemantics.Physical : ControllerValueSemantics.Binary, physical ? 255 : 1);
+				var physical = model.IsPhysicalLamp(lamp.Id);
+				listener.NativeOutputChanged(ControllerEventKind.Lamp, lamp.Id, lamp.Value, physical ? ControllerValueSemantics.Physical : ControllerValueSemantics.Binary, physical ? PinMameOutputModel.PhysicalMaximum : 1);
 			}
 			foreach (var gi in _changedGIs) {
-				listener.NativeOutputChanged(ControllerEventKind.GeneralIllumination, gi.Id, gi.Value, ControllerValueSemantics.Levels, giMaximum);
+				listener.NativeOutputChanged(ControllerEventKind.GeneralIllumination, gi.Id, gi.Value, ControllerValueSemantics.Levels, model.GiMaximum);
 			}
 			while (_nativeSolenoids.TryDequeue(out var solenoid)) {
-				listener.NativeOutputChanged(ControllerEventKind.Coil, solenoid.id, solenoid.value, physicalSolenoids ? ControllerValueSemantics.Physical : ControllerValueSemantics.Binary, physicalSolenoids ? 255 : 1);
+				listener.NativeOutputChanged(ControllerEventKind.Coil, solenoid.id, solenoid.value, model.PhysicalSolenoids ? ControllerValueSemantics.Physical : ControllerValueSemantics.Binary, model.PhysicalSolenoids ? PinMameOutputModel.PhysicalMaximum : 1);
 			}
 			while (_nativeMechs.TryDequeue(out var mech)) {
 				listener.NativeOutputChanged(ControllerEventKind.Mech, mech.id, mech.position, ControllerValueSemantics.Position, 1);
