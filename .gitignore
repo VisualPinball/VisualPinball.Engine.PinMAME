@@ -353,3 +353,8 @@ MigrationBackup/
 
 **/protos/*.cs
 **/Plugins/**/*.dll
+**/Plugins/**/*.so
+**/Plugins/**/*.so.*
+**/Plugins/**/*.dylib
+# ...but not their import settings: "*.so.*" also matches "libpinmame.so.meta"
+!**/Plugins/**/*.meta

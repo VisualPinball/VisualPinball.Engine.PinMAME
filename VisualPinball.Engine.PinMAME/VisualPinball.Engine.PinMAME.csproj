@@ -53,5 +53,15 @@
 
     <!-- If an older build already dropped pinmame64.dll, remove it so the package only contains pinmame.dll. -->
     <Delete Condition="'$(RuntimeIdentifier)' == 'win-x64'" Files="..\VisualPinball.Engine.PinMAME.Unity\Plugins\$(RuntimeIdentifier)\pinmame64.dll" />
+
+    <!-- PinMameDotNet P/Invokes "pinmame", which Mono on Linux resolves as libpinmame.so. The
+         linux-x64 native package ships it versioned (libpinmame.so.3.7.0), so deploy it under
+         that name and remove the versioned copy, which nothing loads. -->
+    <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64'">
+      <_LinuxPinMame Include="$(NuGetPackageRoot)pinmame.native.$(RuntimeIdentifier)/$(PinMameNativeVersion)/runtimes/$(RuntimeIdentifier)/native/libpinmame.so.*" />
+      <_LinuxPinMameVersioned Include="..\VisualPinball.Engine.PinMAME.Unity\Plugins\$(RuntimeIdentifier)\libpinmame.so.*" Exclude="..\VisualPinball.Engine.PinMAME.Unity\Plugins\$(RuntimeIdentifier)\*.meta" />
+    </ItemGroup>
+    <Copy Condition="'@(_LinuxPinMame)' != ''" SourceFiles="@(_LinuxPinMame)" DestinationFiles="..\VisualPinball.Engine.PinMAME.Unity\Plugins\$(RuntimeIdentifier)\libpinmame.so" SkipUnchangedFiles="true" />
+    <Delete Condition="'@(_LinuxPinMameVersioned)' != ''" Files="@(_LinuxPinMameVersioned)" />
   </Target>
 </Project>
