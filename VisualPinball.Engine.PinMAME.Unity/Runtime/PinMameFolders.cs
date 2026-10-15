@@ -109,7 +109,7 @@ namespace VisualPinball.Engine.PinMAME
 						File.Copy(source, target, false);
 						Logger.Info($"[PinMAME] Copied {source} from Visual PinMAME to {target}.");
 					} catch (Exception e) {
-						Logger.Warn($"[PinMAME] Could not copy {source} to {target}: {e.Message}");
+						Logger.Warn(e, "[PinMAME] Could not copy {Source:l} from Visual PinMAME to {Target:l}.", source, target);
 					}
 					break;
 				}
