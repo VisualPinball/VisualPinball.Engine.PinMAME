@@ -380,6 +380,7 @@ namespace VisualPinball.Engine.PinMAME
 		private volatile DisplayFrameFormat _requestedDmdFrameFormat = DisplayFrameFormat.Dmd8;
 
 		private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+		private static readonly Logger NativeLogger = LogManager.GetLogger("PinMAME.Native");
 		private static readonly Color Tint = new(1, 0.18f, 0);
 		private static readonly Color UnlitTint = new(Tint.r * 0.18f, Tint.g * 0.18f, Tint.b * 0.18f, 1f);
 
@@ -475,6 +476,7 @@ namespace VisualPinball.Engine.PinMAME
 		private readonly LogOncePerKey<string> _unknownSwitchLog = new();
 		private readonly LogOncePerKey<(string, int)> _unmappedLampLog = new();
 		private readonly LogOncePerKey<int> _unregisteredMechLog = new();
+		private readonly LogThrottle _nativeLogThrottle = new(100, TimeSpan.FromSeconds(10));
 		[ThreadStatic] private static bool _callbackThreadNamed;
 
 		// Diagnostics. The native library is loaded once per process, so its version is static.
@@ -697,6 +699,7 @@ namespace VisualPinball.Engine.PinMAME
 				_pinMame.OnMechAvailable -= OnMechAvailable;
 				_pinMame.OnMechUpdated -= OnMechUpdated;
 				_pinMame.OnSolenoidUpdated -= OnSolenoidUpdated;
+				_pinMame.OnLogMessage -= OnNativeLogMessage;
 				_pinMame.IsKeyPressed -= IsKeyPressed;
 			}
 			_frameBuffer.Clear();
@@ -763,6 +766,7 @@ namespace VisualPinball.Engine.PinMAME
 				_pinMame.OnMechAvailable -= OnMechAvailable;
 				_pinMame.OnMechUpdated -= OnMechUpdated;
 				_pinMame.OnSolenoidUpdated -= OnSolenoidUpdated;
+				_pinMame.OnLogMessage -= OnNativeLogMessage;
 				_pinMame.IsKeyPressed -= IsKeyPressed;
 				_pinMame.OnAudioAvailable -= OnAudioAvailable;
 				_pinMame.OnAudioUpdated -= OnAudioUpdated;
@@ -820,6 +824,7 @@ namespace VisualPinball.Engine.PinMAME
 					_pinMame.OnMechAvailable -= OnMechAvailable;
 					_pinMame.OnMechUpdated -= OnMechUpdated;
 					_pinMame.OnSolenoidUpdated -= OnSolenoidUpdated;
+				_pinMame.OnLogMessage -= OnNativeLogMessage;
 					_pinMame.IsKeyPressed -= IsKeyPressed;
 					_pinMame.OnAudioAvailable -= OnAudioAvailable;
 					_pinMame.OnAudioUpdated -= OnAudioUpdated;
@@ -937,6 +942,7 @@ namespace VisualPinball.Engine.PinMAME
 				_pinMame.OnMechAvailable -= OnMechAvailable;
 				_pinMame.OnMechUpdated -= OnMechUpdated;
 				_pinMame.OnSolenoidUpdated -= OnSolenoidUpdated;
+				_pinMame.OnLogMessage -= OnNativeLogMessage;
 				_pinMame.IsKeyPressed -= IsKeyPressed;
 				_pinMame.OnAudioAvailable -= OnAudioAvailable;
 				_pinMame.OnAudioUpdated -= OnAudioUpdated;
@@ -983,6 +989,7 @@ namespace VisualPinball.Engine.PinMAME
 				_pinMame.OnMechAvailable += OnMechAvailable;
 				_pinMame.OnMechUpdated += OnMechUpdated;
 				_pinMame.OnSolenoidUpdated += OnSolenoidUpdated;
+				_pinMame.OnLogMessage += OnNativeLogMessage;
 				_pinMame.IsKeyPressed += IsKeyPressed;
 
 				_player = player;
@@ -1748,6 +1755,33 @@ namespace VisualPinball.Engine.PinMAME
 		public bool GetCoil(string id)
 		{
 			return _player != null && _player.CoilStatuses.ContainsKey(id) && _player.CoilStatuses[id];
+		}
+
+		/// <summary>
+		/// libpinmame's own messages: ROM loading, CRC mismatches, missing files. Raised on the
+		/// emulation thread with the text already formatted.
+		/// </summary>
+		private void OnNativeLogMessage(PinMameLogLevel level, string message)
+		{
+			if (!_nativeLogThrottle.ShouldLog(out var suppressed)) {
+				return;
+			}
+			if (suppressed > 0) {
+				NativeLogger.Info("{Suppressed} messages from PinMAME were suppressed.", suppressed);
+			}
+			// the text is an argument, never the template, so braces in it stay as they are
+			switch (level) {
+				case PinMameLogLevel.Error:
+					// a bad or missing ROM file, a wrong setup: the user's to fix, not VPE's
+					NativeLogger.Warn("{Message:l}", message);
+					break;
+				case PinMameLogLevel.Info:
+					NativeLogger.Info("{Message:l}", message);
+					break;
+				default:
+					NativeLogger.Debug("{Message:l}", message);
+					break;
+			}
 		}
 
 		private void OnSolenoidUpdated(int id, int value)
