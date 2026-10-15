@@ -470,10 +470,11 @@ namespace VisualPinball.Engine.PinMAME
 		private static readonly LogThrottle MechCallbackThrottle = new(3, TimeSpan.FromSeconds(30));
 		private static readonly LogThrottle SolenoidCallbackThrottle = new(3, TimeSpan.FromSeconds(30));
 		private static readonly LogThrottle KeyCallbackThrottle = new(3, TimeSpan.FromSeconds(30));
-		private static readonly LogOncePerKey<int> UnmappedCoilLog = new();
-		private static readonly LogOncePerKey<string> UnknownSwitchLog = new();
-		private static readonly LogOncePerKey<(string, int)> UnmappedLampLog = new();
-		private static readonly LogOncePerKey<int> UnregisteredMechLog = new();
+		// per engine, so one table's mapping problems don't hide the next one's
+		private readonly LogOncePerKey<int> _unmappedCoilLog = new();
+		private readonly LogOncePerKey<string> _unknownSwitchLog = new();
+		private readonly LogOncePerKey<(string, int)> _unmappedLampLog = new();
+		private readonly LogOncePerKey<int> _unregisteredMechLog = new();
 		[ThreadStatic] private static bool _callbackThreadNamed;
 
 		// Diagnostics. The native library is loaded once per process, so its version is static.
@@ -520,10 +521,12 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void Update()
 		{
-			if (_pinMame == null || !_isRunning) {
+			if (_pinMame == null) {
 				return;
 			}
 
+			// Run what the callbacks queued even when the game isn't running (anymore): a ROM
+			// that stops before it starts queues its failure for the diagnostics.
 			_pendingDispatchCallbacks.Clear();
 
 			lock (_dispatchQueue) {
@@ -539,6 +542,10 @@ namespace VisualPinball.Engine.PinMAME
 				catch (Exception e) {
 					Logger.Error(e, "[PinMAME] Exception while processing main-thread dispatch callback.");
 				}
+			}
+
+			if (!_isRunning) {
+				return;
 			}
 
 			// lamps
@@ -608,7 +615,7 @@ namespace VisualPinball.Engine.PinMAME
 		private void LogUnmappedLampSample(string kind, int pinMameId, float value, LampSource source)
 		{
 			// once per output, and only for the first few outputs
-			if (_loggedUnmappedLampSamples >= MaxLoggedUnmappedLampSamples || !UnmappedLampLog.ShouldLog((kind, pinMameId))) {
+			if (_loggedUnmappedLampSamples >= MaxLoggedUnmappedLampSamples || !_unmappedLampLog.ShouldLog((kind, pinMameId))) {
 				return;
 			}
 
@@ -1816,7 +1823,7 @@ namespace VisualPinball.Engine.PinMAME
 					}
 				}
 			}
-			else if (UnmappedCoilLog.ShouldLog(id)) {
+			else if (_unmappedCoilLog.ShouldLog(id)) {
 				Logger.Warn("[PinMAME] <= coil {CoilId} changed to {Value}, but the table doesn't map it. Further changes of this coil are not logged.", id, value);
 			}
 		}
@@ -1889,7 +1896,7 @@ namespace VisualPinball.Engine.PinMAME
 				if (isClosed) {
 					_ballManager.CreateBall(new DebugBallCreator(630f, _playfieldComponent.Height / 2f));
 				}
-			} else if (UnknownSwitchLog.ShouldLog(id ?? string.Empty)) {
+			} else if (_unknownSwitchLog.ShouldLog(id ?? string.Empty)) {
 				Logger.Warn("[PinMAME] Switch {SwitchId} isn't mapped to this game, ignoring it. Further events of this switch are not logged.", id);
 			}
 
@@ -2012,7 +2019,7 @@ namespace VisualPinball.Engine.PinMAME
 			if (_registeredMechs.ContainsKey(mechNo)) {
 				EnqueueMainThreadDispatch(() => _registeredMechs[mechNo].UpdateMech(mechInfo));
 
-			} else if (Logger.IsDebugEnabled && UnregisteredMechLog.ShouldLog(mechNo)) {
+			} else if (Logger.IsDebugEnabled && _unregisteredMechLog.ShouldLog(mechNo)) {
 				Logger.Debug("[PinMAME] <= mech {MechNo} updated, but no mech component is registered for it ({MechInfo}). Further updates are not logged.", mechNo, mechInfo.ToString());
 			}
 		}
