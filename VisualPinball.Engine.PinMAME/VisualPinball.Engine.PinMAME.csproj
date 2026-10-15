@@ -15,24 +15,14 @@
     <RuntimeIdentifier Condition="$([MSBuild]::IsOSPlatform('Linux'))">linux-x64</RuntimeIdentifier>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Condition="'$(PinMameManagedSourcePath)' == ''" Include="PinMame" Version="$(PinMameVersion)" />
-    <PackageReference Condition="'$(PinMameNativeSourcePath)' == '' Or '$(RuntimeIdentifier)' != 'win-x64'" Include="PinMame.Native" Version="$(PinMameNativeVersion)" />
-    <Reference Condition="'$(PinMameManagedSourcePath)' != ''" Include="PinMameDotNet">
-      <HintPath>$(PinMameManagedSourcePath)</HintPath>
-      <Private>true</Private>
-    </Reference>
-    <PackageReference Include="VisualPinball.Engine" Version="0.0.1-preview.105" />
+    <PackageReference Include="PinMame" Version="$(PinMameVersion)" />
+    <PackageReference Include="PinMame.Native" Version="$(PinMameNativeVersion)" />
+    <PackageReference Include="VisualPinball.Engine" Version="0.0.1-preview.105" /> 
     <!-- Uncomment when doing local dev -->
     <!-- <Reference Include="VisualPinball.Engine">
       <HintPath>..\..\VisualPinball.Engine\VisualPinball.Engine\.bin\Release\netstandard2.1\VisualPinball.Engine.dll</HintPath>
     </Reference> -->
   </ItemGroup>
-  <Target Name="ValidatePinMameSourcePaths" BeforeTargets="ResolveReferences">
-    <Error Condition="'$(PinMameManagedSourcePath)' != '' And !Exists('$(PinMameManagedSourcePath)')" Text="PinMameManagedSourcePath does not exist: $(PinMameManagedSourcePath)" />
-    <Error Condition="'$(PinMameNativeSourcePath)' != '' And !Exists('$(PinMameNativeSourcePath)')" Text="PinMameNativeSourcePath does not exist: $(PinMameNativeSourcePath)" />
-    <Error Condition="'$(PinMameNativeSourcePath)' != '' And '$(RuntimeIdentifier)' != 'win-x64'" Text="PinMameNativeSourcePath currently supports only the win-x64 runtime identifier." />
-  </Target>
-
   <Target Name="PluginsDeploy" AfterTargets="AfterBuild">
     <ItemGroup Condition="'$(RuntimeIdentifier)' != 'ios-arm64' And '$(RuntimeIdentifier)' != 'android-arm64-v8a'">
        <Plugins Include="$(OutDir)PinMameDotNet.dll" />
@@ -51,10 +41,7 @@
     <!-- PinMameDotNet P/Invokes "pinmame" on Windows. The win-x64 native package ships
          pinmame64.dll, so copy it as pinmame.dll for Unity to resolve it. -->
     <ItemGroup Condition="'$(RuntimeIdentifier)' == 'win-x64'">
-      <RenamedPlugins Condition="'$(PinMameNativeSourcePath)' == ''" Include="$(NuGetPackageRoot)pinmame.native.$(RuntimeIdentifier)/$(PinMameNativeVersion)/runtimes/$(RuntimeIdentifier)/native/pinmame64.dll">
-        <DestinationFile>..\VisualPinball.Engine.PinMAME.Unity\Plugins\$(RuntimeIdentifier)\pinmame.dll</DestinationFile>
-      </RenamedPlugins>
-      <RenamedPlugins Condition="'$(PinMameNativeSourcePath)' != ''" Include="$(PinMameNativeSourcePath)">
+      <RenamedPlugins Include="$(NuGetPackageRoot)pinmame.native.$(RuntimeIdentifier)/$(PinMameNativeVersion)/runtimes/$(RuntimeIdentifier)/native/pinmame64.dll">
         <DestinationFile>..\VisualPinball.Engine.PinMAME.Unity\Plugins\$(RuntimeIdentifier)\pinmame.dll</DestinationFile>
       </RenamedPlugins>
     </ItemGroup>
