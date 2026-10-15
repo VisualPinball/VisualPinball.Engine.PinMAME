@@ -136,11 +136,11 @@ namespace VisualPinball.Engine.PinMAME
 			foreach (var mark in Marks) {
 				var switchMapping = switchMappings.FirstOrDefault(sm => ReferenceEquals(sm.Device, this) && sm.DeviceItem == mark.SwitchId);
 				if (switchMapping == null) {
-					Logger.Error($"Switch \"{mark.Name}\" for mech {_cachedName} is not mapped in the switch manager, ignoring.");
+					Logger.Warn("[PinMAME] Switch {SwitchName} of mech {MechName} is not mapped in the switch manager, ignoring it.", mark.Name, _cachedName);
 					continue;
 				}
 				if (!switchIdToPinMameIdMappings.TryGetValue(switchMapping.Id, out var pinMameSwitchId)) {
-					Logger.Error($"Switch \"{switchMapping.Id}\" for mech {_cachedName} is not a PinMAME switch, ignoring.");
+					Logger.Warn("[PinMAME] Switch {SwitchId} of mech {MechName} is not a PinMAME switch, ignoring it.", switchMapping.Id, _cachedName);
 					continue;
 				}
 

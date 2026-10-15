@@ -45,7 +45,7 @@ namespace VisualPinball.Engine.PinMAME
 	[RequireComponent(typeof(AudioSource))]
 	[PackAs("PinMameGamelogicEngine")]
 	[AddComponentMenu("Pinball/Gamelogic Engine/PinMAME")]
-	public class PinMameGamelogicEngine : MonoBehaviour, IGamelogicEngine, IDisplayFrameFormatPreference, IDisplayResourceMetadata, IGamelogicAudioResourceProvider, IGameIdentityProvider, IRomNameProvider, IGamelogicInputThreading, IGamelogicTimeFence, IGamelogicCoilOutputFeed, IGamelogicSharedStateWriter, IGamelogicSharedStateApplier, IGamelogicPerformanceStats, IGamelogicNativeOutputs, ISegmentDisplayMetadata, IPackable
+	public class PinMameGamelogicEngine : MonoBehaviour, IGamelogicEngine, IDisplayFrameFormatPreference, IDisplayResourceMetadata, IGamelogicAudioResourceProvider, IGameIdentityProvider, IRomNameProvider, IGamelogicInputThreading, IGamelogicTimeFence, IGamelogicCoilOutputFeed, IGamelogicSharedStateWriter, IGamelogicSharedStateApplier, IGamelogicPerformanceStats, IGamelogicNativeOutputs, ISegmentDisplayMetadata, IPackable, IDiagnosticsSource, IGamelogicStartupStatus
 	{
 		public string Name { get; } = "PinMAME Gamelogic Engine";
 		public GamelogicInputDispatchMode SwitchDispatchMode => GamelogicInputDispatchMode.SimulationThread;
@@ -268,7 +268,10 @@ namespace VisualPinball.Engine.PinMAME
 				PinMame.PinMame.SetTimeFence(timeInSeconds);
 			}
 			catch (Exception e) {
-				Logger.Warn(e, "[PinMAME] SetTimeFence call failed.");
+				// called every simulation tick
+				if (TimeFenceThrottle.ShouldLog(out var suppressed)) {
+					Logger.Warn(e, "[PinMAME] SetTimeFence call failed ({Suppressed} similar suppressed).", suppressed);
+				}
 			}
 		}
 
@@ -456,6 +459,39 @@ namespace VisualPinball.Engine.PinMAME
 		private int _playModeExitHandled;
 		private const int StopTimeoutMs = 10000;
 
+		// Hot paths (native callbacks, simulation ticks, audio) check these before logging.
+		private static readonly LogThrottle TimeFenceThrottle = new(3, TimeSpan.FromSeconds(30));
+		private static readonly LogThrottle DroppedFrameThrottle = new(5, TimeSpan.FromSeconds(30));
+		private static readonly LogThrottle AudioOverflowThrottle = new(3, TimeSpan.FromSeconds(30));
+		private static readonly LogThrottle AudioUnderrunThrottle = new(3, TimeSpan.FromSeconds(30));
+		private static readonly LogThrottle GameStateCallbackThrottle = new(3, TimeSpan.FromSeconds(30));
+		private static readonly LogThrottle DisplayCallbackThrottle = new(3, TimeSpan.FromSeconds(30));
+		private static readonly LogThrottle AudioCallbackThrottle = new(3, TimeSpan.FromSeconds(30));
+		private static readonly LogThrottle MechCallbackThrottle = new(3, TimeSpan.FromSeconds(30));
+		private static readonly LogThrottle SolenoidCallbackThrottle = new(3, TimeSpan.FromSeconds(30));
+		private static readonly LogThrottle KeyCallbackThrottle = new(3, TimeSpan.FromSeconds(30));
+		private static readonly LogOncePerKey<int> UnmappedCoilLog = new();
+		private static readonly LogOncePerKey<string> UnknownSwitchLog = new();
+		private static readonly LogOncePerKey<(string, int)> UnmappedLampLog = new();
+		private static readonly LogOncePerKey<int> UnregisteredMechLog = new();
+		[ThreadStatic] private static bool _callbackThreadNamed;
+
+		// Diagnostics. The native library is loaded once per process, so its version is static.
+		private static string _nativeVersion;
+		private static string _nativeLibraryPath;
+		private string _romFolder;
+		private string _nvramFolder;
+		private string _configFolder;
+		private bool? _romAuditPassed;
+		private bool _romKnown = true;
+		private bool _romMissingReported;
+		private volatile bool _awaitingGameStart;
+		private volatile string _startFailure;
+
+		/// <inheritdoc />
+		public string StartupFailure => _startFailure;
+		private long _hardwareGen;
+
 		#endregion
 
 		#region Lifecycle
@@ -465,7 +501,7 @@ namespace VisualPinball.Engine.PinMAME
 			// SimulationThreadComponent reads RequestedSwitches from Start(). Build these caches in Awake so
 			// their availability does not depend on Unity's undefined ordering between component Start calls.
 			UpdateCaches(true);
-			Logger.Info("Project audio sample rate: " +  AudioSettings.outputSampleRate);
+			Logger.Debug("[PinMAME] Project audio sample rate: {SampleRate} Hz", AudioSettings.outputSampleRate);
 			_keyboard = Keyboard.current;
 		}
 
@@ -516,7 +552,7 @@ namespace VisualPinball.Engine.PinMAME
 						LogChangedLampSample("lamp", changedLamp.Id, vpeLampId, changedLamp.Value, LampSource.Lamp);
 						OnLampChanged?.Invoke(this, new LampEventArgs(vpeLampId, changedLamp.Value));
 					}
-				} else {
+				} else if (!_pinMameIdToLampIdMapping.ContainsKey(changedLamp.Id)) {
 					LogUnmappedLampSample("lamp", changedLamp.Id, changedLamp.Value, LampSource.Lamp);
 				}
 			}
@@ -533,7 +569,7 @@ namespace VisualPinball.Engine.PinMAME
 						LogChangedLampSample("gi", changedGi.Id, vpeLampId, changedGi.Value, LampSource.GI);
 						OnLampChanged?.Invoke(this, new LampEventArgs(vpeLampId, changedGi.Value, LampSource.GI));
 					}
-				} else {
+				} else if (!_pinMameIdToGiIdMapping.ContainsKey(changedGi.Id)) {
 					LogUnmappedLampSample("gi", changedGi.Id, changedGi.Value, LampSource.GI);
 				}
 			}
@@ -553,33 +589,32 @@ namespace VisualPinball.Engine.PinMAME
 				_dispatchQueue.Enqueue(callback);
 				if (!_dispatchQueueWarningIssued && _dispatchQueue.Count >= DispatchQueueWarningThreshold) {
 					_dispatchQueueWarningIssued = true;
-					Logger.Warn($"[PinMAME] Main-thread dispatch queue backlog reached {_dispatchQueue.Count} items.");
+					Logger.Warn("[PinMAME] Main-thread dispatch queue backlog reached {Count} items.", _dispatchQueue.Count);
 				}
 			}
 		}
 
 		private void LogChangedLampSample(string kind, int pinMameId, string vpeLampId, float value, LampSource source)
 		{
-			if (_loggedChangedLampSamples >= MaxLoggedChangedLampSamples) {
+			if (_loggedChangedLampSamples >= MaxLoggedChangedLampSamples || !Logger.IsDebugEnabled) {
 				return;
 			}
 
 			_loggedChangedLampSamples++;
-			Logger.Info(
-				$"[PinMAME] <= {kind} sample #{_loggedChangedLampSamples}: pinmameId={pinMameId}, " +
-				$"vpeId={vpeLampId}, source={source}, value={value}, sharedLampPlaybackActive={_sharedLampPlaybackActive}.");
+			Logger.Debug("[PinMAME] <= {Kind} sample #{Sample}: pinmameId={PinMameId}, vpeId={VpeLampId}, source={Source}, value={Value}, sharedLampPlaybackActive={SharedLampPlayback}.",
+				kind, _loggedChangedLampSamples, pinMameId, vpeLampId, source, value, _sharedLampPlaybackActive);
 		}
 
 		private void LogUnmappedLampSample(string kind, int pinMameId, float value, LampSource source)
 		{
-			if (_loggedUnmappedLampSamples >= MaxLoggedUnmappedLampSamples) {
+			// once per output, and only for the first few outputs
+			if (_loggedUnmappedLampSamples >= MaxLoggedUnmappedLampSamples || !UnmappedLampLog.ShouldLog((kind, pinMameId))) {
 				return;
 			}
 
 			_loggedUnmappedLampSamples++;
-			Logger.Warn(
-				$"[PinMAME] <= {kind} UNMAPPED sample #{_loggedUnmappedLampSamples}: pinmameId={pinMameId}, " +
-				$"source={source}, value={value}, sharedLampPlaybackActive={_sharedLampPlaybackActive}.");
+			Logger.Warn("[PinMAME] <= {Kind} {PinMameId} ({Source}) changed to {Value}, but the table doesn't map it. Further changes of it are not logged.",
+				kind, pinMameId, source, value);
 		}
 
 		private int CopyCoilStates(ref SimulationState.Snapshot snapshot)
@@ -725,7 +760,10 @@ namespace VisualPinball.Engine.PinMAME
 				_pinMame.OnAudioAvailable -= OnAudioAvailable;
 				_pinMame.OnAudioUpdated -= OnAudioUpdated;
 			}
-			catch { }
+			catch (Exception e) {
+				// teardown: the callbacks are unsubscribed again before the next start
+				Logger.Debug(e, "[PinMAME] Unsubscribing callbacks on play mode exit failed.");
+			}
 		}
 
 		private void RequestStopGame(string reason)
@@ -750,20 +788,20 @@ namespace VisualPinball.Engine.PinMAME
 				}
 
 			} catch (Exception e) {
-				Logger.Warn(e, $"[PinMAME] StopGame ({reason}) failed.");
+				Logger.Warn(e, "[PinMAME] StopGame ({Reason}) failed.", reason);
 				return;
 			}
 
 			// Avoid racing StartGame on re-entering play mode.
 			if (!PinMameStartStopGate.Wait(0)) {
-				Logger.Warn($"[PinMAME] StopGame ({reason}) skipped: start/stop already in progress.");
+				Logger.Warn("[PinMAME] StopGame ({Reason}) skipped: start/stop already in progress.", reason);
 				return;
 			}
 
 			// Never block the Unity main thread during playmode exit.
 			// PinMAME shutdown is best-effort here; OnInit() and the editor lifecycle hook
 			// will recover/ensure shutdown before starting a new ROM.
-			Logger.Warn($"[PinMAME] StopGame ({reason}) requested. RunningGame={_pinMame?.RunningGame}");
+			Logger.Info("[PinMAME] Stopping ROM {Rom} ({Reason}).", _pinMame?.RunningGame ?? romId, reason);
 
 			try {
 				if (_pinMame != null) {
@@ -781,7 +819,8 @@ namespace VisualPinball.Engine.PinMAME
 				}
 			}
 			catch (Exception e) {
-				Logger.Warn(e, $"[PinMAME] Unsubscribe during shutdown ({reason}) failed.");
+				// teardown: the native side is stopped right after
+				Logger.Debug(e, "[PinMAME] Unsubscribe during shutdown ({Reason}) failed.", reason);
 			}
 
 			// PinmameStop may block (joins the emulation thread). Never do that on the Unity main thread.
@@ -789,7 +828,7 @@ namespace VisualPinball.Engine.PinMAME
 				try {
 					_pinMame?.StopGame();
 				} catch (Exception e) {
-					Logger.Warn(e, $"[PinMAME] StopGame ({reason}) failed.");
+					Logger.Warn(e, "[PinMAME] StopGame ({Reason}) failed.", reason);
 				} finally {
 					PinMameStartStopGate.Release();
 				}
@@ -833,7 +872,7 @@ namespace VisualPinball.Engine.PinMAME
 
 			await PinMameStartStopGate.WaitAsync(ct);
 			try {
-				Logger.Info($"[PinMAME] OnInit {name}: romId={romId}, sampleRate={AudioSettings.outputSampleRate}");
+				Logger.Info("[PinMAME] Starting ROM {Rom} of machine {Machine} on {Name:l} (audio {SampleRate} Hz).", romId, machineId, name, AudioSettings.outputSampleRate);
 
 				#if UNITY_EDITOR
 				// With Domain Reload disabled, PinMAME (native + managed singleton) persists across play sessions.
@@ -853,7 +892,8 @@ namespace VisualPinball.Engine.PinMAME
 				}
 				Logger.Debug($"[PinMAME] Editor pre-stop: initialRunState={preStopState}, stopCallMs={preStopSw.ElapsedMilliseconds}, waitMs={preStopWaitSw.ElapsedMilliseconds}, finalRunState={PinMame.PinMame.RunState}");
 				if (PinMame.PinMame.RunState != 0) {
-					Logger.Error($"[PinMAME] Cannot start ROM; PinMAME did not reach stopped state (RunState={PinMame.PinMame.RunState}).");
+					_startFailure = "previous game did not stop";
+					Logger.Error("[PinMAME] Cannot start ROM {Rom}, the previous game did not stop within {TimeoutMs} ms (run state {RunState}).", romId, StopTimeoutMs, PinMame.PinMame.RunState);
 					return;
 				}
 
@@ -876,6 +916,11 @@ namespace VisualPinball.Engine.PinMAME
 				_pinMame = PinMame.PinMame.Instance(PinMameAudioFormat.AudioFormatFloat, AudioSettings.outputSampleRate, vpmPath);
 				// Re-apply config each init (important when Domain Reload is disabled).
 				_pinMame.ApplyConfig();
+				if (_nativeVersion == null) {
+					// the native library is loaded now
+					ReadNativeVersion(out _nativeVersion, out _nativeLibraryPath);
+					Logger.Info("[PinMAME] libpinmame {Version} ({Path:l}), pinmame-dotnet {WrapperVersion}.", _nativeVersion, _nativeLibraryPath ?? "path unknown", WrapperVersion);
+				}
 
 				// Prevent duplicate subscriptions if OnInit is invoked more than once.
 				_pinMame.OnGameStarted -= OnGameStarted;
@@ -937,6 +982,7 @@ namespace VisualPinball.Engine.PinMAME
 				_solenoidsEnabled = SolenoidDelay == 0;
 
 				try {
+					_awaitingGameStart = true;
 					_pinMame.StartGame(romId);
 					Logger.Debug($"[PinMAME] StartGame returned. RunState={PinMame.PinMame.RunState}");
 				}
@@ -944,18 +990,43 @@ namespace VisualPinball.Engine.PinMAME
 				{
 					Logger.Warn(e, "[PinMAME] StartGame reported already running; stopping and retrying once.");
 					try {
+						// the game stopped here isn't ours, so its end isn't a failed start
+						_awaitingGameStart = false;
 						_pinMame.StopGame();
 						await Task.Delay(100, ct);
+						_awaitingGameStart = true;
 						_pinMame.StartGame(romId);
 						Logger.Debug($"[PinMAME] StartGame retry returned. RunState={PinMame.PinMame.RunState}");
 					}
+					catch (OperationCanceledException) {
+						_awaitingGameStart = false;
+						throw;
+					}
 					catch (Exception retryEx) {
-						Logger.Error(retryEx);
+						_awaitingGameStart = false;
+						_startFailure = "start failed after stopping the running game";
+						Logger.Error(retryEx, "[PinMAME] Cannot start ROM {Rom} after stopping the game that was still running.", romId);
 					}
 				}
-				catch (Exception e) {
-					Logger.Error(e);
+				catch (InvalidOperationException e) when (e.Message != null && e.Message.Contains("status=GAME_NOT_FOUND"))
+				{
+					// a typo in the table, or a ROM newer than this PinMAME
+					_awaitingGameStart = false;
+					_startFailure = "unknown ROM";
+					Logger.Warn(e, "[PinMAME] Cannot start ROM {Rom}, libpinmame {Version} doesn't know it. Check the ROM name of the table.", romId, _nativeVersion ?? "unknown");
 				}
+				catch (Exception e) {
+					_awaitingGameStart = false;
+					_startFailure = "start failed: " + e.Message;
+					Logger.Error(e, "[PinMAME] Cannot start ROM {Rom}.", romId);
+				}
+
+			} catch (Exception e) when (e is DllNotFoundException || e is EntryPointNotFoundException || e is BadImageFormatException) {
+				// a broken install, or no PinMAME build for this platform
+				_awaitingGameStart = false;
+				_startFailure = "native library not loaded";
+				// a broken local install, a missing runtime dependency, or no build for this platform
+				Logger.Warn(e, "[PinMAME] Cannot start ROM {Rom}, PinMAME's native library could not be loaded.", romId);
 
 			} finally {
 				PinMameStartStopGate.Release();
@@ -974,14 +1045,30 @@ namespace VisualPinball.Engine.PinMAME
 			}
 			PinMameFolders.ImportFromVpm(romId);
 
-			// Only a hint: PinMAME's audit reports clones whose files are all identical to their
-			// parent's as missing, although they run. StartGame reports a ROM that really is missing.
 			try {
-				if (!_pinMame.GetGame(romId).RomFound) {
-					Logger.Warn($"[PinMAME] ROM \"{romId}\" may be missing from {_pinMame.RomPath}. If the game doesn't start, set the ROM folder to where your ROMs are.");
+				_romFolder = _pinMame.RomPath;
+				_nvramFolder = _pinMame.GetPath(PinMameFileType.Nvram);
+				_configFolder = _pinMame.GetPath(PinMameFileType.Config);
+			} catch (Exception e) {
+				Logger.Debug(e, "[PinMAME] Could not read PinMAME's folders.");
+			}
+
+			// PinMAME's audit reports clones whose files are all identical to their parent's as
+			// missing, although they run. So only a failed audit without a zip is reported here.
+			// StartGame reports unknown ROMs, OnGameEnded ROMs that fail to load.
+			try {
+				_romAuditPassed = _pinMame.GetGame(romId).RomFound;
+			} catch (InvalidOperationException e) {
+				_romKnown = false;
+				Logger.Debug(e, "[PinMAME] PinMAME doesn't know ROM {Rom}.", romId);
+			}
+			if (_romAuditPassed == false) {
+				if (!PinMameFolders.HasRomZip(_romFolder, romId)) {
+					_romMissingReported = true;
+					Logger.Warn("[PinMAME] ROM {Rom} not found, there is no zip file of that name in {RomFolders:l}. Put the ROM there, or set the ROM folder to where your ROMs are.", romId, _romFolder ?? "<no ROM folder>");
+				} else {
+					Logger.Debug("[PinMAME] PinMAME's audit reports ROM {Rom} as incomplete in {RomFolders:l}. Clones often do and still run.", romId, _romFolder);
 				}
-			} catch (InvalidOperationException) {
-				// unknown game: StartGame reports it
 			}
 		}
 
@@ -995,7 +1082,25 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void OnGameStarted()
 		{
-			Logger.Info("[PinMAME] Game started.");
+			NameCallbackThread();
+			try {
+				HandleGameStarted();
+			} catch (Exception e) {
+				LogCallbackFailure(GameStateCallbackThrottle, "game started", e);
+			}
+		}
+
+		private void HandleGameStarted()
+		{
+			_awaitingGameStart = false;
+			long hardwareGen = 0;
+			try {
+				hardwareGen = (long)PinMame.PinMame.CurrentHardwareGen;
+			} catch (Exception e) {
+				Logger.Debug(e, "[PinMAME] Could not read the hardware generation.");
+			}
+			Volatile.Write(ref _hardwareGen, hardwareGen);
+			Logger.Info("[PinMAME] Game {Rom} started (hardware {HardwareGen}, libpinmame {Version}).", romId, ((PinMameHardwareGen)(ulong)hardwareGen).ToString(), _nativeVersion ?? "unknown");
 			_isRunning = true;
 
 			_solenoidDelayStartTimestampUsec = TimestampUsec;
@@ -1007,17 +1112,41 @@ namespace VisualPinball.Engine.PinMAME
 			}
 
 			catch(Exception e) {
-				Logger.Error($"[PinMAME] OnGameStarted: {e.Message}");
+				Logger.Error(e, "[PinMAME] Could not send the initial switches and mechs to ROM {Rom}.", romId);
 			}
 
-			EnqueueMainThreadDispatch(() => OnStarted?.Invoke(this, EventArgs.Empty));
+			EnqueueMainThreadDispatch(() => {
+				OnStarted?.Invoke(this, EventArgs.Empty);
+				// the run state and hardware generation are known now
+				_player?.RefreshGamelogicDiagnostics();
+			});
 		}
 
 		private void OnGameEnded()
 		{
+			NameCallbackThread();
+			try {
+				HandleGameEnded();
+			} catch (Exception e) {
+				LogCallbackFailure(GameStateCallbackThrottle, "game ended", e);
+			}
+		}
+
+		private void HandleGameEnded()
+		{
 			// Native can report ended more than once during teardown; keep it idempotent.
 			if (_isRunning) {
-				Logger.Info("[PinMAME] Game ended.");
+				Logger.Info("[PinMAME] Game {Rom} ended.", romId);
+
+			} else if (_awaitingGameStart && Volatile.Read(ref _stopRequested) == 0) {
+				// PinMAME gave up while loading the ROM
+				_awaitingGameStart = false;
+				_startFailure = "stopped before it started";
+				if (!_romMissingReported) {
+					Logger.Warn("[PinMAME] PinMAME stopped ROM {Rom} before it started. The ROM is probably missing or incomplete in {RomFolders:l}.", romId, _romFolder ?? "<default ROM folder>");
+				}
+				// the player already marked the table as started; tell it otherwise
+				EnqueueMainThreadDispatch(() => _player?.RefreshGamelogicDiagnostics());
 			}
 			_isRunning = false;
 			while (_simulationCoilDispatchQueue.TryDequeue(out _)) {
@@ -1214,6 +1343,26 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void OnDisplayRequested(int index, int displayCount, PinMameDisplayLayout displayLayout)
 		{
+			NameCallbackThread();
+			try {
+				HandleDisplayRequested(index, displayLayout);
+			} catch (Exception e) {
+				LogCallbackFailure(DisplayCallbackThrottle, "display available", e);
+			}
+		}
+
+		private void OnDisplayUpdated(int index, IntPtr framePtr, PinMameDisplayLayout displayLayout)
+		{
+			NameCallbackThread();
+			try {
+				HandleDisplayUpdated(index, framePtr, displayLayout);
+			} catch (Exception e) {
+				LogCallbackFailure(DisplayCallbackThrottle, "display updated", e);
+			}
+		}
+
+		private void HandleDisplayRequested(int index, PinMameDisplayLayout displayLayout)
+		{
 			if (displayLayout.IsDmd) {
 				EnqueueMainThreadDispatch(() =>
 					OnDisplaysRequested?.Invoke(this, new RequestedDisplays(
@@ -1240,7 +1389,7 @@ namespace VisualPinball.Engine.PinMAME
 			}
 		}
 
-		private void OnDisplayUpdated(int index, IntPtr framePtr, PinMameDisplayLayout displayLayout)
+		private void HandleDisplayUpdated(int index, IntPtr framePtr, PinMameDisplayLayout displayLayout)
 		{
 			MarkPinMameCallbackActivity();
 
@@ -1256,14 +1405,18 @@ namespace VisualPinball.Engine.PinMAME
 		{
 			var format = GetRequestedDmdDisplayFrameFormat(displayLayout);
 			if (framePtr == IntPtr.Zero) {
-				Logger.Warn($"[PinMAME] Dropping DMD frame for index {index} because frame pointer is null (layout: {displayLayout}).");
+				if (DroppedFrameThrottle.ShouldLog(out var suppressed)) {
+					Logger.Warn("[PinMAME] Dropping DMD frame of display {Index}, the frame pointer is null ({Suppressed} similar suppressed).", index, suppressed);
+				}
 				return;
 			}
 
 			byte[] frameBuffer;
 			lock (_displayStateLock) {
 				if (!_frameBuffer.TryGetValue(index, out frameBuffer)) {
-					Logger.Warn($"[PinMAME] Dropping DMD frame for unknown index {index} (layout: {displayLayout}).");
+					if (DroppedFrameThrottle.ShouldLog(out var suppressed)) {
+						Logger.Warn("[PinMAME] Dropping DMD frame of unknown display {Index} ({Width}x{Height}, {Suppressed} similar suppressed).", index, displayLayout.Width, displayLayout.Height, suppressed);
+					}
 					return;
 				}
 			}
@@ -1282,14 +1435,18 @@ namespace VisualPinball.Engine.PinMAME
 		private void UpdateSegDisp(int index, PinMameDisplayLayout displayLayout, IntPtr framePtr)
 		{
 			if (framePtr == IntPtr.Zero) {
-				Logger.Warn($"[PinMAME] Dropping segmented display frame for index {index} because frame pointer is null (layout: {displayLayout}).");
+				if (DroppedFrameThrottle.ShouldLog(out var suppressed)) {
+					Logger.Warn("[PinMAME] Dropping segment display frame of display {Index}, the frame pointer is null ({Suppressed} similar suppressed).", index, suppressed);
+				}
 				return;
 			}
 
 			byte[] frameBuffer;
 			lock (_displayStateLock) {
 				if (!_frameBuffer.TryGetValue(index, out frameBuffer)) {
-					Logger.Warn($"[PinMAME] Dropping segmented display frame for unknown index {index} (layout: {displayLayout}).");
+					if (DroppedFrameThrottle.ShouldLog(out var suppressed)) {
+						Logger.Warn("[PinMAME] Dropping segment display frame of unknown display {Index} (type {Type}, {Suppressed} similar suppressed).", index, displayLayout.Type, suppressed);
+					}
 					return;
 				}
 			}
@@ -1402,14 +1559,36 @@ namespace VisualPinball.Engine.PinMAME
 
 		private int OnAudioAvailable(PinMameAudioInfo audioInfo)
 		{
-			Logger.Info("Game audio available: " + audioInfo);
+			NameCallbackThread();
+			try {
+				return HandleAudioAvailable(audioInfo);
+			} catch (Exception e) {
+				LogCallbackFailure(AudioCallbackThrottle, "audio available", e);
+				return audioInfo.SamplesPerFrame;
+			}
+		}
+
+		private int OnAudioUpdated(IntPtr framePtr, int frameSize)
+		{
+			NameCallbackThread();
+			try {
+				return HandleAudioUpdated(framePtr, frameSize);
+			} catch (Exception e) {
+				LogCallbackFailure(AudioCallbackThrottle, "audio updated", e);
+				return _audioInfo.SamplesPerFrame;
+			}
+		}
+
+		private int HandleAudioAvailable(PinMameAudioInfo audioInfo)
+		{
+			Logger.Info("[PinMAME] Game audio available: {Channels} channel(s) at {SampleRate} Hz, {SamplesPerFrame} samples per frame.", audioInfo.Channels, audioInfo.SampleRate, audioInfo.SamplesPerFrame);
 
 			_audioInfo = audioInfo;
 			_queuedGain = OutputGain; // A saved mute applies to the first produced frame, including boot audio.
 			return _audioInfo.SamplesPerFrame;
 		}
 
-		private int OnAudioUpdated(IntPtr framePtr, int frameSize)
+		private int HandleAudioUpdated(IntPtr framePtr, int frameSize)
 		{
 			if (_pluginAudio.HasSubscribers && framePtr != IntPtr.Zero && frameSize > 0) {
 				int length = checked(frameSize * _audioInfo.Channels * sizeof(float));
@@ -1463,12 +1642,16 @@ namespace VisualPinball.Engine.PinMAME
 			}
 
 			_queuedGain = targetGain;
+			var droppedFrames = 0;
 			lock (_audioQueue) {
 				if (_audioQueue.Count >= _maximalQueueSize) {
+					droppedFrames = _audioQueue.Count;
 					_audioQueue.Clear();
-					Logger.Error("Clearing full audio frame queue.");
 				}
 				_audioQueue.Enqueue(frame);
+			}
+			if (droppedFrames > 0 && AudioOverflowThrottle.ShouldLog(out var suppressed)) {
+				Logger.Warn("[PinMAME] Audio output fell behind, dropped {Frames} queued audio frames ({Suppressed} similar suppressed).", droppedFrames, suppressed);
 			}
 
 			return _audioInfo.SamplesPerFrame;
@@ -1495,13 +1678,14 @@ namespace VisualPinball.Engine.PinMAME
 
 			if (_audioFilterChannels == 0) {
 				_audioFilterChannels = channels;
-				Logger.Info($"Creating audio on {channels} channels.");
+				Logger.Info("[PinMAME] Creating audio on {Channels} channels.", channels);
 				return;
 			}
 
 			if (_audioQueue.Count == 0) {
-				if (!DisableAudio) {
-					Logger.Info("Filtering audio but nothing to de-queue.");
+				// runs per audio buffer; normal until the game produces sound
+				if (!DisableAudio && Logger.IsDebugEnabled && AudioUnderrunThrottle.ShouldLog(out var suppressed)) {
+					Logger.Debug("[PinMAME] Filtering audio but nothing to de-queue ({Suppressed} similar suppressed).", suppressed);
 				}
 				return;
 			}
@@ -1561,6 +1745,16 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void OnSolenoidUpdated(int id, int value)
 		{
+			NameCallbackThread();
+			try {
+				HandleSolenoidUpdated(id, value);
+			} catch (Exception e) {
+				LogCallbackFailure(SolenoidCallbackThrottle, "solenoid updated", e);
+			}
+		}
+
+		private void HandleSolenoidUpdated(int id, int value)
+		{
 			MarkPinMameCallbackActivity();
 			if (_nativeOutputs != null) {
 				_nativeSolenoids.Enqueue((id, value));
@@ -1580,7 +1774,7 @@ namespace VisualPinball.Engine.PinMAME
 					_solenoidsEnabled = TimestampUsec - _solenoidDelayStartTimestampUsec >= (long)(SolenoidDelay * 1000f);
 
 					if (_solenoidsEnabled) {
-						Logger.Info($"Solenoids enabled, {SolenoidDelay}ms passed");
+						Logger.Info("[PinMAME] Solenoids enabled, {SolenoidDelay} ms passed.", SolenoidDelay);
 					}
 				}
 
@@ -1590,15 +1784,15 @@ namespace VisualPinball.Engine.PinMAME
 					}
 
 					foreach (var coilId in coilIds) {
-						if (Logger.IsDebugEnabled) {
-							Logger.Debug($"[PinMAME] <= coil {coilId} : {value} | {(_coils.TryGetValue(coilId, out var coil) ? coil.Description : string.Empty)}");
+						if (Logger.IsTraceEnabled) {
+							Logger.Trace("[PinMAME] <= coil {CoilId}: {Value} | {Description}", coilId, value, _coils.TryGetValue(coilId, out var coil) ? coil.Description : string.Empty);
 						}
 						if (ShouldDispatchSimulationCoil(coilId)) {
 							_simulationCoilDispatchQueue.Enqueue(new CoilEventArgs(coilId, isActive));
 							var simulationCoilQueueSize = Interlocked.Increment(ref _simulationCoilDispatchQueueSize);
 							if (!_simulationCoilQueueWarningIssued && simulationCoilQueueSize >= MaxSimulationCoilDispatchQueueSize / 2) {
 								_simulationCoilQueueWarningIssued = true;
-								Logger.Warn($"[PinMAME] Simulation coil dispatch backlog reached {simulationCoilQueueSize} items.");
+								Logger.Warn("[PinMAME] Simulation coil dispatch backlog reached {Count} items.", simulationCoilQueueSize);
 							}
 							if (simulationCoilQueueSize > MaxSimulationCoilDispatchQueueSize) {
 								if (_simulationCoilDispatchQueue.TryDequeue(out _)) {
@@ -1607,7 +1801,7 @@ namespace VisualPinball.Engine.PinMAME
 									}
 									if (!_simulationCoilQueueDropWarningIssued) {
 										_simulationCoilQueueDropWarningIssued = true;
-										Logger.Warn($"[PinMAME] Simulation coil dispatch queue exceeded {MaxSimulationCoilDispatchQueueSize} items. Dropping oldest coil callbacks.");
+										Logger.Warn("[PinMAME] Simulation coil dispatch queue exceeded {Count} items. Dropping oldest coil callbacks.", MaxSimulationCoilDispatchQueueSize);
 									}
 								}
 							}
@@ -1617,13 +1811,13 @@ namespace VisualPinball.Engine.PinMAME
 					}
 				}
 				else {
-					if (Logger.IsDebugEnabled) {
-						Logger.Debug($"[PinMAME] <= solenoids disabled, coil {id} : {value}");
+					if (Logger.IsTraceEnabled) {
+						Logger.Trace("[PinMAME] <= solenoids disabled, coil {CoilId}: {Value}", id, value);
 					}
 				}
 			}
-			else {
-				Logger.Warn($"[PinMAME] <= coil UNMAPPED {id}: {isActive}");
+			else if (UnmappedCoilLog.ShouldLog(id)) {
+				Logger.Warn("[PinMAME] <= coil {CoilId} changed to {Value}, but the table doesn't map it. Further changes of this coil are not logged.", id, value);
 			}
 		}
 
@@ -1667,7 +1861,9 @@ namespace VisualPinball.Engine.PinMAME
 				if (_switches.TryGetValue(id, out var @switch)
 				    && _switchIdToPinMameIdMappings.TryGetValue(@switch.Id, out var pinMameId)
 				    && !_mechSwitches.Contains(pinMameId)) {
-					Logger.Info($"[PinMAME] => sw {id} ({@switch.Id}): {true} | {@switch.Description}");
+					if (Logger.IsDebugEnabled) {
+						Logger.Debug("[PinMAME] => initial sw {SwitchId} ({MappingId}): closed | {Description}", id, @switch.Id, @switch.Description);
+					}
 
 					_pinMame.SetSwitch(pinMameId, true);
 				}
@@ -1682,8 +1878,8 @@ namespace VisualPinball.Engine.PinMAME
 					return;
 				}
 				if (_pinMame != null && _isRunning) {
-					if (Logger.IsDebugEnabled) {
-						Logger.Debug($"[PinMAME] => sw {id}: {isClosed} | {sw.Description}");
+					if (Logger.IsTraceEnabled) {
+						Logger.Trace("[PinMAME] => sw {SwitchId}: {IsClosed} | {Description}", id, isClosed, sw.Description);
 					}
 					if (_switchIdToPinMameIdMappings.TryGetValue(sw.Id, out pinMameId)) {
 						_pinMame.SetSwitch(pinMameId, isClosed);
@@ -1693,10 +1889,8 @@ namespace VisualPinball.Engine.PinMAME
 				if (isClosed) {
 					_ballManager.CreateBall(new DebugBallCreator(630f, _playfieldComponent.Height / 2f));
 				}
-			} else {
-				if (Logger.IsErrorEnabled) {
-					Logger.Error($"[PinMAME] Unknown switch \"{id}\".");
-				}
+			} else if (UnknownSwitchLog.ShouldLog(id ?? string.Empty)) {
+				Logger.Warn("[PinMAME] Switch {SwitchId} isn't mapped to this game, ignoring it. Further events of this switch are not logged.", id);
 			}
 
 			OnSwitchChanged?.Invoke(this, new SwitchEventArgs2(id, isClosed));
@@ -1792,10 +1986,25 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void OnMechAvailable(int mechNo, PinMameMechInfo mechInfo)
 		{
-			Logger.Info($"[PinMAME] <= mech available: mechNo={mechNo}, mechInfo={mechInfo}");
+			NameCallbackThread();
+			try {
+				Logger.Info("[PinMAME] <= mech available: mechNo={MechNo}, mechInfo={MechInfo}", mechNo, mechInfo.ToString());
+			} catch (Exception e) {
+				LogCallbackFailure(MechCallbackThrottle, "mech available", e);
+			}
 		}
 
 		private void OnMechUpdated(int mechNo, PinMameMechInfo mechInfo)
+		{
+			NameCallbackThread();
+			try {
+				HandleMechUpdated(mechNo, mechInfo);
+			} catch (Exception e) {
+				LogCallbackFailure(MechCallbackThrottle, "mech updated", e);
+			}
+		}
+
+		private void HandleMechUpdated(int mechNo, PinMameMechInfo mechInfo)
 		{
 			if (_nativeOutputs != null) {
 				_nativeMechs.Enqueue((mechNo, mechInfo.Pos));
@@ -1803,8 +2012,8 @@ namespace VisualPinball.Engine.PinMAME
 			if (_registeredMechs.ContainsKey(mechNo)) {
 				EnqueueMainThreadDispatch(() => _registeredMechs[mechNo].UpdateMech(mechInfo));
 
-			} else {
-				Logger.Info($"[PinMAME] <= mech updated: mechNo={mechNo}, mechInfo={mechInfo}");
+			} else if (Logger.IsDebugEnabled && UnregisteredMechLog.ShouldLog(mechNo)) {
+				Logger.Debug("[PinMAME] <= mech {MechNo} updated, but no mech component is registered for it ({MechInfo}). Further updates are not logged.", mechNo, mechInfo.ToString());
 			}
 		}
 
@@ -1815,7 +2024,7 @@ namespace VisualPinball.Engine.PinMAME
 				var mechName = _registeredMechNames.TryGetValue(id, out var name) ? name : $"mech#{id}";
 				// GetMaxMechs() returns the count of available slots and valid mech numbers are 1..max.
 				if (id > max) {
-					Logger.Error($"PinMAME supports {max} custom mech slot(s). Cannot register mech id={id} ({mechName}).");
+					Logger.Warn("[PinMAME] This game supports {Max} custom mech slot(s), ignoring mech {MechId} ({MechName}).", max, id, mechName);
 					continue;
 				}
 				var mechConfig = mech.Config(_player.SwitchMapping, _player.CoilMapping, _switchIdToPinMameIdMappings, _coilIdToPinMameIdMapping);
@@ -1829,6 +2038,17 @@ namespace VisualPinball.Engine.PinMAME
 		#endregion
 
 		private int IsKeyPressed(PinMameKeycode keycode)
+		{
+			NameCallbackThread();
+			try {
+				return HandleIsKeyPressed(keycode);
+			} catch (Exception e) {
+				LogCallbackFailure(KeyCallbackThrottle, "is key pressed", e);
+				return 0;
+			}
+		}
+
+		private int HandleIsKeyPressed(PinMameKeycode keycode)
 		{
 			if (keycode == PinMameKeycode.F10) {
 				if (_toggleSpeed) {
@@ -1869,6 +2089,173 @@ namespace VisualPinball.Engine.PinMAME
 			var rate = elapsedSeconds > 0.0 ? callbacks / elapsedSeconds : 0.0;
 			Volatile.Write(ref _pinMameCallbackRateHz, (float)rate);
 		}
+
+		#region Logging and diagnostics
+
+		/// <summary>
+		/// Names PinMAME's emulation thread on its first callback, so log lines and reports show
+		/// where they come from. Costs a thread-static read after that.
+		/// </summary>
+		private static void NameCallbackThread()
+		{
+			if (_callbackThreadNamed) {
+				return;
+			}
+			_callbackThreadNamed = true;
+			try {
+				var thread = Thread.CurrentThread;
+				if (thread.Name == null) {
+					thread.Name = "PinMAME";
+				}
+			} catch (InvalidOperationException) {
+				// named in the meantime
+			}
+		}
+
+		/// <summary>
+		/// Logs an exception thrown by a native callback. Callbacks never let exceptions through,
+		/// since they'd unwind into native code.
+		/// </summary>
+		private static void LogCallbackFailure(LogThrottle throttle, string callback, Exception e)
+		{
+			if (throttle.ShouldLog(out var suppressed)) {
+				Logger.Error(e, "[PinMAME] The {Callback} callback failed ({Suppressed} similar suppressed).", callback, suppressed);
+			}
+		}
+
+		private static string WrapperVersion
+		{
+			get {
+				try {
+					return typeof(PinMame.PinMame).Assembly.GetName().Version?.ToString() ?? "unknown";
+				} catch (Exception) {
+					return "unknown";
+				}
+			}
+		}
+
+		private static string RunStateName(int state) => state switch {
+			0 => "stopped",
+			1 => "running",
+			2 => "starting",
+			3 => "stopping",
+			_ => state.ToString(CultureInfo.InvariantCulture),
+		};
+
+		#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+		[DllImport("kernel32", CharSet = CharSet.Unicode, SetLastError = true)]
+		private static extern IntPtr GetModuleHandleW(string moduleName);
+
+		[DllImport("kernel32", CharSet = CharSet.Unicode, SetLastError = true)]
+		private static extern uint GetModuleFileNameW(IntPtr module, System.Text.StringBuilder fileName, uint size);
+		#endif
+
+		/// <summary>
+		/// Reads the version of the loaded native library. libpinmame has no version call, but on
+		/// Windows its DLL carries a version resource.
+		/// </summary>
+		private static void ReadNativeVersion(out string version, out string path)
+		{
+			version = "unavailable on this platform";
+			path = null;
+			#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+			try {
+				foreach (var moduleName in new[] { "pinmame.dll", "pinmame64.dll" }) {
+					var module = GetModuleHandleW(moduleName);
+					if (module == IntPtr.Zero) {
+						continue;
+					}
+					var fileName = new System.Text.StringBuilder(1024);
+					if (GetModuleFileNameW(module, fileName, (uint)fileName.Capacity) == 0) {
+						continue;
+					}
+					path = fileName.ToString();
+					var info = FileVersionInfo.GetVersionInfo(path);
+					version = !string.IsNullOrEmpty(info.ProductVersion) ? info.ProductVersion
+						: !string.IsNullOrEmpty(info.FileVersion) ? info.FileVersion
+						: "unknown";
+					return;
+				}
+				version = "unknown (module not found)";
+			} catch (Exception e) {
+				Logger.Debug(e, "[PinMAME] Could not read the version of the native library.");
+				version = "unknown";
+			}
+			#endif
+		}
+
+		public string DiagnosticsSection => "PinMAME";
+
+		public void Describe(DiagnosticsWriter writer)
+		{
+			writer.Add("machine", string.IsNullOrEmpty(machineId) ? "<not set>" : machineId);
+			writer.Add("libpinmame", _nativeVersion ?? "not loaded yet");
+			if (_nativeLibraryPath != null) {
+				writer.Add("libpinmame-path", _nativeLibraryPath);
+			}
+			writer.Add("pinmame-dotnet", WrapperVersion);
+
+			// the native library is only touched once this engine loaded it
+			var runState = "not started";
+			if (_pinMame != null) {
+				try {
+					runState = RunStateName(PinMame.PinMame.RunState);
+				} catch (Exception e) {
+					runState = "unknown (" + e.GetType().Name + ")";
+				}
+			}
+			writer.Add("run-state", runState);
+			var startFailure = _startFailure;
+			if (startFailure != null) {
+				writer.Add("start-failure", startFailure);
+			}
+			var hardwareGen = Volatile.Read(ref _hardwareGen);
+			if (hardwareGen != 0) {
+				writer.Add("hardware", ((PinMameHardwareGen)(ulong)hardwareGen).ToString());
+			}
+
+			var romFolder = _romFolder ?? GamelogicPaths.RomFolder;
+			writer.Add("rom-folder", romFolder ?? "<default>");
+			if (!string.IsNullOrWhiteSpace(romFolder) && !string.IsNullOrWhiteSpace(romId)) {
+				writer.Add("rom-zip-found", PinMameFolders.HasRomZip(romFolder, romId));
+			}
+			if (!_romKnown) {
+				writer.Add("rom-known", false);
+			}
+			if (_romAuditPassed.HasValue) {
+				writer.Add("rom-audit", _romAuditPassed.Value ? "complete" : "missing or incomplete");
+			}
+			if (_nvramFolder != null) {
+				writer.Add("nvram-folder", _nvramFolder);
+				if (!string.IsNullOrWhiteSpace(romId)) {
+					writer.Add("nvram-found", System.IO.File.Exists(System.IO.Path.Combine(_nvramFolder, romId + ".nv")));
+				}
+			}
+			if (_configFolder != null) {
+				writer.Add("config-folder", _configFolder);
+			}
+
+			var audioInfo = _audioInfo;
+			if (audioInfo.SampleRate > 0) {
+				writer.Add("audio", string.Format(CultureInfo.InvariantCulture, "{0} channel(s), {1} Hz, {2} samples per frame", audioInfo.Channels, audioInfo.SampleRate, audioInfo.SamplesPerFrame));
+			}
+			int displays;
+			lock (_displayStateLock) {
+				displays = _frameBuffer.Count;
+			}
+			writer.Add("displays", displays);
+			writer.Add("registered-mechs", _registeredMechs.Count);
+
+			writer.AddSetting("DisableMechs", DisableMechs);
+			writer.AddSetting("DisableAudio", DisableAudio);
+			writer.AddSetting("SolenoidDelay", SolenoidDelay);
+			writer.AddSetting("OutputGain", OutputGain);
+			writer.AddSetting("DmdFrameFormat", _requestedDmdFrameFormat);
+			writer.AddSetting("RomFolderOverride", GamelogicPaths.RomFolderOverride ?? "");
+			writer.AddSetting("HostRomFolder", GamelogicPaths.HostRomFolder ?? "");
+		}
+
+		#endregion
 	}
 
 	[Serializable]
