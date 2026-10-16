@@ -592,6 +592,17 @@ namespace VisualPinball.Engine.PinMAME
 			// }
 		}
 
+		/// <summary>
+		/// Tells the host that the ROM isn't there, so it can ask for the ROM folder. Dispatched to
+		/// the main thread, which also defers it until the table finished loading.
+		/// </summary>
+		private void ReportRomMissing()
+		{
+			var rom = romId;
+			var folders = _romFolder;
+			EnqueueMainThreadDispatch(() => GamelogicPaths.ReportRomMissing(rom, folders));
+		}
+
 		private void EnqueueMainThreadDispatch(Action callback)
 		{
 			lock (_dispatchQueue) {
@@ -1159,6 +1170,9 @@ namespace VisualPinball.Engine.PinMAME
 				if (!_romMissingReported) {
 					Logger.Warn("[PinMAME] PinMAME stopped ROM {Rom} before it started. The ROM is probably missing or incomplete in {RomFolders:l}.", romId, _romFolder ?? "<default ROM folder>");
 				}
+				// only now: the audit before the start can't tell a missing ROM from a clone that
+				// runs from its parent's zip
+				ReportRomMissing();
 				// the player already marked the table as started; tell it otherwise
 				EnqueueMainThreadDispatch(() => _player?.RefreshGamelogicDiagnostics());
 			}
