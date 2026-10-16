@@ -1159,6 +1159,11 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void HandleGameEnded()
 		{
+			// PinMameDotNet raises "ended" for every state but running, including "starting" (2),
+			// which PinmameRun() reports before the game thread even loads the ROM.
+			if (PinMame.PinMame.RunState == 2) {
+				return;
+			}
 			// Native can report ended more than once during teardown; keep it idempotent.
 			if (_isRunning) {
 				Logger.Info("[PinMAME] Game {Rom} ended.", romId);
