@@ -27,9 +27,9 @@ namespace VisualPinball.Engine.PinMAME
 	/// <summary>
 	/// Where VPE's PinMAME keeps its files on desktop. VPE ships its own PinMAME and doesn't depend
 	/// on a Visual PinMAME (VPM) installation: NVRAM, config and high scores live in VPE's data
-	/// folder, shared by all VPE apps, and ROMs are searched in the folder the host set in
-	/// <see cref="GamelogicPaths.RomFolder"/>. The only thing taken from VPM is a game's NVRAM,
-	/// high scores and config, copied over the first time VPE runs that game.
+	/// folder, shared by all VPE apps. ROMs use <see cref="GamelogicPaths.RomFolder"/> when set,
+	/// otherwise VPM's ROM folder if available, then "roms" in VPE's data folder. A game's NVRAM,
+	/// high scores and config are copied from VPM the first time VPE runs that game.
 	/// </summary>
 	public static class PinMameFolders
 	{
@@ -58,12 +58,13 @@ namespace VisualPinball.Engine.PinMAME
 		}
 
 		/// <summary>
-		/// Points PinMAME at the host's ROM folder, or at "roms" in the data folder if the host
-		/// didn't set one. Must not be called while a game is running.
+		/// Points PinMAME at the configured ROM folder, falling back to VPM's ROM folder when
+		/// available, then "roms" in VPE's data folder. Must not be called while a game is running.
 		/// </summary>
 		public static void ApplyRomFolder(PinMame.PinMame pinMame)
 		{
-			pinMame.RomPath = GamelogicPaths.RomFolder;
+			pinMame.RomPath = GamelogicPaths.RomFolder ?? PinMame.PinMame.FindVpmPath(PinMameFileType.Roms);
+			Logger.Info($"[PinMAME] ROM folder: {pinMame.RomPath}; NVRAM: {pinMame.GetPath(PinMameFileType.Nvram)}; config: {pinMame.GetPath(PinMameFileType.Config)}.");
 		}
 
 		/// <summary>

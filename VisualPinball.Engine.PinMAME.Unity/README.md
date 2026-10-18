@@ -16,6 +16,12 @@ In the Player, this package contributes a **PinMAME** settings section with a gl
 
 Existing scenes and packages that used the retired class-based definitions remain compatible through a small runtime alias resolver. New and repopulated tables serialize numeric PinMAME IDs and populated flipper-wire mappings on the table. Candidate hardware snapshots stay in the editor scene and are omitted from packaged gamelogic data, so no machine-definition classes or catalog records are shipped with the player.
 
+### ROM and state folders
+
+Desktop builds use the ROM folder configured by the player or host. If neither sets one, PinMAME uses Visual PinMAME's configured ROM folders when available, otherwise `roms` under VPE's data folder. This fallback also applies to standalone table builds.
+
+NVRAM, configuration and high scores stay in VPE's own shared data folder (`%LOCALAPPDATA%\Visual Pinball Engine\PinMAME` on Windows). Existing game state is copied from Visual PinMAME on the first run only; VPE subsequently maintains its own copy.
+
 ## Developer Setup
 
 This UPM package gets build and published via CI. If you want to use it locally,
