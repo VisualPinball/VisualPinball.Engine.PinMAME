@@ -24,7 +24,7 @@ namespace VisualPinball.Engine.PinMAME
 		public IPlayerPlugin Create(PluginApplicationContext context) => new SettingsAdapter(context);
 		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
 		private static void Register() => PlayerPluginRegistry.Register(new PinMamePluginFactory());
-		private sealed class SettingsAdapter : PlayerPlugin, IPluginSynchronousReconfiguration, IPluginReconfiguration, IPluginEmergencyStop
+		private sealed class SettingsAdapter : PlayerPlugin, IPluginSynchronousReconfiguration, IPluginReconfiguration, IPluginEmergencyStop, IPluginStatusSource
 		{
 			private readonly PluginApplicationContext _application;
 			private PinMameGamelogicEngine _engine;
@@ -43,6 +43,13 @@ namespace VisualPinball.Engine.PinMAME
 				_application.Scheduler.VerifyOwner();
 				if (_engine != null) _engine.OutputGain = Mathf.Clamp(settings.Integer("Volume", 100), 0, 100) / 100f;
 				return new PluginActionResult(true, "");
+			}
+			// nothing to say for a table without PinMAME
+			public void DescribeStatus(PluginStatusWriter writer)
+			{
+				if (_engine == null) return;
+				writer.Add("ROM", string.IsNullOrEmpty(_engine.romId) ? "not set" : _engine.romId);
+				writer.Add("Volume", Mathf.RoundToInt(_engine.OutputGain * 100f) + "%");
 			}
 			public Task<PluginActionResult> ApplyAsync(PluginSettingsSnapshot settings, CancellationToken cancellation) { cancellation.ThrowIfCancellationRequested(); return Task.FromResult(Apply(settings)); }
 			public override Task StopGameAsync(CancellationToken cancellation) { EmergencyStop(); return Task.CompletedTask; }
