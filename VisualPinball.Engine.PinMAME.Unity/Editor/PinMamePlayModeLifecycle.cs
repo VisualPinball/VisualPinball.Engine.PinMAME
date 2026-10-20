@@ -33,17 +33,19 @@ namespace VisualPinball.Engine.PinMAME.Editor
 	{
 		private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 		private static bool _stopping;
-		private static Stopwatch _stopwatch;
-		private const int StopTimeoutMs = 2000;
-		private static bool _warnedTimeout;
-		private static System.Threading.Tasks.Task _stopTask;
-
-		// (removed) Domain reload branching; stop is synchronous for determinism.
 
 		static PinMamePlayModeLifecycle()
 		{
 			EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
 			EditorApplication.quitting += OnQuitting;
+			AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
+		}
+
+		private static void OnBeforeAssemblyReload()
+		{
+			// Native threads survive a managed domain reload. Join them while their callback
+			// delegates are still valid, including ROMs started by editor display discovery.
+			RequestStop("Before assembly reload");
 		}
 
 		private static void OnQuitting()
@@ -63,9 +65,6 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			int runState;
 			try {
 				runState = PinMame.PinMame.RunState;
-				if (runState == 0) {
-					return;
-				}
 			} catch {
 				return;
 			}
@@ -75,66 +74,48 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			}
 
 			_stopping = true;
-			_warnedTimeout = false;
-			_stopwatch = Stopwatch.StartNew();
-			Logger.Info($"[PinMAME] Stop requested ({reason}), RunState={runState}");
-
-			// Stop sim thread(s) first. This reduces the chance of other high-frequency code paths
-			// continuing to call into PinMAME while we are stopping it.
 			try {
-				var sims = UnityEngine.Object.FindObjectsByType<VisualPinball.Unity.Simulation.SimulationThreadComponent>(FindObjectsSortMode.None);
-				for (var i = 0; i < sims.Length; i++) {
-					sims[i].StopSimulation();
+				if (runState != 0) {
+					Logger.Info($"[PinMAME] Stop requested ({reason}), RunState={runState}");
 				}
-			} catch { }
 
-			// Prefer stopping via the active component(s) so they can unsubscribe callbacks first.
-			try {
-				var engines = UnityEngine.Object.FindObjectsByType<VisualPinball.Engine.PinMAME.PinMameGamelogicEngine>(FindObjectsSortMode.None);
-				for (var i = 0; i < engines.Length; i++) {
-					engines[i].StopForPlayModeExit();
+				// Stop simulation before joining the emulation thread. Include inactive tables,
+				// which may have been disabled during a scene or packaged table replacement.
+				try {
+					var sims = UnityEngine.Object.FindObjectsByType<VisualPinball.Unity.Simulation.SimulationThreadComponent>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+					for (var i = 0; i < sims.Length; i++) {
+						sims[i].StopSimulation();
+					}
+				} catch (Exception e) {
+					Logger.Warn(e, "[PinMAME] Could not stop simulation before native shutdown.");
 				}
-			} catch { }
 
-			EditorApplication.update -= Update;
-			EditorApplication.update += Update;
+				// Edit-mode components have no runtime subscriptions. Do not set their teardown
+				// flags: Unity preserves private fields when hot-reloading scene components.
+				if (EditorApplication.isPlaying) {
+					try {
+						var engines = UnityEngine.Object.FindObjectsByType<VisualPinball.Engine.PinMAME.PinMameGamelogicEngine>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+						for (var i = 0; i < engines.Length; i++) {
+							engines[i].StopForPlayModeExit();
+						}
+					} catch (Exception e) {
+						Logger.Warn(e, "[PinMAME] Could not detach table callbacks before native shutdown.");
+					}
+				}
 
-			// Stop PinMAME now.
-			// With Domain Reload disabled, background stop can overlap the next play session.
-			// Now that other hot loops are tamed, prefer a synchronous stop for determinism.
-			try {
+				// A display probe can run without a table component. Release its time fence too.
+				PinMame.PinMame.SetTimeFence(0.0);
+				// Stop synchronously: deferring this until after reload would call unloaded managed
+				// callbacks. Even state 0 can leave a finished native thread that needs joining.
 				var sw = Stopwatch.StartNew();
 				PinMame.PinMame.StopRunningGame();
-				Logger.Info($"[PinMAME] Stop call returned after {sw.ElapsedMilliseconds}ms");
+				if (runState != 0 || sw.ElapsedMilliseconds > 50) {
+					Logger.Info($"[PinMAME] Stop call returned after {sw.ElapsedMilliseconds}ms, RunState={PinMame.PinMame.RunState}");
+				}
 			} catch (Exception e) {
-				Logger.Warn(e, "[PinMAME] StopGame failed while exiting play mode.");
-			}
-			_stopTask = System.Threading.Tasks.Task.CompletedTask;
-		}
-
-		private static void Update()
-		{
-			int runState;
-			try {
-				runState = PinMame.PinMame.RunState;
-			} catch {
-				runState = 0;
-			}
-			var running = runState != 0;
-
-			var stopDone = _stopTask == null || _stopTask.IsCompleted;
-			if (!running && stopDone) {
-				EditorApplication.update -= Update;
+				Logger.Warn(e, "[PinMAME] Native shutdown failed ({Reason}).", reason);
+			} finally {
 				_stopping = false;
-				_warnedTimeout = false;
-				_stopTask = null;
-				Logger.Info("[PinMAME] Stopped (editor)");
-				return;
-			}
-
-			if (!_warnedTimeout && _stopwatch != null && _stopwatch.ElapsedMilliseconds > StopTimeoutMs) {
-				_warnedTimeout = true;
-				Logger.Warn($"[PinMAME] Still running after stop timeout (editor), RunState={runState}");
 			}
 		}
 	}
