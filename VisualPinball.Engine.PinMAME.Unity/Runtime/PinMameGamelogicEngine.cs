@@ -258,7 +258,39 @@ namespace VisualPinball.Engine.PinMAME
 		private const int MaxLoggedChangedLampSamples = 24;
 		private const int MaxLoggedUnmappedLampSamples = 24;
 
+		private readonly PinMameTimeFence _timeFenceClock = new();
+		private readonly object _timeFenceLock = new();
+		private bool _timeFenceActive;
+
 		public void SetTimeFence(double timeInSeconds)
+		{
+			lock (_timeFenceLock) {
+				if (!_timeFenceActive || Volatile.Read(ref _stopRequested) != 0) {
+					return;
+				}
+				SetNativeTimeFence(_timeFenceClock.ToEmulationTime(timeInSeconds));
+			}
+		}
+
+		// Serialize reset, tick and shutdown so no in-flight tick can re-enable a stopped fence.
+		private void ResetTimeFence()
+		{
+			lock (_timeFenceLock) {
+				_timeFenceClock.Reset();
+				_timeFenceActive = true;
+				SetNativeTimeFence(PinMameTimeFence.InitialFenceSeconds);
+			}
+		}
+
+		private void DisableTimeFence()
+		{
+			lock (_timeFenceLock) {
+				_timeFenceActive = false;
+				SetNativeTimeFence(0.0);
+			}
+		}
+
+		private void SetNativeTimeFence(double timeInSeconds)
 		{
 			if (_pinMame == null) {
 				return;
@@ -760,7 +792,7 @@ namespace VisualPinball.Engine.PinMAME
 			// Do not call into native Stop() here (it blocks); the editor hook will stop PinMAME
 			// after we unsubscribe managed callbacks.
 			Interlocked.Exchange(ref _stopRequested, 1);
-			SetTimeFence(0.0);
+			DisableTimeFence();
 			// Stop polling outputs immediately to avoid concurrent calls into pinmame.dll
 			// while a stop is in progress (pinmame APIs are not guaranteed thread-safe).
 			_isRunning = false;
@@ -798,7 +830,7 @@ namespace VisualPinball.Engine.PinMAME
 			#endif
 
 			try {
-				SetTimeFence(0.0);
+				DisableTimeFence();
 
 				if (Interlocked.Exchange(ref _stopRequested, 1) != 0) {
 					return;
@@ -985,7 +1017,7 @@ namespace VisualPinball.Engine.PinMAME
 				_pinMame.SetHandleKeyboard(false);
 				_pinMame.SetHandleMechanics(DisableMechs ? 0 : 0xFF);
 				ApplyDmdModePreference();
-				SetTimeFence(0.01);
+				ResetTimeFence();
 
 				_pinMame.OnGameStarted += OnGameStarted;
 				_pinMame.OnGameEnded += OnGameEnded;
@@ -1017,8 +1049,10 @@ namespace VisualPinball.Engine.PinMAME
 					try {
 						// the game stopped here isn't ours, so its end isn't a failed start
 						_awaitingGameStart = false;
+						DisableTimeFence();
 						_pinMame.StopGame();
 						await Task.Delay(100, ct);
+						ResetTimeFence();
 						_awaitingGameStart = true;
 						_pinMame.StartGame(romId);
 						Logger.Debug($"[PinMAME] StartGame retry returned. RunState={PinMame.PinMame.RunState}");
