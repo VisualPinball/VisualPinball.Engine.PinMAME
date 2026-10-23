@@ -109,7 +109,7 @@ namespace VisualPinball.Engine.PinMAME
 		[Tooltip("Delay after startup to listen for solenoid events.")]
 		public float SolenoidDelay;
 
-		[Tooltip("Disable audio")]
+		[Tooltip("Disable audio for direct play in Unity. Not exported to .vpe tables; playback settings belong to the player.")]
 		public bool DisableAudio;
 
 		#endregion
@@ -123,8 +123,7 @@ namespace VisualPinball.Engine.PinMAME
 				GameId = _legacyGameId,
 				RomId = romId,
 				DisableMechs = DisableMechs,
-				SolenoidDelay = SolenoidDelay,
-				DisableAudio = DisableAudio
+				SolenoidDelay = SolenoidDelay
 			};
 			return PackageApi.Packer.Pack(data);
 		}
@@ -139,7 +138,7 @@ namespace VisualPinball.Engine.PinMAME
 			romId = data.RomId;
 			DisableMechs = data.DisableMechs;
 			SolenoidDelay = data.SolenoidDelay;
-			DisableAudio = data.DisableAudio;
+			// Playback preferences belong to the player; ignore legacy package mute settings.
 			#if UNITY_EDITOR
 			ClearAvailableHardware();
 			UpdateCaches(false);
@@ -2382,7 +2381,6 @@ namespace VisualPinball.Engine.PinMAME
 		public string RomId;
 		public bool DisableMechs;
 		public float SolenoidDelay;
-		public bool DisableAudio;
 	}
 
 	#if UNITY_EDITOR
