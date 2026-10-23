@@ -88,7 +88,19 @@ namespace VisualPinball.Engine.PinMAME
 		DisplayEncoding IDisplayResourceMetadata.DisplayFormats => DisplayEncoding.Gray2 | DisplayEncoding.Gray4 | DisplayEncoding.Luminance8;
 		DisplayEncoding IDisplayResourceMetadata.DefaultDisplayFormat => DisplayEncoding.Luminance8;
 		bool IDisplayResourceMetadata.FormatAppliesToAllDisplays => true;
-		IPluginAudioSource IGamelogicAudioResourceProvider.AudioSource => _pluginAudio;
+		IPluginAudioSource IGamelogicAudioResourceProvider.AudioSource => _playbackAudio ??= new PlaybackAudioSource(this);
+		private PlaybackAudioSource _playbackAudio;
+
+		// The raw stream is shared; output mute/gain belongs only to its playback owner.
+		private sealed class PlaybackAudioSource : IPluginAudioSource, IPluginAudioPlaybackControl, IPluginAudioPlaybackGainSource
+		{
+			private readonly PinMameGamelogicEngine _engine;
+			public ResourceKind Kind => ResourceKind.Audio;
+			public float PlaybackGain => Volatile.Read(ref _engine.DisableAudio) ? 0 : _engine.OutputGain;
+			internal PlaybackAudioSource(PinMameGamelogicEngine engine) { _engine = engine; }
+			public IDisposable Subscribe(Action<PluginPcmFrame> receive) => _engine._pluginAudio.Subscribe(receive);
+			public IDisposable AcquirePlayback(string pluginId) => _engine._pluginAudio.AcquirePlayback(pluginId);
+		}
 
 		[Tooltip("Disable built-in mechs")]
 		public bool DisableMechs = true;
@@ -97,7 +109,7 @@ namespace VisualPinball.Engine.PinMAME
 		[Tooltip("Delay after startup to listen for solenoid events.")]
 		public float SolenoidDelay;
 
-		[Tooltip("Disable audio")]
+		[Tooltip("Disable audio for direct play in Unity. Not exported to .vpe tables; playback settings belong to the player.")]
 		public bool DisableAudio;
 
 		#endregion
@@ -111,8 +123,7 @@ namespace VisualPinball.Engine.PinMAME
 				GameId = _legacyGameId,
 				RomId = romId,
 				DisableMechs = DisableMechs,
-				SolenoidDelay = SolenoidDelay,
-				DisableAudio = DisableAudio
+				SolenoidDelay = SolenoidDelay
 			};
 			return PackageApi.Packer.Pack(data);
 		}
@@ -127,7 +138,7 @@ namespace VisualPinball.Engine.PinMAME
 			romId = data.RomId;
 			DisableMechs = data.DisableMechs;
 			SolenoidDelay = data.SolenoidDelay;
-			DisableAudio = data.DisableAudio;
+			// Playback preferences belong to the player; ignore legacy package mute settings.
 			#if UNITY_EDITOR
 			ClearAvailableHardware();
 			UpdateCaches(false);
@@ -457,11 +468,13 @@ namespace VisualPinball.Engine.PinMAME
 			set {
 				if (float.IsNaN(value) || float.IsInfinity(value) || value < 0 || value > 1) throw new ArgumentOutOfRangeException(nameof(value));
 				Volatile.Write(ref _outputGain, value);
+				_pluginAudio.PlaybackGain = value;
 			}
 		}
-		private readonly AudioResourceSource _pluginAudio = new(error => Logger.Warn(error, "[PinMAME] Plugin audio subscriber failed."));
+		private readonly GainControlledAudioResourceSource _pluginAudio = new(error => Logger.Warn(error, "[PinMAME] Plugin audio subscriber failed."));
 		private byte[] _pluginAudioBuffer = Array.Empty<byte>();
 		private long _pluginAudioSequence;
+		private bool _audioPlaybackWasReplaced; // Producer thread only.
 		private readonly HashSet<string> _loggedUnresolvedMappingIds = new(StringComparer.Ordinal);
 
 		private int _audioFilterChannels;
@@ -1657,13 +1670,19 @@ namespace VisualPinball.Engine.PinMAME
 
 		private int HandleAudioUpdated(IntPtr framePtr, int frameSize)
 		{
+			bool playbackReplaced = _pluginAudio.PlaybackReplaced;
 			if (_pluginAudio.HasSubscribers && framePtr != IntPtr.Zero && frameSize > 0) {
 				int length = checked(frameSize * _audioInfo.Channels * sizeof(float));
 				if (_pluginAudioBuffer.Length < length) _pluginAudioBuffer = new byte[length];
 				Marshal.Copy(framePtr, _pluginAudioBuffer, 0, length);
-				_pluginAudio.Publish(new PluginPcmFrame(_pluginAudioBuffer.AsMemory(0, length), PcmEncoding.Float32, (int)_audioInfo.SampleRate, _audioInfo.Channels, frameSize, ++_pluginAudioSequence));
+				playbackReplaced = _pluginAudio.PublishForPlayback(new PluginPcmFrame(_pluginAudioBuffer.AsMemory(0, length), PcmEncoding.Float32, (int)_audioInfo.SampleRate, _audioInfo.Channels, frameSize, ++_pluginAudioSequence));
 			}
-			if (_pluginAudio.PlaybackReplaced || DisableAudio) return _audioInfo.SamplesPerFrame;
+			bool returningToLocalPlayback = _audioPlaybackWasReplaced && !playbackReplaced;
+			_audioPlaybackWasReplaced = playbackReplaced;
+			// The local ramp was suspended during takeover. Resume at the current gain,
+			// otherwise a saved/live mute can briefly ramp down from a stale audible level.
+			if (playbackReplaced || returningToLocalPlayback) _queuedGain = OutputGain;
+			if (playbackReplaced || DisableAudio) return _audioInfo.SamplesPerFrame;
 			if (_audioFilterChannels == 0) {
 				// don't know how many channels yet
 				return _audioInfo.SamplesPerFrame;
@@ -2362,7 +2381,6 @@ namespace VisualPinball.Engine.PinMAME
 		public string RomId;
 		public bool DisableMechs;
 		public float SolenoidDelay;
-		public bool DisableAudio;
 	}
 
 	#if UNITY_EDITOR
