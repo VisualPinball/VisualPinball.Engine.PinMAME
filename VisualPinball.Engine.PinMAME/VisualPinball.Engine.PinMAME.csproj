@@ -5,7 +5,7 @@
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <LangVersion>9.0</LangVersion>
-    <PinMameVersion>1.1.1</PinMameVersion>
+    <PinMameVersion>1.1.2</PinMameVersion>
     <PinMameNativeVersion>3.7.0-beta2</PinMameNativeVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(RuntimeIdentifier)' == ''">
