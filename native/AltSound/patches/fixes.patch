@@ -45,6 +45,20 @@ index 1c85124..ec06ac1 100644
  
  						memcpy(id, ptr + 1, 6);
  						sample.id = std::stoul(trim(id), nullptr);
+diff --git a/src/altsound_processor.cpp b/src/altsound_processor.cpp
+index 2b3fa18..ee2d619 100644
+--- a/src/altsound_processor.cpp
++++ b/src/altsound_processor.cpp
+@@ -273,7 +273,8 @@ void AltsoundProcessorBase::setGlobalVol(const float vol_in)
+ 	for (size_t index = 0; index < channel_stream.size(); ++index) {
+ 		const auto stream = channel_stream[index];
+ 		if (stream) {
+-			vol[index] = getStreamVolume(stream->hstream);
++			// a stream silenced by a zero volume has no level left to scale back up from: start over from its own gain
++			vol[index] = global_vol * master_vol > 0.0f ? getStreamVolume(stream->hstream) : stream->gain;
+ 		}
+ 	}
+ 
 diff --git a/src/altsound_processor.hpp b/src/altsound_processor.hpp
 index d25e410..5d1ac97 100644
 --- a/src/altsound_processor.hpp

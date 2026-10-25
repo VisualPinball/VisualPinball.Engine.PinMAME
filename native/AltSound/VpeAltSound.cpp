@@ -11,6 +11,7 @@
 // boundary: a pack that makes libaltsound throw fails to start, or loses the one command.
 
 #include "altsound.h"
+#include "altsound_processor_base.hpp"
 
 #include <mutex>
 #include <string>
@@ -27,10 +28,13 @@
 typedef void (*VpeAltSoundCallback)(const float* samples, int frames, int sampleRate, int channels, void* userData);
 
 extern std::mutex io_mutex; // libaltsound's lock for its channel table, which its audio thread changes when samples end
+extern AltsoundProcessorBase* g_pProcessor;
 
 namespace {
 std::mutex gate;
 bool running = false;
+bool followGameVolume = true; // libaltsound's default; the host turns it off
+float gameVolume = 1.0f; // the game's last volume command, kept while the pack doesn't follow it
 VpeAltSoundCallback hostCallback = nullptr;
 void* hostUserData = nullptr;
 
@@ -63,7 +67,7 @@ std::string NativePath(const char* utf8)
 }
 }
 
-VPE_ALTSOUND_API int VpeAltSoundVersion() { return 1; }
+VPE_ALTSOUND_API int VpeAltSoundVersion() { return 2; }
 
 // Starts AltSound for a game whose samples are in <basePath>/altsound/<gameName>. Paths are UTF-8; logFolder may be empty.
 // The callback receives float blocks on libaltsound's audio thread until VpeAltSoundShutdown returns. Returns 1 on success,
@@ -82,6 +86,10 @@ VPE_ALTSOUND_API int VpeAltSoundInit(const char* basePath, const char* gameName,
 		AltSoundSetLogger(log, ALTSOUND_LOG_LEVEL_ERROR, false);
 		if (AltSoundInit(base, gameName, static_cast<uint32_t>(sampleRate), 2, static_cast<uint32_t>(bufferFrames))) {
 			AltSoundSetAudioCallback(Forward, nullptr);
+			// libaltsound always decodes the game's volume commands, so following can be turned on and off at any time
+			if (g_pProcessor) g_pProcessor->romControlsVol(true);
+			followGameVolume = true;
+			gameVolume = 1.0f;
 			running = true;
 			return 1;
 		}
@@ -104,8 +112,35 @@ VPE_ALTSOUND_API int VpeAltSoundCommand(int board, int command)
 {
 	std::lock_guard<std::mutex> lock(gate);
 	if (!running) return 0;
-	try { return AltSoundProcessBoardCommand(static_cast<unsigned int>(board), static_cast<unsigned int>(command), 0) ? 1 : 0; }
+	try {
+		const bool handled = AltSoundProcessBoardCommand(static_cast<unsigned int>(board), static_cast<unsigned int>(command), 0);
+		if (!followGameVolume && g_pProcessor && AltsoundProcessorBase::getGlobalVol() != 1.0f) {
+			// a volume command: remember it, and keep the pack at its own level
+			gameVolume = AltsoundProcessorBase::getGlobalVol();
+			std::lock_guard<std::mutex> streams(io_mutex);
+			g_pProcessor->setGlobalVol(1.0f);
+		}
+		return handled ? 1 : 0;
+	}
 	catch (...) { return 0; }
+}
+
+// Whether the game's own volume commands scale the pack, as in Visual PinMAME (where the pack's altsound.ini decides). Off
+// plays the pack at its own level, so the host's volume controls alone set it; the game's volume is still tracked, so
+// turning it back on applies the game's current volume right away.
+VPE_ALTSOUND_API void VpeAltSoundFollowGameVolume(int follow)
+{
+	std::lock_guard<std::mutex> lock(gate);
+	if (!running || !g_pProcessor || followGameVolume == (follow != 0)) return;
+	std::lock_guard<std::mutex> streams(io_mutex); // setGlobalVol walks the channel table
+	try {
+		if (follow) g_pProcessor->setGlobalVol(gameVolume);
+		else {
+			gameVolume = AltsoundProcessorBase::getGlobalVol();
+			g_pProcessor->setGlobalVol(1.0f);
+		}
+		followGameVolume = follow != 0;
+	} catch (...) {}
 }
 
 VPE_ALTSOUND_API void VpeAltSoundPause(int paused)
