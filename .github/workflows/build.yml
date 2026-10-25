@@ -34,6 +34,19 @@ jobs:
         run: |
           cd VisualPinball.Engine.PinMAME
           dotnet build -c Release -r ${{ matrix.rid }}
+      - name: Build AltSound
+        if: matrix.rid == 'win-x64' || matrix.rid == 'win-x86' || matrix.rid == 'osx' || matrix.rid == 'linux-x64'
+        run: |
+          out="${{ runner.temp }}/altsound"
+          case "${{ matrix.rid }}" in
+            win-x64) cmake -S native/AltSound -B "$out" -A x64 ;;
+            win-x86) cmake -S native/AltSound -B "$out" -A Win32 ;;
+            osx) cmake -S native/AltSound -B "$out" -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 ;;
+            linux-x64) cmake -S native/AltSound -B "$out" -DCMAKE_BUILD_TYPE=Release ;;
+          esac
+          cmake --build "$out" --config Release
+          find "$out" -maxdepth 2 \( -name VpeAltSound.dll -o -name libVpeAltSound.dylib -o -name libVpeAltSound.so \) -exec cp {} VisualPinball.Engine.PinMAME.Unity/Plugins/${{ matrix.rid }}/ \;
+          ls VisualPinball.Engine.PinMAME.Unity/Plugins/${{ matrix.rid }} | grep -i altsound
       - run: |
           mkdir tmp
           cp -r VisualPinball.Engine.PinMAME.Unity/Plugins/${{ matrix.rid }} tmp

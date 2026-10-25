@@ -96,7 +96,7 @@ namespace VisualPinball.Engine.PinMAME
 		{
 			private readonly PinMameGamelogicEngine _engine;
 			public ResourceKind Kind => ResourceKind.Audio;
-			public float PlaybackGain => Volatile.Read(ref _engine.DisableAudio) ? 0 : _engine.OutputGain;
+			public float PlaybackGain => Volatile.Read(ref _engine.DisableAudio) ? 0 : _engine.RomGain;
 			internal PlaybackAudioSource(PinMameGamelogicEngine engine) { _engine = engine; }
 			public IDisposable Subscribe(Action<PluginPcmFrame> receive) => _engine._pluginAudio.Subscribe(receive);
 			public IDisposable AcquirePlayback(string pluginId) => _engine._pluginAudio.AcquirePlayback(pluginId);
@@ -468,9 +468,74 @@ namespace VisualPinball.Engine.PinMAME
 			set {
 				if (float.IsNaN(value) || float.IsInfinity(value) || value < 0 || value > 1) throw new ArgumentOutOfRangeException(nameof(value));
 				Volatile.Write(ref _outputGain, value);
-				_pluginAudio.PlaybackGain = value;
+				_pluginAudio.PlaybackGain = RomGain;
+				ApplyAltSoundGain();
 			}
 		}
+		/// <summary>The ROM's own audio: <see cref="OutputGain"/>, or what of it stays under a playing AltSound pack.</summary>
+		private float RomGain => OutputGain * Volatile.Read(ref _romScale);
+
+		// AltSound: a pack of replacement samples that the ROM's sound commands trigger, set up by the Player's PinMAME settings.
+		private PinMameAltSound _altSound;
+		private bool _altSoundEnabled, _romStarting;
+		private string _altSoundFolder = string.Empty, _altSoundStatus = "Off";
+		private float _altSoundVolume = 1, _romUnderAltSound, _romScale = 1;
+		/// <summary>What AltSound does, for the Player's status lines.</summary>
+		public string AltSoundStatus => _altSoundStatus;
+
+		/// <summary>Turns AltSound on or off and sets where packs are. Main thread; applies right away while the ROM runs.</summary>
+		public void ConfigureAltSound(bool enabled, string folder)
+		{
+			folder ??= string.Empty;
+			if (enabled == _altSoundEnabled && folder == _altSoundFolder) return;
+			_altSoundEnabled = enabled;
+			_altSoundFolder = folder;
+			if (_romStarting) StartAltSound();
+		}
+
+		/// <summary>The pack's volume and how much of the ROM's own audio stays under it, both 0..1 and relative to <see cref="OutputGain"/>.</summary>
+		public void SetAltSoundLevels(float volume, float romVolume)
+		{
+			_altSoundVolume = Mathf.Clamp01(volume);
+			_romUnderAltSound = Mathf.Clamp01(romVolume);
+			ApplyAltSoundGain();
+		}
+
+		private void StartAltSound()
+		{
+			StopAltSound();
+			if (!_altSoundEnabled) {
+				_altSoundStatus = "Off";
+				return;
+			}
+			var altSound = PinMameAltSound.Start(_altSoundFolder, romId, AudioSettings.outputSampleRate, out _altSoundStatus);
+			// Published with a full fence, as the game start publishes the hardware generation, so one side sees the other
+			// even when the ROM starts meanwhile. Setting it twice is harmless.
+			Interlocked.Exchange(ref _altSound, altSound);
+			var hardwareGen = Interlocked.Read(ref _hardwareGen);
+			if (altSound != null && hardwareGen != 0) altSound.SetHardwareGen(hardwareGen);
+			ApplyAltSoundGain();
+		}
+
+		private void StopAltSound()
+		{
+			var altSound = Interlocked.Exchange(ref _altSound, null);
+			if (altSound == null) return;
+			altSound.Dispose();
+			ApplyAltSoundGain();
+		}
+
+		// Main thread: the pack's stream gain, and the ROM's own level under it.
+		private void ApplyAltSoundGain()
+		{
+			var altSound = _altSound;
+			Volatile.Write(ref _romScale, altSound != null ? _romUnderAltSound : 1f);
+			_pluginAudio.PlaybackGain = RomGain;
+			if (altSound != null) altSound.Gain = DisableAudio ? 0 : OutputGain * _altSoundVolume;
+		}
+
+		// Emulation thread, in order. A pack that stopped meanwhile drops the command.
+		private void OnSoundCommand(int boardNo, int cmd) => Volatile.Read(ref _altSound)?.Command(boardNo, cmd);
 		private readonly GainControlledAudioResourceSource _pluginAudio = new(error => Logger.Warn(error, "[PinMAME] Plugin audio subscriber failed."));
 		private byte[] _pluginAudioBuffer = Array.Empty<byte>();
 		private long _pluginAudioSequence;
@@ -570,6 +635,11 @@ namespace VisualPinball.Engine.PinMAME
 		{
 			if (_pinMame == null) {
 				return;
+			}
+			var altSound = _altSound;
+			if (altSound != null) {
+				altSound.Paused = AudioListener.pause;
+				altSound.Gain = DisableAudio ? 0 : OutputGain * _altSoundVolume; // DisableAudio can change during play
 			}
 
 			// Run what the callbacks queued even when the game isn't running (anymore): a ROM
@@ -756,6 +826,7 @@ namespace VisualPinball.Engine.PinMAME
 				_pinMame.OnMechUpdated -= OnMechUpdated;
 				_pinMame.OnSolenoidUpdated -= OnSolenoidUpdated;
 				_pinMame.OnLogMessage -= OnNativeLogMessage;
+				_pinMame.OnSoundCommand -= OnSoundCommand;
 				_pinMame.IsKeyPressed -= IsKeyPressed;
 			}
 			_frameBuffer.Clear();
@@ -797,6 +868,8 @@ namespace VisualPinball.Engine.PinMAME
 			// the complete catalog candidate snapshots instead of the runtime MappingConfig projection.
 			_runtimeCachesBuilt = false;
 			#endif
+			_romStarting = false;
+			StopAltSound();
 			if (Interlocked.Exchange(ref _playModeExitHandled, 1) != 0) {
 				return;
 			}
@@ -823,6 +896,7 @@ namespace VisualPinball.Engine.PinMAME
 				_pinMame.OnMechUpdated -= OnMechUpdated;
 				_pinMame.OnSolenoidUpdated -= OnSolenoidUpdated;
 				_pinMame.OnLogMessage -= OnNativeLogMessage;
+				_pinMame.OnSoundCommand -= OnSoundCommand;
 				_pinMame.IsKeyPressed -= IsKeyPressed;
 				_pinMame.OnAudioAvailable -= OnAudioAvailable;
 				_pinMame.OnAudioUpdated -= OnAudioUpdated;
@@ -835,6 +909,8 @@ namespace VisualPinball.Engine.PinMAME
 
 		private void RequestStopGame(string reason)
 		{
+			_romStarting = false;
+			StopAltSound();
 			#if UNITY_EDITOR
 			// In the editor, playmode shutdown is handled by StopForPlayModeExit + editor lifecycle hook.
 			// Calling native Stop() from here can race and destabilize the editor.
@@ -881,6 +957,7 @@ namespace VisualPinball.Engine.PinMAME
 					_pinMame.OnMechUpdated -= OnMechUpdated;
 					_pinMame.OnSolenoidUpdated -= OnSolenoidUpdated;
 				_pinMame.OnLogMessage -= OnNativeLogMessage;
+					_pinMame.OnSoundCommand -= OnSoundCommand;
 					_pinMame.IsKeyPressed -= IsKeyPressed;
 					_pinMame.OnAudioAvailable -= OnAudioAvailable;
 					_pinMame.OnAudioUpdated -= OnAudioUpdated;
@@ -1046,7 +1123,13 @@ namespace VisualPinball.Engine.PinMAME
 				_pinMame.OnMechUpdated += OnMechUpdated;
 				_pinMame.OnSolenoidUpdated += OnSolenoidUpdated;
 				_pinMame.OnLogMessage += OnNativeLogMessage;
+				_pinMame.OnSoundCommand -= OnSoundCommand;
+				_pinMame.OnSoundCommand += OnSoundCommand;
 				_pinMame.IsKeyPressed += IsKeyPressed;
+
+				// before the ROM boots, so the pack hears its first commands
+				_romStarting = true;
+				StartAltSound();
 
 				_player = player;
 				_solenoidsEnabled = SolenoidDelay == 0;
@@ -1171,7 +1254,8 @@ namespace VisualPinball.Engine.PinMAME
 			} catch (Exception e) {
 				Logger.Debug(e, "[PinMAME] Could not read the hardware generation.");
 			}
-			Volatile.Write(ref _hardwareGen, hardwareGen);
+			Interlocked.Exchange(ref _hardwareGen, hardwareGen); // a full fence, see StartAltSound
+			Volatile.Read(ref _altSound)?.SetHardwareGen(hardwareGen);
 			Logger.Info("[PinMAME] Game {Rom} started (hardware {HardwareGen}, libpinmame {Version}).", romId, ((PinMameHardwareGen)(ulong)hardwareGen).ToString(), _nativeVersion ?? "unknown");
 			_isRunning = true;
 
@@ -1664,7 +1748,7 @@ namespace VisualPinball.Engine.PinMAME
 			Logger.Info("[PinMAME] Game audio available: {Channels} channel(s) at {SampleRate} Hz, {SamplesPerFrame} samples per frame.", audioInfo.Channels, audioInfo.SampleRate, audioInfo.SamplesPerFrame);
 
 			_audioInfo = audioInfo;
-			_queuedGain = OutputGain; // A saved mute applies to the first produced frame, including boot audio.
+			_queuedGain = RomGain; // A saved mute applies to the first produced frame, including boot audio.
 			return _audioInfo.SamplesPerFrame;
 		}
 
@@ -1681,7 +1765,7 @@ namespace VisualPinball.Engine.PinMAME
 			_audioPlaybackWasReplaced = playbackReplaced;
 			// The local ramp was suspended during takeover. Resume at the current gain,
 			// otherwise a saved/live mute can briefly ramp down from a stale audible level.
-			if (playbackReplaced || returningToLocalPlayback) _queuedGain = OutputGain;
+			if (playbackReplaced || returningToLocalPlayback) _queuedGain = RomGain;
 			if (playbackReplaced || DisableAudio) return _audioInfo.SamplesPerFrame;
 			if (_audioFilterChannels == 0) {
 				// don't know how many channels yet
@@ -1697,7 +1781,7 @@ namespace VisualPinball.Engine.PinMAME
 				_audioNumSamplesInput = 0;
 			}
 
-			float targetGain = OutputGain, previousGain = _queuedGain;
+			float targetGain = RomGain, previousGain = _queuedGain;
 			float Gain(int sample) => previousGain == targetGain ? targetGain : previousGain + (targetGain - previousGain) * ((sample + 1f) / frameSize);
 			float[] frame;
 			if (_audioFilterChannels == _audioInfo.Channels) { // n channels -> n channels
@@ -1744,6 +1828,13 @@ namespace VisualPinball.Engine.PinMAME
 		}
 
 		private void OnAudioFilterRead(float[] data, int channels)
+		{
+			FillRomAudio(data, channels);
+			// AltSound plays here when it doesn't through the central mixer, on top of what's left of the ROM
+			Volatile.Read(ref _altSound)?.Mix(data, channels);
+		}
+
+		private void FillRomAudio(float[] data, int channels)
 		{
 			if (_pluginAudio.PlaybackReplaced) {
 				Array.Clear(data, 0, data.Length);

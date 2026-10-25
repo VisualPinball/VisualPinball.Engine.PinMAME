@@ -1,0 +1,89 @@
+diff --git a/src/altsound.cpp b/src/altsound.cpp
+index 2946e11..93aef02 100644
+--- a/src/altsound.cpp
++++ b/src/altsound.cpp
+@@ -456,6 +456,12 @@ ALTSOUNDAPI bool AltSoundInit(const string& pinmamePath, const string& gameName,
+ 
+ 	// perform processor initialization (load samples, etc)
+ 	g_pProcessor->init();
++	if (!g_pProcessor->isInitialized()) {
++		ALT_ERROR(0, "FAILED: AltSound processor could not load the samples");
++		ALT_OUTDENT;
++		ALT_DEBUG(0, "END AltSoundInit()");
++		return false;
++	}
+ 
+ 	g_cmdData.cmd_counter = 0;
+ 	g_cmdData.stored_command = -1;
+diff --git a/src/altsound_file_parser.cpp b/src/altsound_file_parser.cpp
+index 1c85124..ec06ac1 100644
+--- a/src/altsound_file_parser.cpp
++++ b/src/altsound_file_parser.cpp
+@@ -163,14 +163,14 @@ bool AltsoundFileParser::parse(std::vector<AltsoundSampleInfo>& samples_out)
+ 				string PATH2 = PATH + entry->d_name;
+ 
+ 				// Check for overriding gain value
+-				string PATHG = PATH2 + "gain.txt";
++				string PATHG = PATH2 + '/' + "gain.txt";
+ 				float parsedGain = parseFileValue(PATHG);
+ 				if (parsedGain != -1.0f) {
+ 					gain = parsedGain;
+ 				}
+ 
+ 				// check for overriding ducking value
+-				PATHG = PATH2 + "ducking.txt";
++				PATHG = PATH2 + '/' + "ducking.txt";
+ 				float parsedDucking = parseFileValue(PATHG);
+ 				if (parsedDucking != -1.0f) {
+ 					ducking = parsedDucking;
+@@ -191,7 +191,7 @@ bool AltsoundFileParser::parse(std::vector<AltsoundSampleInfo>& samples_out)
+ 
+ 						AltsoundSampleInfo sample;
+ 
+-						sample.fname = PATH2 + entry2->d_name;
++						sample.fname = PATH2 + '/' + entry2->d_name;
+ 
+ 						memcpy(id, ptr + 1, 6);
+ 						sample.id = std::stoul(trim(id), nullptr);
+diff --git a/src/altsound_processor.hpp b/src/altsound_processor.hpp
+index d25e410..5d1ac97 100644
+--- a/src/altsound_processor.hpp
++++ b/src/altsound_processor.hpp
+@@ -50,6 +50,9 @@ public:
+ 	// External interface to stop currently-playing MUSIC stream
+ 	bool stopMusic() override;
+ 
++	// whether init() loaded the samples
++	bool isInitialized() const override { return is_initialized; }
++
+ 	// miniaudio SYNCPROC callback when jingle samples end
+ 	static void ALTSOUNDCALLBACK jingle_callback(unsigned int handle, unsigned int channel, unsigned int data, void *user);
+ 
+diff --git a/src/altsound_processor_base.hpp b/src/altsound_processor_base.hpp
+index 9c5cba8..56505df 100644
+--- a/src/altsound_processor_base.hpp
++++ b/src/altsound_processor_base.hpp
+@@ -63,6 +63,9 @@ public:
+ 	// initialize processing state
+ 	virtual void init();
+ 
++	// whether init() loaded the samples
++	virtual bool isInitialized() const { return true; }
++
+ 	// master volume accessor/mutator
+ 	void setMasterVol(const float vol_in);
+ 	static float getMasterVol();
+diff --git a/src/gsound_processor.hpp b/src/gsound_processor.hpp
+index 2b4d9b4..24d479a 100644
+--- a/src/gsound_processor.hpp
++++ b/src/gsound_processor.hpp
+@@ -50,6 +50,9 @@ public:
+ 	// External interface to stop MUSIC stream
+ 	bool stopMusic() override;
+ 
++	// whether init() loaded the samples
++	bool isInitialized() const override { return is_initialized; }
++
+ 	// Process ROM commands to the sound board
+ 	bool handleCmd(const unsigned int cmd_combined_in) override;
+ 
