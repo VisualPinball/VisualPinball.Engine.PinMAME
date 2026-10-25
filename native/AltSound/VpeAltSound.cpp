@@ -13,6 +13,7 @@
 #include "altsound.h"
 #include "altsound_processor_base.hpp"
 
+#include <cmath>
 #include <mutex>
 #include <string>
 
@@ -35,6 +36,9 @@ std::mutex gate;
 bool running = false;
 bool followGameVolume = true; // libaltsound's default; the host turns it off
 float gameVolume = 1.0f; // the game's last volume command, kept while the pack doesn't follow it
+// The level the pack plays at while it doesn't follow the game: the float just under 1 (inaudibly lower), which no volume
+// command produces, so every command shows as a change, a command to full volume included.
+const float ownLevel = std::nextafter(1.0f, 0.0f);
 VpeAltSoundCallback hostCallback = nullptr;
 void* hostUserData = nullptr;
 
@@ -114,11 +118,11 @@ VPE_ALTSOUND_API int VpeAltSoundCommand(int board, int command)
 	if (!running) return 0;
 	try {
 		const bool handled = AltSoundProcessBoardCommand(static_cast<unsigned int>(board), static_cast<unsigned int>(command), 0);
-		if (!followGameVolume && g_pProcessor && AltsoundProcessorBase::getGlobalVol() != 1.0f) {
+		if (!followGameVolume && g_pProcessor && AltsoundProcessorBase::getGlobalVol() != ownLevel) {
 			// a volume command: remember it, and keep the pack at its own level
 			gameVolume = AltsoundProcessorBase::getGlobalVol();
 			std::lock_guard<std::mutex> streams(io_mutex);
-			g_pProcessor->setGlobalVol(1.0f);
+			g_pProcessor->setGlobalVol(ownLevel);
 		}
 		return handled ? 1 : 0;
 	}
@@ -137,7 +141,7 @@ VPE_ALTSOUND_API void VpeAltSoundFollowGameVolume(int follow)
 		if (follow) g_pProcessor->setGlobalVol(gameVolume);
 		else {
 			gameVolume = AltsoundProcessorBase::getGlobalVol();
-			g_pProcessor->setGlobalVol(1.0f);
+			g_pProcessor->setGlobalVol(ownLevel);
 		}
 		followGameVolume = follow != 0;
 	} catch (...) {}
