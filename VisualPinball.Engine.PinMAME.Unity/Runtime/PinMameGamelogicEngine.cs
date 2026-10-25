@@ -478,6 +478,7 @@ namespace VisualPinball.Engine.PinMAME
 		// AltSound: a pack of replacement samples that the ROM's sound commands trigger, set up by the Player's PinMAME settings.
 		private PinMameAltSound _altSound;
 		private bool _altSoundEnabled, _romStarting;
+		private int _romRun; // counts StartGame calls, so the end of an earlier run can't stop the pack of a later one
 		private string _altSoundFolder = string.Empty, _altSoundStatus = "Off";
 		private float _altSoundVolume = 1, _romUnderAltSound, _romScale = 1;
 		/// <summary>What AltSound does, for the Player's status lines.</summary>
@@ -515,6 +516,16 @@ namespace VisualPinball.Engine.PinMAME
 			var hardwareGen = Interlocked.Read(ref _hardwareGen);
 			if (altSound != null && hardwareGen != 0) altSound.SetHardwareGen(hardwareGen);
 			ApplyAltSoundGain();
+		}
+
+		// Main thread: the ROM stopped or didn't start, so its pack stops too, music included.
+		private void EndAltSound(int run, string reason)
+		{
+			if (run != Volatile.Read(ref _romRun)) return;
+			_romStarting = false;
+			if (_altSound == null) return;
+			StopAltSound();
+			_altSoundStatus = "Stopped, " + reason + ".";
 		}
 
 		private void StopAltSound()
@@ -1136,6 +1147,7 @@ namespace VisualPinball.Engine.PinMAME
 
 				try {
 					_awaitingGameStart = true;
+					Interlocked.Increment(ref _romRun);
 					_pinMame.StartGame(romId);
 					Logger.Debug($"[PinMAME] StartGame returned. RunState={PinMame.PinMame.RunState}");
 				}
@@ -1150,6 +1162,10 @@ namespace VisualPinball.Engine.PinMAME
 						await Task.Delay(100, ct);
 						ResetTimeFence();
 						_awaitingGameStart = true;
+						// the stopped game's end may have stopped the pack meanwhile; start it again for this run
+						Interlocked.Increment(ref _romRun);
+						_romStarting = true;
+						StartAltSound();
 						_pinMame.StartGame(romId);
 						Logger.Debug($"[PinMAME] StartGame retry returned. RunState={PinMame.PinMame.RunState}");
 					}
@@ -1184,6 +1200,7 @@ namespace VisualPinball.Engine.PinMAME
 				Logger.Warn(e, "[PinMAME] Cannot start ROM {Rom}, PinMAME's native library could not be loaded.", romId);
 
 			} finally {
+				if (_startFailure != null) EndAltSound(Volatile.Read(ref _romRun), "the ROM didn't start");
 				PinMameStartStopGate.Release();
 			}
 		}
@@ -1298,6 +1315,8 @@ namespace VisualPinball.Engine.PinMAME
 			// Native can report ended more than once during teardown; keep it idempotent.
 			if (_isRunning) {
 				Logger.Info("[PinMAME] Game {Rom} ended.", romId);
+				var run = Volatile.Read(ref _romRun);
+				EnqueueMainThreadDispatch(() => EndAltSound(run, "the ROM stopped"));
 
 			} else if (_awaitingGameStart && Volatile.Read(ref _stopRequested) == 0) {
 				// PinMAME gave up while loading the ROM
@@ -1309,6 +1328,8 @@ namespace VisualPinball.Engine.PinMAME
 				// only now: the audit before the start can't tell a missing ROM from a clone that
 				// runs from its parent's zip
 				ReportRomMissing();
+				var run = Volatile.Read(ref _romRun);
+				EnqueueMainThreadDispatch(() => EndAltSound(run, "the ROM didn't start"));
 				// the player already marked the table as started; tell it otherwise
 				EnqueueMainThreadDispatch(() => _player?.RefreshGamelogicDiagnostics());
 			}
