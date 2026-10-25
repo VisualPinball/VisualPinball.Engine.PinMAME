@@ -25,9 +25,12 @@ namespace VisualPinball.Engine.PinMAME
 					Description = "Plays the pack named after the table's ROM when there is one." },
 				new PluginField("AltSoundFolder", "AltSound folder", SettingKind.Folder) { Default = "", FullWidth = true, VisibleWhen = "AltSound",
 					Description = "The folder with a subfolder per ROM, such as VPinMAME's altsound folder. Empty looks next to VPinMAME's ROMs and in VPE's PinMAME folder." },
-				new PluginField("AltSoundVolume", "AltSound volume", SettingKind.Integer) { Default = 100, Minimum = 0, Maximum = 100, Change = ConfigurationChange.Live,
+				new PluginField("AltSoundVolume", "AltSound volume", SettingKind.Integer) { Default = 100, Minimum = 0, Maximum = 200, Change = ConfigurationChange.Live,
 					Presentation = PluginFieldPresentation.Slider, Unit = "%", Scope = ConfigurationScope.GlobalAndGame, VisibleWhen = "AltSound",
-					Description = "The pack's level, relative to the ROM volume." },
+					Description = "The pack's level, at its own level at 100%. The ROM volume above doesn't change it." },
+				new PluginField("AltSoundGameVolume", "Follow the game's volume", SettingKind.Boolean) { Default = false, Change = ConfigurationChange.Live,
+					Scope = ConfigurationScope.GlobalAndGame, VisibleWhen = "AltSound",
+					Description = "Lets the volume set in the game's own menu scale the pack too, as in Visual PinMAME. Packs are often much quieter then." },
 				new PluginField("AltSoundRomVolume", "ROM sound under AltSound", SettingKind.Integer) { Default = 0, Minimum = 0, Maximum = 100, Change = ConfigurationChange.Live,
 					Presentation = PluginFieldPresentation.Slider, Unit = "%", Scope = ConfigurationScope.GlobalAndGame, VisibleWhen = "AltSound",
 					Description = "How much of the ROM's own sound still plays, for packs that don't replace all of it. Off, like Visual PinMAME." }));
@@ -58,7 +61,8 @@ namespace VisualPinball.Engine.PinMAME
 				_application.Scheduler.VerifyOwner();
 				if (_engine != null) {
 					_engine.OutputGain = Mathf.Clamp(settings.Integer("Volume", 100), 0, 100) / 100f;
-					_engine.SetAltSoundLevels(Mathf.Clamp(settings.Integer("AltSoundVolume", 100), 0, 100) / 100f, Mathf.Clamp(settings.Integer("AltSoundRomVolume", 0), 0, 100) / 100f);
+					_engine.SetAltSoundLevels(Mathf.Clamp(settings.Integer("AltSoundVolume", 100), 0, 200) / 100f, Mathf.Clamp(settings.Integer("AltSoundRomVolume", 0), 0, 100) / 100f,
+						settings.Boolean("AltSoundGameVolume"));
 				}
 				return new PluginActionResult(true, "");
 			}

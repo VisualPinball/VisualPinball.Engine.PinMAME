@@ -481,6 +481,7 @@ namespace VisualPinball.Engine.PinMAME
 		private int _romRun; // counts StartGame calls, so the end of an earlier run can't stop the pack of a later one
 		private string _altSoundFolder = string.Empty, _altSoundStatus = "Off";
 		private float _altSoundVolume = 1, _romUnderAltSound, _romScale = 1;
+		private bool _altSoundFollowsGameVolume;
 		/// <summary>What AltSound does, for the Player's status lines.</summary>
 		public string AltSoundStatus => _altSoundStatus;
 
@@ -494,11 +495,15 @@ namespace VisualPinball.Engine.PinMAME
 			if (_romStarting) StartAltSound();
 		}
 
-		/// <summary>The pack's volume and how much of the ROM's own audio stays under it, both 0..1 and relative to <see cref="OutputGain"/>.</summary>
-		public void SetAltSoundLevels(float volume, float romVolume)
+		/// <summary>
+		/// The pack's volume (0..2, on its own, not scaled by <see cref="OutputGain"/>), how much of the ROM's own audio stays under it
+		/// (0..1 of <see cref="OutputGain"/>), and whether the game's volume setting scales the pack too.
+		/// </summary>
+		public void SetAltSoundLevels(float volume, float romVolume, bool followGameVolume)
 		{
-			_altSoundVolume = Mathf.Clamp01(volume);
+			_altSoundVolume = Mathf.Clamp(volume, 0, 2);
 			_romUnderAltSound = Mathf.Clamp01(romVolume);
+			_altSoundFollowsGameVolume = followGameVolume;
 			ApplyAltSoundGain();
 		}
 
@@ -542,7 +547,10 @@ namespace VisualPinball.Engine.PinMAME
 			var altSound = _altSound;
 			Volatile.Write(ref _romScale, altSound != null ? _romUnderAltSound : 1f);
 			_pluginAudio.PlaybackGain = RomGain;
-			if (altSound != null) altSound.Gain = DisableAudio ? 0 : OutputGain * _altSoundVolume;
+			if (altSound != null) {
+				altSound.Gain = DisableAudio ? 0 : _altSoundVolume;
+				altSound.FollowGameVolume = _altSoundFollowsGameVolume;
+			}
 		}
 
 		// Emulation thread, in order. A pack that stopped meanwhile drops the command.
@@ -650,7 +658,7 @@ namespace VisualPinball.Engine.PinMAME
 			var altSound = _altSound;
 			if (altSound != null) {
 				altSound.Paused = AudioListener.pause;
-				altSound.Gain = DisableAudio ? 0 : OutputGain * _altSoundVolume; // DisableAudio can change during play
+				altSound.Gain = DisableAudio ? 0 : _altSoundVolume; // DisableAudio can change during play
 			}
 
 			// Run what the callbacks queued even when the game isn't running (anymore): a ROM

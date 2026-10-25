@@ -2,7 +2,8 @@
 # plugin. libaltsound's own API takes std::string, which can't be called from C#, so its sources are compiled into this
 # library together with a small C shim. Only miniaudio's null backend is used: the mixed audio goes to the host through a
 # callback, not to a device. Fixes on top of the pinned sources: patches/fixes.patch joins the sample paths of folder-based
-# (PinSound-style) packs and makes AltSoundInit fail when the processor couldn't load the samples, and compat/dirent
+# (PinSound-style) packs, makes AltSoundInit fail when the processor couldn't load the samples and lets a stream silenced by
+# a zero game volume come back, and compat/dirent
 # replaces the Windows directory listing libaltsound bundles, which changes the process's current directory and can't nest
 # listings.
 #
