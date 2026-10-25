@@ -91,7 +91,7 @@ namespace VisualPinball.Engine.PinMAME
 			int result;
 			try {
 				result = VpeAltSoundInit(Utf8(basePath), Utf8(Path.GetFileName(pack)), sampleRate, BlockFrames, Callback, IntPtr.Zero, Utf8(PinMameFolders.DataFolder));
-			} catch (Exception e) when (e is DllNotFoundException || e is EntryPointNotFoundException) {
+			} catch (Exception e) when (e is DllNotFoundException || e is EntryPointNotFoundException || e is BadImageFormatException) {
 				result = int.MinValue;
 				Logger.Warn(e, "[PinMAME] AltSound is not available on this platform.");
 			}
@@ -212,7 +212,7 @@ namespace VisualPinball.Engine.PinMAME
 			if (_current != this) return;
 			try {
 				VpeAltSoundShutdown();
-			} catch (Exception e) when (e is DllNotFoundException || e is EntryPointNotFoundException) {
+			} catch (Exception e) when (e is DllNotFoundException || e is EntryPointNotFoundException || e is BadImageFormatException) {
 				// never started
 			}
 			Volatile.Write(ref _current, null);
