@@ -1,11 +1,8 @@
 # Builds VpeAltSound, a C interface to libaltsound (BSD-3-Clause, https://github.com/vpinball/libaltsound) for the PinMAME
 # plugin. libaltsound's own API takes std::string, which can't be called from C#, so its sources are compiled into this
 # library together with a small C shim. Only miniaudio's null backend is used: the mixed audio goes to the host through a
-# callback, not to a device. Fixes on top of the pinned sources: patches/fixes.patch joins the sample paths of folder-based
-# (PinSound-style) packs, makes AltSoundInit fail when the processor couldn't load the samples and lets a stream silenced by
-# a zero game volume come back, and compat/dirent
-# replaces the Windows directory listing libaltsound bundles, which changes the process's current directory and can't nest
-# listings.
+# callback, not to a device. patches/fixes.patch goes on top of the pinned sources until upstream has it: it makes
+# AltSoundInit fail when the processor couldn't load the samples, and lets a stream silenced by a zero game volume come back.
 #
 #   cmake -S native/AltSound -B build/altsound -A x64
 #   cmake --build build/altsound --config Release
@@ -28,7 +25,7 @@ else()
 	include(FetchContent)
 	FetchContent_Declare(altsound
 		GIT_REPOSITORY https://github.com/vpinball/libaltsound.git
-		GIT_TAG ce11780064a75fe23059fd3b61847ee18d477931
+		GIT_TAG 62914678c532ff06a245e9360fce6d5d28804eee # 0.6.5
 		PATCH_COMMAND git apply --whitespace=nowarn "${CMAKE_CURRENT_SOURCE_DIR}/patches/fixes.patch"
 		UPDATE_DISCONNECTED ON)
 	FetchContent_GetProperties(altsound)
@@ -51,12 +48,9 @@ set(ALTSOUND_SOURCES
 	${A}/src/altsound.cpp
 	${A}/src/miniaudio_private.c
 	${A}/src/miniaudio_bass_compat.cpp)
-if(WIN32)
-	list(APPEND ALTSOUND_SOURCES compat/dirent.c)
-endif()
 
 add_library(VpeAltSound SHARED VpeAltSound.cpp ${ALTSOUND_SOURCES})
-target_include_directories(VpeAltSound PRIVATE compat ${A}/src ${A}/third-party/include) # compat first: its dirent wins
+target_include_directories(VpeAltSound PRIVATE ${A}/src ${A}/third-party/include)
 if(MSVC)
 	target_compile_definitions(VpeAltSound PRIVATE _CRT_SECURE_NO_WARNINGS)
 	target_compile_options(VpeAltSound PRIVATE /utf-8 /MP)
