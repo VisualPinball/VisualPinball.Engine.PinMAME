@@ -249,12 +249,20 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				.Where(@switch => !string.IsNullOrEmpty(@switch.InputActionHint))
 				.OrderBy(@switch => coreFlipperButtonIds.Contains(@switch.Id) ? 0 : 1)
 				.ToArray();
+			// One generic button plus one matrix copy is expected. Multiple candidates for the
+			// same action are ambiguous and must still produce mapping diagnostics.
+			var flipperMirrorIds = new HashSet<string>(actionClaimOrder
+				.GroupBy(@switch => @switch.InputActionHint, StringComparer.Ordinal)
+				.Where(group => group.Count() == 2 && group.Count(@switch => coreFlipperButtonIds.Contains(@switch.Id)) == 1)
+				.Select(group => group.Single(@switch => !coreFlipperButtonIds.Contains(@switch.Id)).Id), StringComparer.Ordinal);
 			foreach (var @switch in actionClaimOrder) {
 				if (inputActions.Add(@switch.InputActionHint)) {
 					continue;
 				}
 
-				diagnostics.Add($"Duplicate input action {@switch.InputActionHint}; switch {@switch.Id} ({@switch.Description}) was left available for manual mapping.");
+				if (!flipperMirrorIds.Contains(@switch.Id)) {
+					diagnostics.Add($"Duplicate input action {@switch.InputActionHint}; switch {@switch.Id} ({@switch.Description}) was left available for manual mapping.");
+				}
 				@switch.InputActionHint = string.Empty;
 				@switch.InputMapHint = string.Empty;
 			}

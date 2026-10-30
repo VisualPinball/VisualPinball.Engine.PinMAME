@@ -233,8 +233,9 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			Assert.That(definition.Diagnostics.Count(diagnostic => diagnostic.Contains("PinMAME's numbering")), Is.EqualTo(4));
 		}
 
-		[Test]
-		public void PrefersGenericFlipperButtonsOverMatrixCopies()
+		[TestCase(false)]
+		[TestCase(true)]
+		public void PrefersGenericFlipperButtonsOverMatrixCopies(bool conflictingMatrixButton)
 		{
 			// pre-Fliptronic WPC lists the matrix flipper switches as buttons too, like the published Bride of Pinbot
 			const string json = @"{
@@ -254,14 +255,44 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				]
 			}";
 
-			var definition = PinMameGameDefinitionConverter.Convert(json);
+			var root = JObject.Parse(json);
+			if (conflictingMatrixButton) {
+				((JArray)root["inputs"]).Add(JObject.Parse(@"{ 'id': 'switch.matrix-13', 'label': 'Another Right Flipper Button', 'binding': { 'group': 'pinmame.input.switch', 'device': 13 }, 'roles': ['flipper.lower.right.button'] }"));
+			}
+			var definition = PinMameGameDefinitionConverter.Convert(root.ToString());
 
 			Assert.That(definition.Switches.Single(@switch => @switch.Id == "112").InputActionHint, Is.EqualTo(InputConstants.ActionRightFlipper));
 			Assert.That(definition.Switches.Single(@switch => @switch.Id == "114").InputActionHint, Is.EqualTo(InputConstants.ActionLeftFlipper));
 			Assert.That(definition.Switches.Single(@switch => @switch.Id == "11").InputActionHint, Is.Empty);
 			Assert.That(definition.Switches.Single(@switch => @switch.Id == "12").InputActionHint, Is.Empty);
+			Assert.That(definition.Diagnostics.Count(diagnostic => diagnostic.Contains("Duplicate input action")), Is.EqualTo(conflictingMatrixButton ? 2 : 0));
+			if (conflictingMatrixButton) {
+				Assert.That(definition.Switches.Single(@switch => @switch.Id == "13").InputActionHint, Is.Empty);
+			}
 			Assert.That(definition.Wires.Select(wire => $"{wire.SourceId}->{wire.DestinationId}"), Is.EquivalentTo(new[] { "112->46", "114->48" }));
 			Assert.That(definition.Diagnostics, Has.None.Contains("not imported"));
+		}
+
+		[Test]
+		public void ReportsDuplicateCabinetInputActions()
+		{
+			const string json = @"{
+				'format': 'pinmame-machine-definition',
+				'schema_version': 2,
+				'machine': { 'id': 'test.duplicate-start.2026', 'name': 'Duplicate Start' },
+				'coverage': { 'status': 'partial', 'completion_score': 50 },
+				'inputs': [
+					{ 'id': 'switch.start-1', 'label': 'Start', 'binding': { 'group': 'pinmame.input.switch', 'device': 1 }, 'roles': ['cabinet.start'] },
+					{ 'id': 'switch.start-2', 'label': 'Other Start', 'binding': { 'group': 'pinmame.input.switch', 'device': 2 }, 'roles': ['cabinet.start'] }
+				]
+			}";
+
+			var definition = PinMameGameDefinitionConverter.Convert(json);
+
+			Assert.That(definition.Switches.Single(@switch => @switch.Id == "1").InputActionHint, Is.EqualTo(InputConstants.ActionStartGame));
+			Assert.That(definition.Switches.Single(@switch => @switch.Id == "2").InputActionHint, Is.Empty);
+			Assert.That(definition.Switches.Single(@switch => @switch.Id == "2").InputMapHint, Is.Empty);
+			Assert.That(definition.Diagnostics, Has.Exactly(1).Contains("Duplicate input action"));
 		}
 
 		[Test]
