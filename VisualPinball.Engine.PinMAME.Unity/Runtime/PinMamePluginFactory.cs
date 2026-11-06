@@ -14,7 +14,7 @@ using VisualPinball.Unity;
 namespace VisualPinball.Engine.PinMAME
 {
 	/// <summary>Configures the selected engine's audio; emulation remains owned by the table.</summary>
-	internal sealed class PinMamePluginFactory : IPlayerPluginFactory
+	internal sealed partial class PinMamePluginFactory : IPlayerPluginFactory, IPluginSystemDefaults
 	{
 		public PluginDescriptor Descriptor { get; } = new PluginDescriptor("org.visualpinball.pinmame", "PinMAME", "ROM audio for tables using the PinMAME engine.") { EnabledByDefault = true, CanDisable = false, Category = "Gamelogic", Order = 5 };
 		public PluginSettingsSchema Schema { get; } = new PluginSettingsSchema(1, new PluginSettingsGroup("ROM audio", "Controls PinMAME playback without changing ROM settings.",
