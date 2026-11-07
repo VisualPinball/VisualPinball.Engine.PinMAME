@@ -24,6 +24,8 @@ Desktop builds use the ROM folder configured by the player or host. If neither s
 
 NVRAM, configuration and high scores stay in VPE's own shared data folder (`%LOCALAPPDATA%\Visual Pinball Engine\PinMAME` on Windows). Existing game state is copied from Visual PinMAME on the first run only; VPE subsequently maintains its own copy.
 
+To reset a ROM's saved memory, exit the table in all VPE windows, select it in the library and open **Settings › Plugins › PinMAME › Selected game › Back up and reset ROM memory**. VPE moves the ROM's `.nv` file to `nvram-backups/<rom>` and skips importing that ROM's NVRAM from Visual PinMAME. The reset applies to every VPE table using the same ROM. To restore the backup, exit the table again and copy the backed-up file to `nvram/<rom>.nv`.
+
 ## Developer Setup
 
 This UPM package gets build and published via CI. If you want to use it locally,

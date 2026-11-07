@@ -86,6 +86,30 @@ namespace VisualPinball.Engine.PinMAME
 				.Any(folder => folder.Length > 0 && File.Exists(Path.Combine(folder, romId + ".zip")));
 		}
 
+		/// <summary>Backs up a stopped ROM's NVRAM so the next run starts with fresh memory.</summary>
+		internal static string ResetNvram(string romId)
+		{
+			if (string.IsNullOrEmpty(romId) || romId.Any(c => !(c is >= 'a' and <= 'z' or >= '0' and <= '9' or '_'))) {
+				throw new ArgumentException("The selected table has an invalid PinMAME ROM name.", nameof(romId));
+			}
+			var dataFolder = DataFolder;
+			var backupFolder = Path.Combine(dataFolder, "nvram-backups", romId);
+			Directory.CreateDirectory(backupFolder);
+			// Keep the import opt-out beside the active save so clearing backups does not re-enable import.
+			using (File.Open(NvramImportOptOut(dataFolder, romId), FileMode.OpenOrCreate, FileAccess.Write)) { }
+			var backup = Path.Combine(backupFolder, $"{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}.nv");
+			try {
+				File.Move(Path.Combine(dataFolder, "nvram", romId + ".nv"), backup);
+			} catch (FileNotFoundException) {
+				return null;
+			}
+			Logger.Info("[PinMAME] Backed up {Rom:l} NVRAM to {Backup:l}.", romId, backup);
+			return backup;
+		}
+
+		private static string NvramImportOptOut(string dataFolder, string romId)
+			=> Path.Combine(dataFolder, "nvram", romId.ToLowerInvariant() + ".skip-vpm-import");
+
 		/// <summary>
 		/// Copies the game's NVRAM, high scores and config from VPM's folders, for each of them
 		/// that VPE doesn't have yet. Existing files are never overwritten, so after the first run
@@ -98,6 +122,9 @@ namespace VisualPinball.Engine.PinMAME
 			}
 			var dataFolder = DataFolder;
 			foreach (var (type, folder, extension) in VpmImports) {
+				if (type == PinMameFileType.Nvram && File.Exists(NvramImportOptOut(dataFolder, romId))) {
+					continue;
+				}
 				var target = Path.Combine(dataFolder, folder, romId + extension);
 				if (File.Exists(target)) {
 					continue;

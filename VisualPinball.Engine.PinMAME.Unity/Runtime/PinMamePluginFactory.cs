@@ -5,6 +5,7 @@
 // Licensed under MIT. See https://opensource.org/license/mit.
 
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -14,9 +15,12 @@ using VisualPinball.Unity;
 namespace VisualPinball.Engine.PinMAME
 {
 	/// <summary>Configures the selected engine's audio; emulation remains owned by the table.</summary>
-	internal sealed partial class PinMamePluginFactory : IPlayerPluginFactory, IPluginSystemDefaults
+	internal sealed partial class PinMamePluginFactory : IPlayerPluginFactory, IPluginSystemDefaults, IPluginSettingsProvider
 	{
-		public PluginDescriptor Descriptor { get; } = new PluginDescriptor("org.visualpinball.pinmame", "PinMAME", "ROM audio for tables using the PinMAME engine.") { EnabledByDefault = true, CanDisable = false, Category = "Gamelogic", Order = 5 };
+		private const string ResetRomMemory = "reset-rom-memory";
+		private const string CloseTableMessage = "Exit the running table before resetting ROM memory.";
+
+		public PluginDescriptor Descriptor { get; } = new PluginDescriptor("org.visualpinball.pinmame", "PinMAME", "ROM audio and saved memory for tables using the PinMAME engine.") { EnabledByDefault = true, CanDisable = false, Category = "Gamelogic", Order = 5 };
 		public PluginSettingsSchema Schema { get; } = new PluginSettingsSchema(1, new PluginSettingsGroup("ROM audio", "Controls PinMAME playback without changing ROM settings.",
 			new PluginField("Volume", "Volume", SettingKind.Integer) { Default = 100, Minimum = 0, Maximum = 100, Change = ConfigurationChange.Live,
 				Presentation = PluginFieldPresentation.Slider, Unit = "%", GlobalSetting = new PluginGlobalSetting(PluginGlobalSections.VolumeMixer) { Order = 20 } }),
@@ -33,8 +37,33 @@ namespace VisualPinball.Engine.PinMAME
 					Description = "Lets the volume set in the game's own menu scale the pack too, as in Visual PinMAME. Packs are often much quieter then." },
 				new PluginField("AltSoundRomVolume", "ROM sound under AltSound", SettingKind.Integer) { Default = 0, Minimum = 0, Maximum = 100, Change = ConfigurationChange.Live,
 					Presentation = PluginFieldPresentation.Slider, Unit = "%", Scope = ConfigurationScope.GlobalAndGame, VisibleWhen = "AltSound",
-					Description = "How much of the ROM's own sound still plays, for packs that don't replace all of it. Off, like Visual PinMAME." }));
-		public IPluginSettingsProvider SettingsProvider => null;
+					Description = "How much of the ROM's own sound still plays, for packs that don't replace all of it. Off, like Visual PinMAME." }),
+			new PluginSettingsGroup("ROM memory", "Tables using the same ROM share its saved memory.",
+				new PluginField("ResetRomMemory", "Back up and reset ROM memory", SettingKind.Action) { Scope = ConfigurationScope.GameOnly, Provider = ResetRomMemory,
+					Description = "Takes effect immediately. The ROM starts fresh next time, clearing saved adjustments, audits and any scores stored in its memory. Exit the table in every VPE window first." }));
+		public IPluginSettingsProvider SettingsProvider => this;
+
+		public Task<PluginChoiceCatalog> DiscoverAsync(string provider, PluginChoiceRequest request, CancellationToken cancellation)
+			=> Task.FromResult(new PluginChoiceCatalog(provider, Array.Empty<PluginChoice>()));
+
+		public IReadOnlyList<PluginValidationIssue> Validate(PluginChoiceRequest request) => Array.Empty<PluginValidationIssue>();
+
+		public Task<PluginActionResult> RunActionAsync(string action, PluginChoiceRequest request, CancellationToken cancellation)
+		{
+			cancellation.ThrowIfCancellationRequested();
+			if (action != ResetRomMemory || Application.isMobilePlatform) {
+				return Task.FromResult(new PluginActionResult(false, "This action is unavailable."));
+			}
+			if (!(request.Game is GameIdentity game) || game.Provider != "pinmame") {
+				return Task.FromResult(new PluginActionResult(false, "Select a table that uses PinMAME."));
+			}
+			if (!PinMameGamelogicEngine.TryResetNvram(game.Key, out var backup)) {
+				return Task.FromResult(new PluginActionResult(false, CloseTableMessage));
+			}
+			var message = $"{game.Key} will start with fresh ROM memory.";
+			return Task.FromResult(new PluginActionResult(true, backup == null ? message : $"{message} Backup saved to {backup}"));
+		}
+
 		public IPlayerPlugin Create(PluginApplicationContext context) => new SettingsAdapter(context);
 		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
 		private static void Register() => PlayerPluginRegistry.Register(new PinMamePluginFactory());
