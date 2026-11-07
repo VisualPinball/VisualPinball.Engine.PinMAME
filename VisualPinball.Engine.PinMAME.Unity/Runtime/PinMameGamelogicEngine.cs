@@ -926,6 +926,23 @@ namespace VisualPinball.Engine.PinMAME
 			}
 		}
 
+		internal static bool TryResetNvram(string romId, out string backup)
+		{
+			backup = null;
+			if (!PinMameStartStopGate.Wait(0)) {
+				return false;
+			}
+			try {
+				if (PinMame.PinMame.IsStopInProgress || PinMame.PinMame.IsRunning) {
+					return false;
+				}
+				backup = PinMameFolders.ResetNvram(romId);
+				return true;
+			} finally {
+				PinMameStartStopGate.Release();
+			}
+		}
+
 		private void RequestStopGame(string reason)
 		{
 			_romStarting = false;
