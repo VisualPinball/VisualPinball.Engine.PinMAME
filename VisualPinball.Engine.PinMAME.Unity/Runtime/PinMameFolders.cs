@@ -49,13 +49,18 @@ namespace VisualPinball.Engine.PinMAME
 		public static string DataFolder
 		{
 			get {
-				var folder = Path.Combine(GamelogicPaths.DataRoot, "PinMAME");
+				var folder = DataFolderPath;
 				foreach (var subFolder in SubFolders) {
 					Directory.CreateDirectory(Path.Combine(folder, subFolder));
 				}
 				return folder;
 			}
 		}
+
+		/// <summary>
+		/// Where <see cref="DataFolder"/> is, without creating it.
+		/// </summary>
+		internal static string DataFolderPath => Path.Combine(GamelogicPaths.DataRoot, "PinMAME");
 
 		/// <summary>
 		/// Points PinMAME at the configured ROM folder, falling back to VPM's ROM folder when

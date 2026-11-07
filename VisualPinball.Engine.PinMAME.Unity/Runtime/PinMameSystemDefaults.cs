@@ -31,16 +31,22 @@ namespace VisualPinball.Engine.PinMAME
 			});
 
 			cancellation.ThrowIfCancellationRequested();
-			// the folders PinMameAltSound.Find looks in when AltSoundFolder is empty
-			var altSound = DefaultAltSoundFolders().FirstOrDefault(Exists);
-			var packs = altSound != null ? Safe(() => Directory.GetDirectories(altSound).Length) : 0;
+			// The folders PinMameAltSound.Find looks in when AltSoundFolder is empty. It looks in all of them for each game, so the
+			// first one with packs is shown and the count covers all of them.
+			var folders = DefaultAltSoundFolders().Where(Exists).Distinct(StringComparer.OrdinalIgnoreCase)
+				.Select(folder => (Folder: folder, Packs: Safe(() => Directory.GetDirectories(folder)) ?? Array.Empty<string>()))
+				.ToList();
+			var withPacks = folders.Where(folder => folder.Packs.Length > 0).ToList();
+			var shown = withPacks.Count > 0 ? withPacks : folders.Take(1).ToList();
+			var packs = withPacks.SelectMany(folder => folder.Packs).Select(pack => Path.GetFileName(pack)).Distinct(StringComparer.OrdinalIgnoreCase).Count();
 			var on = settings.Boolean("AltSound");
-			found.Add(new PluginSystemDefault("AltSound", altSound != null && altSound.StartsWith(PinMameFolders.DataFolder, StringComparison.OrdinalIgnoreCase) ? "VPE" : "VPinMAME") {
-				Path = altSound ?? "",
+			found.Add(new PluginSystemDefault("AltSound", shown.Count == 0 ? "VPinMAME" : string.Join(" and ", shown.Select(folder => Source(folder.Folder)).Distinct())) {
+				Path = shown.Count > 0 ? shown[0].Folder : "",
 				FieldId = "AltSoundFolder",
-				Description = altSound == null
+				Description = shown.Count == 0
 					? "No AltSound packs found. Only needed for recorded music and callouts."
 					: (packs == 1 ? "1 replacement sound pack" : $"{packs} replacement sound packs")
+						+ (withPacks.Count > 1 ? ", here and in " + string.Join(" and ", withPacks.Skip(1).Select(folder => folder.Folder)) : "")
 						+ (on ? "." : ". AltSound is off: switch it on under Settings › Plugins › PinMAME."),
 			});
 			return found;
@@ -55,8 +61,12 @@ namespace VisualPinball.Engine.PinMAME
 					if (!string.IsNullOrEmpty(vpm)) yield return Path.Combine(vpm, "altsound");
 				}
 			}
-			yield return Path.Combine(PinMameFolders.DataFolder, "altsound");
+			// only the path: reading the defaults never creates folders
+			yield return Path.Combine(PinMameFolders.DataFolderPath, "altsound");
 		}
+
+		private static string Source(string folder)
+			=> folder.StartsWith(PinMameFolders.DataFolderPath, StringComparison.OrdinalIgnoreCase) ? "VPE" : "VPinMAME";
 
 		private static string FirstFolder(string folders)
 			=> (folders ?? "").Split(';').Select(folder => folder.Trim()).FirstOrDefault(Exists);
