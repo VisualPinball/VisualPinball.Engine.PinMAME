@@ -64,5 +64,13 @@
     </ItemGroup>
     <Copy Condition="'@(_LinuxPinMame)' != ''" SourceFiles="@(_LinuxPinMame)" DestinationFiles="..\VisualPinball.Engine.PinMAME.Unity\Plugins\$(RuntimeIdentifier)\libpinmame.so" SkipUnchangedFiles="true" />
     <Delete Condition="'@(_LinuxPinMameVersioned)' != ''" Files="@(_LinuxPinMameVersioned)" />
+
+    <!-- Same for macOS: Mono resolves "pinmame" as libpinmame.dylib, but the package ships libpinmame.3.7.0.dylib. -->
+    <ItemGroup Condition="'$(RuntimeIdentifier)' == 'osx'">
+      <_OsxPinMame Include="$(NuGetPackageRoot)pinmame.native.$(RuntimeIdentifier)/$(PinMameNativeVersion)/runtimes/$(RuntimeIdentifier)/native/libpinmame.*.dylib" />
+      <_OsxPinMameVersioned Include="..\VisualPinball.Engine.PinMAME.Unity\Plugins\$(RuntimeIdentifier)\libpinmame.*.dylib" />
+    </ItemGroup>
+    <Copy Condition="'@(_OsxPinMame)' != ''" SourceFiles="@(_OsxPinMame)" DestinationFiles="..\VisualPinball.Engine.PinMAME.Unity\Plugins\$(RuntimeIdentifier)\libpinmame.dylib" SkipUnchangedFiles="true" />
+    <Delete Condition="'@(_OsxPinMameVersioned)' != ''" Files="@(_OsxPinMameVersioned)" />
   </Target>
 </Project>
