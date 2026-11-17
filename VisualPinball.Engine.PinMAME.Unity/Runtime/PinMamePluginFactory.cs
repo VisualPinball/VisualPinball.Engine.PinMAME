@@ -43,7 +43,7 @@ namespace VisualPinball.Engine.PinMAME
 					Presentation = PluginFieldPresentation.Slider, Unit = "%", Scope = ConfigurationScope.GlobalAndGame, VisibleWhen = "AltSound",
 					Description = "How much of the ROM's own sound still plays, for packs that don't replace all of it. Off, like Visual PinMAME." }),
 			new PluginSettingsGroup("ROM", "",
-				new PluginField(CompatibleRomField, "Compatible ROM", SettingKind.Choice) { Scope = ConfigurationScope.GameOnly, Provider = CompatibleRomsProvider, Default = "",
+				new PluginField(CompatibleRomField, "ROM", SettingKind.Choice) { Scope = ConfigurationScope.GameOnly, Provider = CompatibleRomsProvider, Default = "",
 					Description = "The ROM to play when the one this table was made for isn't in your ROM folder. The table lists the ROMs that run the same machine." }),
 			new PluginSettingsGroup("ROM memory", "Tables using the same ROM share its saved memory.",
 				new PluginField("ResetRomMemory", "Back up and reset ROM memory", SettingKind.Action) { Scope = ConfigurationScope.GameOnly, Provider = ResetRomMemory,
@@ -92,8 +92,9 @@ namespace VisualPinball.Engine.PinMAME
 
 		private static string ChoiceLabel(PinMameCompatibleRom rom)
 		{
-			var label = string.IsNullOrWhiteSpace(rom.Description) ? rom.Id : $"{rom.Description} · {rom.Id}";
-			return rom.Compatibility == PinMameRomCompatibility.Unverified ? label + " (unverified)" : label;
+			// two lines: the game's name, then the ROM's ID, smaller and dimmer
+			var detail = rom.Compatibility == PinMameRomCompatibility.Unverified ? rom.Id + " · unverified" : rom.Id;
+			return string.IsNullOrWhiteSpace(rom.Description) ? detail : $"{rom.Description}\n<size=80%><alpha=#99>{detail}";
 		}
 
 		private static string Explain(PinMameCompatibleRom rom) => rom.Compatibility switch {
