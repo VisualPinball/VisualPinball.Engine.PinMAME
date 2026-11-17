@@ -111,6 +111,47 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			Assert.That(catalogOnlyDefinition.Diagnostics, Has.Exactly(1).Contains("no curated driver override"));
 		}
 
+		private const string CompatibilityJson = @"{
+			'format': 'pinmame-machine-definition',
+			'schema_version': 2,
+			'machine': { 'id': 'test.compatibility.2026', 'name': 'Test Compatibility' },
+			'coverage': { 'status': 'partial', 'completion_score': 50 },
+			'drivers': [
+				{ 'id': 'test_l1', 'description': 'Test (L-1)', 'physical_compatibility': 'identical' },
+				{ 'id': 'test_l2', 'description': 'Test (L-2)', 'physical_compatibility': 'identical' },
+				{ 'id': 'test_f1', 'description': 'Test (Fix 1)', 'physical_compatibility': 'compatible' },
+				{ 'id': 'test_x1', 'description': 'Test (Other hardware)', 'physical_compatibility': 'different' },
+				{ 'id': 'test_u1', 'description': 'Test (Unknown)', 'physical_compatibility': 'unknown' }
+			],
+			'catalogDrivers': [
+				{ 'id': 'test_p1', 'description': 'Test (Prototype)' }
+			]
+		}";
+
+		[Test]
+		public void ListsCompatibleRomsBestMatchFirst()
+		{
+			var roms = PinMameGameDefinitionConverter.ReadCompatibleRoms(CompatibilityJson, "test_l2");
+
+			Assert.That(roms.Select(rom => rom.Id), Is.EqualTo(new[] { "test_l1", "test_f1", "test_p1", "test_u1" }));
+			Assert.That(roms.Select(rom => rom.Compatibility), Is.EqualTo(new[] {
+				PinMameRomCompatibility.Identical, PinMameRomCompatibility.Compatible, PinMameRomCompatibility.Unverified, PinMameRomCompatibility.Unverified
+			}));
+			Assert.That(roms[0].Description, Is.EqualTo("Test (L-1)"));
+			Assert.That(PinMameGameDefinitionConverter.Convert(CompatibilityJson, "test_l2").CompatibleRoms.Select(rom => rom.Id), Is.EqualTo(roms.Select(rom => rom.Id)));
+		}
+
+		[Test]
+		public void KeepsDifferentRomsApartFromCompatibleOnes()
+		{
+			Assert.That(PinMameGameDefinitionConverter.ReadCompatibleRoms(CompatibilityJson, "test_x1"), Is.Empty);
+			Assert.That(PinMameGameDefinitionConverter.ReadCompatibleRoms(CompatibilityJson, "test_f1").Select(rom => rom.Compatibility),
+				Has.None.EqualTo(PinMameRomCompatibility.Identical));
+			Assert.That(PinMameGameDefinitionConverter.ReadCompatibleRoms(CompatibilityJson, "test_u1").Select(rom => rom.Compatibility),
+				Is.All.EqualTo(PinMameRomCompatibility.Unverified));
+			Assert.That(PinMameGameDefinitionConverter.ReadCompatibleRoms(CompatibilityJson, "other_l1"), Is.Empty);
+		}
+
 		[Test]
 		public void SkipsAmbiguousOrDuplicateDevicesWithDiagnostics()
 		{
