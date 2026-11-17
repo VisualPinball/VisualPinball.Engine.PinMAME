@@ -85,6 +85,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			Undo.RecordObject(tableComponent, "Populate PinMAME hardware");
 			gle.SetMachineSelection(machineId, !string.IsNullOrWhiteSpace(romId) ? romId : definition.DefaultRomId);
 			gle.SetAvailableHardware(definition.Switches, definition.Coils, definition.Lamps, definition.Wires);
+			gle.SetCompatibleRoms(definition.CompatibleRoms);
 			tableComponent.RepopulateHardware(gle);
 			gle.MarkMappingsPopulated();
 			EditorUtility.SetDirty(gle);

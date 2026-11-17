@@ -33,11 +33,16 @@ namespace VisualPinball.Engine.PinMAME.Editor
 		public PinMameSpatialPlacement[] SpatialCoils { get; }
 		public PinMameSpatialPlacement[] SpatialLamps { get; }
 		public string[] Diagnostics { get; }
+		/// <summary>
+		/// The machine's other ROMs that run a table made for the selected ROM, best match first.
+		/// </summary>
+		public PinMameCompatibleRom[] CompatibleRoms { get; }
 
 		public PinMameGameDefinition(string machineId, string name, string coverageStatus, int completionScore,
 			PinMameRomDefinition[] roms, string defaultRomId, GamelogicEngineSwitch[] switches, GamelogicEngineCoil[] coils,
 			GamelogicEngineLamp[] lamps, GamelogicEngineWire[] wires, PinMameSpatialPlacement[] spatialSwitches,
-			PinMameSpatialPlacement[] spatialCoils, PinMameSpatialPlacement[] spatialLamps, string[] diagnostics)
+			PinMameSpatialPlacement[] spatialCoils, PinMameSpatialPlacement[] spatialLamps, string[] diagnostics,
+			PinMameCompatibleRom[] compatibleRoms = null)
 		{
 			MachineId = machineId;
 			Name = name;
@@ -53,6 +58,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			SpatialCoils = spatialCoils ?? Array.Empty<PinMameSpatialPlacement>();
 			SpatialLamps = spatialLamps ?? Array.Empty<PinMameSpatialPlacement>();
 			Diagnostics = diagnostics ?? Array.Empty<string>();
+			CompatibleRoms = compatibleRoms ?? Array.Empty<PinMameCompatibleRom>();
 		}
 	}
 

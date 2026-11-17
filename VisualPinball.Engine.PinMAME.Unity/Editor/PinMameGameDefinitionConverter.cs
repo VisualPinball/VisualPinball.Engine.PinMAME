@@ -86,9 +86,66 @@ namespace VisualPinball.Engine.PinMAME.Editor
 			ConvertOutputs(root["outputs"] as JArray, overrides, coils, lamps, spatialCoils, spatialLamps, diagnostics);
 			var wires = ConvertFlipperWires(root["inputs"] as JArray, root["outputs"] as JArray, overrides, diagnostics);
 
+			var compatibleRoms = CompatibleRoms(sourceDrivers, roms, string.IsNullOrWhiteSpace(selectedRomId) ? defaultRomId : selectedRomId);
+
 			return new PinMameGameDefinition(machineId, name, coverageStatus, completionScore, roms, defaultRomId,
 				switches.ToArray(), coils.ToArray(), lamps.ToArray(), wires, spatialSwitches.ToArray(),
-				spatialCoils.ToArray(), spatialLamps.ToArray(), diagnostics.ToArray());
+				spatialCoils.ToArray(), spatialLamps.ToArray(), diagnostics.ToArray(), compatibleRoms);
+		}
+
+		/// <summary>
+		/// The machine's other ROMs that run a table made for <paramref name="romId"/>, best match
+		/// first, read from a machine definition of the catalog.
+		/// </summary>
+		public static PinMameCompatibleRom[] ReadCompatibleRoms(string json, string romId)
+		{
+			if (string.IsNullOrWhiteSpace(json) || string.IsNullOrWhiteSpace(romId)) {
+				return Array.Empty<PinMameCompatibleRom>();
+			}
+			var root = JObject.Parse(json);
+			if (!string.Equals(root.Value<string>("format"), ExpectedFormat, StringComparison.Ordinal)) {
+				throw new InvalidDataException($"Expected {ExpectedFormat}, got {root.Value<string>("format") ?? "no format"}.");
+			}
+			var sourceDrivers = (root["drivers"] as JArray)?.OfType<JObject>().ToArray() ?? Array.Empty<JObject>();
+			return CompatibleRoms(sourceDrivers, ReadRoms(root, sourceDrivers), romId);
+		}
+
+		/// <summary>
+		/// The catalog marks how each curated ROM relates to the physical machine. Two ROMs both
+		/// "identical" to it are revisions of each other; "identical" or "compatible" ones run the
+		/// same machine; "different" ones need modified hardware, so they don't run a table made for
+		/// another ROM, and nothing else runs a table made for them. ROMs without a mark, or marked
+		/// "unknown", are offered as unverified.
+		/// </summary>
+		private static PinMameCompatibleRom[] CompatibleRoms(IEnumerable<JObject> sourceDrivers, PinMameRomDefinition[] roms, string selectedRomId)
+		{
+			// a ROM the machine doesn't list may not even run it
+			if (string.IsNullOrWhiteSpace(selectedRomId) || !roms.Any(rom => string.Equals(rom.Id, selectedRomId, StringComparison.OrdinalIgnoreCase))) {
+				return Array.Empty<PinMameCompatibleRom>();
+			}
+			var marks = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+			foreach (var driver in sourceDrivers) {
+				var id = driver.Value<string>("id");
+				if (!string.IsNullOrWhiteSpace(id)) marks[id] = driver.Value<string>("physical_compatibility");
+			}
+			string Mark(string id) => marks.TryGetValue(id, out var mark) ? mark : null;
+			static bool RunsMachine(string mark) => mark is "identical" or "compatible";
+
+			var selected = Mark(selectedRomId);
+			if (selected == "different") {
+				return Array.Empty<PinMameCompatibleRom>();
+			}
+			return roms
+				.Where(rom => !string.Equals(rom.Id, selectedRomId, StringComparison.OrdinalIgnoreCase))
+				.Select(rom => (rom, mark: Mark(rom.Id)))
+				.Where(entry => entry.mark != "different")
+				.Select(entry => new PinMameCompatibleRom(entry.rom.Id, entry.rom.Description,
+					selected == "identical" && entry.mark == "identical" ? PinMameRomCompatibility.Identical
+					: RunsMachine(selected) && RunsMachine(entry.mark) ? PinMameRomCompatibility.Compatible
+					: PinMameRomCompatibility.Unverified))
+				.OrderBy(rom => rom.Compatibility)
+				.ThenBy(rom => rom.Id, StringComparer.OrdinalIgnoreCase)
+				.ToArray();
 		}
 
 		private static GamelogicEngineWire[] ConvertFlipperWires(JArray inputs, JArray outputs, IReadOnlyDictionary<string, JObject> overrides,
