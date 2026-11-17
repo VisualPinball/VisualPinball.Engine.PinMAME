@@ -83,7 +83,43 @@ namespace VisualPinball.Engine.PinMAME
 		[SerializeField, HideInInspector]
 		private string _legacyGameId;
 
-		string IRomNameProvider.RomName => romId;
+		// ROMs that run this table in place of romId, exported so the player can offer them when romId is missing
+		[SerializeField, HideInInspector]
+		private PinMameCompatibleRom[] _compatibleRoms = Array.Empty<PinMameCompatibleRom>();
+
+		// the ROM started, which is romId unless the player substituted a compatible one
+		private string _runningRomId;
+		private string _romSubstitute;
+		// the compatible ROM chosen in place of the table's one counts from the moment it's chosen, so the plugins prepared
+		// after PinMAME's (the DMD's colorization) see it before OnInit
+		private string RunningRom => !string.IsNullOrEmpty(_runningRomId) ? _runningRomId : !string.IsNullOrWhiteSpace(_romSubstitute) ? _romSubstitute : romId;
+
+		/// <summary>
+		/// The ROMs that can run this table in place of <see cref="romId"/>, as of when the ROM was
+		/// selected or the table was last exported.
+		/// </summary>
+		public IReadOnlyList<PinMameCompatibleRom> CompatibleRoms => _compatibleRoms ?? Array.Empty<PinMameCompatibleRom>();
+
+		/// <summary>
+		/// Starts <paramref name="rom"/> in place of the table's ROM, or the table's own ROM again
+		/// when null. Only before the game starts.
+		/// </summary>
+		/// <summary>
+		/// The compatible ROM that plays in place of the table's, or null.
+		/// </summary>
+		internal string RomSubstitute => _romSubstitute;
+
+		internal void UseCompatibleRom(string rom)
+		{
+			if (Volatile.Read(ref _onInitCalled) != 0) {
+				throw new InvalidOperationException("The ROM can only be changed before the game starts.");
+			}
+			_romSubstitute = string.IsNullOrWhiteSpace(rom) || string.Equals(rom, romId, StringComparison.OrdinalIgnoreCase) ? null : rom.Trim();
+		}
+
+		// the ROM that runs, whose files colorizations and the like belong to
+		string IRomNameProvider.RomName => RunningRom;
+		// always the table's own ROM, so per-game settings don't change with the ROM that happens to be there
 		GameIdentity? IGameIdentityProvider.GameIdentity => string.IsNullOrWhiteSpace(romId) ? null : new GameIdentity("pinmame", romId);
 		DisplayEncoding IDisplayResourceMetadata.DisplayFormats => DisplayEncoding.Gray2 | DisplayEncoding.Gray4 | DisplayEncoding.Luminance8;
 		DisplayEncoding IDisplayResourceMetadata.DefaultDisplayFormat => DisplayEncoding.Luminance8;
@@ -122,10 +158,27 @@ namespace VisualPinball.Engine.PinMAME
 				MachineId = machineId,
 				GameId = _legacyGameId,
 				RomId = romId,
+				CompatibleRoms = CompatibleRomsForPack(),
 				DisableMechs = DisableMechs,
 				SolenoidDelay = SolenoidDelay
 			};
 			return PackageApi.Packer.Pack(data);
+		}
+
+		private PinMameCompatibleRom[] CompatibleRomsForPack()
+		{
+			#if UNITY_EDITOR
+			// the machine catalog may know more ROMs, or know them better, than when the ROM was selected
+			try {
+				var resolved = ResolveCompatibleRoms?.Invoke(this);
+				if (resolved != null) {
+					return resolved.Where(rom => !string.IsNullOrWhiteSpace(rom.Id)).ToArray();
+				}
+			} catch (Exception e) {
+				Logger.Warn(e, "[PinMAME] Could not look up the ROMs compatible with {Rom}; exporting the ones saved with the table.", romId);
+			}
+			#endif
+			return _compatibleRoms?.Where(rom => !string.IsNullOrWhiteSpace(rom.Id)).ToArray() ?? Array.Empty<PinMameCompatibleRom>();
 		}
 
 		public byte[] PackReferences(Transform root, PackagedRefs refs, PackagedFiles files) => Array.Empty<byte>();
@@ -136,6 +189,7 @@ namespace VisualPinball.Engine.PinMAME
 			machineId = data.MachineId ?? string.Empty;
 			_legacyGameId = data.GameId;
 			romId = data.RomId;
+			_compatibleRoms = data.CompatibleRoms ?? Array.Empty<PinMameCompatibleRom>();
 			DisableMechs = data.DisableMechs;
 			SolenoidDelay = data.SolenoidDelay;
 			// Playback preferences belong to the player; ignore legacy package mute settings.
@@ -226,10 +280,31 @@ namespace VisualPinball.Engine.PinMAME
 				_mappedMachineId = currentMachineId;
 			}
 			machineId = selectedMachineId;
-			romId = selectedRomId ?? string.Empty;
+			var newRomId = selectedRomId ?? string.Empty;
+			if (!string.Equals(romId, newRomId, StringComparison.OrdinalIgnoreCase)) {
+				// they were compatible with the ROM selected until now
+				_compatibleRoms = Array.Empty<PinMameCompatibleRom>();
+			}
+			romId = newRomId;
 			_legacyGameId = null;
 			ClearAvailableHardware();
 		}
+
+		/// <summary>
+		/// Sets the ROMs that can run this table in place of <see cref="romId"/>.
+		/// </summary>
+		public void SetCompatibleRoms(IEnumerable<PinMameCompatibleRom> roms)
+		{
+			_compatibleRoms = roms?.Where(rom => !string.IsNullOrWhiteSpace(rom.Id)
+				&& !string.Equals(rom.Id, romId, StringComparison.OrdinalIgnoreCase)).ToArray() ?? Array.Empty<PinMameCompatibleRom>();
+		}
+
+		/// <summary>
+		/// Set by the editor to look up the ROMs compatible with a component's ROM in the machine
+		/// catalog when the table is exported. Returns null when it can't tell, in which case the
+		/// ones saved with the component are exported.
+		/// </summary>
+		public static Func<PinMameGamelogicEngine, PinMameCompatibleRom[]> ResolveCompatibleRoms;
 
 		private void ClearAvailableHardware()
 		{
@@ -514,7 +589,7 @@ namespace VisualPinball.Engine.PinMAME
 				_altSoundStatus = "Off";
 				return;
 			}
-			var altSound = PinMameAltSound.Start(_altSoundFolder, romId, AudioSettings.outputSampleRate, out _altSoundStatus);
+			var altSound = PinMameAltSound.Start(_altSoundFolder, RunningRom, AudioSettings.outputSampleRate, out _altSoundStatus);
 			// Published with a full fence, as the game start publishes the hardware generation, so one side sees the other
 			// even when the ROM starts meanwhile. Setting it twice is harmless.
 			Interlocked.Exchange(ref _altSound, altSound);
@@ -732,7 +807,7 @@ namespace VisualPinball.Engine.PinMAME
 		/// </summary>
 		private void ReportRomMissing()
 		{
-			var rom = romId;
+			var rom = RunningRom;
 			var folders = _romFolder;
 			EnqueueMainThreadDispatch(() => GamelogicPaths.ReportRomMissing(rom, folders));
 		}
@@ -980,7 +1055,7 @@ namespace VisualPinball.Engine.PinMAME
 			// Never block the Unity main thread during playmode exit.
 			// PinMAME shutdown is best-effort here; OnInit() and the editor lifecycle hook
 			// will recover/ensure shutdown before starting a new ROM.
-			Logger.Info("[PinMAME] Stopping ROM {Rom} ({Reason}).", _pinMame?.RunningGame ?? romId, reason);
+			Logger.Info("[PinMAME] Stopping ROM {Rom} ({Reason}).", _pinMame?.RunningGame ?? RunningRom, reason);
 
 			try {
 				if (_pinMame != null) {
@@ -1023,6 +1098,12 @@ namespace VisualPinball.Engine.PinMAME
 				return;
 			}
 
+			// the player may run a compatible ROM when the table's own isn't there
+			_runningRomId = string.IsNullOrWhiteSpace(_romSubstitute) ? romId : _romSubstitute;
+			if (!string.Equals(_runningRomId, romId, StringComparison.OrdinalIgnoreCase)) {
+				Logger.Info("[PinMAME] Running ROM {Rom} in place of the table's ROM {TableRom}.", _runningRomId, romId);
+			}
+
 			string vpmPath = null;
 			_ballManager = ballManager;
 			_playfieldComponent = GetComponentInChildren<PlayfieldComponent>();
@@ -1034,9 +1115,9 @@ namespace VisualPinball.Engine.PinMAME
 				byte[] data = null;
 
 				#if UNITY_IOS
-					data = File.ReadAllBytes(Path.Combine(Application.streamingAssetsPath, $"{romId}.zip"));
+					data = File.ReadAllBytes(Path.Combine(Application.streamingAssetsPath, $"{RunningRom}.zip"));
 				#else
-					UnityWebRequest webRequest = new UnityWebRequest(Path.Combine(Application.streamingAssetsPath, $"{romId}.zip"));
+					UnityWebRequest webRequest = new UnityWebRequest(Path.Combine(Application.streamingAssetsPath, $"{RunningRom}.zip"));
 
 					webRequest.downloadHandler = new DownloadHandlerBuffer();
 					webRequest.SendWebRequest();
@@ -1046,14 +1127,14 @@ namespace VisualPinball.Engine.PinMAME
 					data = webRequest.downloadHandler.data;
 				#endif
 
-				File.WriteAllBytes(Path.Combine(vpmPath, "roms", $"{romId}.zip"), data);
+				File.WriteAllBytes(Path.Combine(vpmPath, "roms", $"{RunningRom}.zip"), data);
 			#else
 				vpmPath = PinMameFolders.DataFolder;
 			#endif
 
 			await PinMameStartStopGate.WaitAsync(ct);
 			try {
-				Logger.Info("[PinMAME] Starting ROM {Rom} of machine {Machine} on {Name:l} (audio {SampleRate} Hz).", romId, machineId, name, AudioSettings.outputSampleRate);
+				Logger.Info("[PinMAME] Starting ROM {Rom} of machine {Machine} on {Name:l} (audio {SampleRate} Hz).", RunningRom, machineId, name, AudioSettings.outputSampleRate);
 
 				#if UNITY_EDITOR
 				// With Domain Reload disabled, PinMAME (native + managed singleton) persists across play sessions.
@@ -1074,7 +1155,7 @@ namespace VisualPinball.Engine.PinMAME
 				Logger.Debug($"[PinMAME] Editor pre-stop: initialRunState={preStopState}, stopCallMs={preStopSw.ElapsedMilliseconds}, waitMs={preStopWaitSw.ElapsedMilliseconds}, finalRunState={PinMame.PinMame.RunState}");
 				if (PinMame.PinMame.RunState != 0) {
 					_startFailure = "previous game did not stop";
-					Logger.Error("[PinMAME] Cannot start ROM {Rom}, the previous game did not stop within {TimeoutMs} ms (run state {RunState}).", romId, StopTimeoutMs, PinMame.PinMame.RunState);
+					Logger.Error("[PinMAME] Cannot start ROM {Rom}, the previous game did not stop within {TimeoutMs} ms (run state {RunState}).", RunningRom, StopTimeoutMs, PinMame.PinMame.RunState);
 					return;
 				}
 
@@ -1173,7 +1254,7 @@ namespace VisualPinball.Engine.PinMAME
 				try {
 					_awaitingGameStart = true;
 					Interlocked.Increment(ref _romRun);
-					_pinMame.StartGame(romId);
+					_pinMame.StartGame(RunningRom);
 					Logger.Debug($"[PinMAME] StartGame returned. RunState={PinMame.PinMame.RunState}");
 				}
 				catch (InvalidOperationException e) when (e.Message != null && e.Message.Contains("status=GAME_ALREADY_RUNNING"))
@@ -1191,7 +1272,7 @@ namespace VisualPinball.Engine.PinMAME
 						Interlocked.Increment(ref _romRun);
 						_romStarting = true;
 						StartAltSound();
-						_pinMame.StartGame(romId);
+						_pinMame.StartGame(RunningRom);
 						Logger.Debug($"[PinMAME] StartGame retry returned. RunState={PinMame.PinMame.RunState}");
 					}
 					catch (OperationCanceledException) {
@@ -1201,7 +1282,7 @@ namespace VisualPinball.Engine.PinMAME
 					catch (Exception retryEx) {
 						_awaitingGameStart = false;
 						_startFailure = "start failed after stopping the running game";
-						Logger.Error(retryEx, "[PinMAME] Cannot start ROM {Rom} after stopping the game that was still running.", romId);
+						Logger.Error(retryEx, "[PinMAME] Cannot start ROM {Rom} after stopping the game that was still running.", RunningRom);
 					}
 				}
 				catch (InvalidOperationException e) when (e.Message != null && e.Message.Contains("status=GAME_NOT_FOUND"))
@@ -1209,12 +1290,12 @@ namespace VisualPinball.Engine.PinMAME
 					// a typo in the table, or a ROM newer than this PinMAME
 					_awaitingGameStart = false;
 					_startFailure = "unknown ROM";
-					Logger.Warn(e, "[PinMAME] Cannot start ROM {Rom}, libpinmame {Version} doesn't know it. Check the ROM name of the table.", romId, _nativeVersion ?? "unknown");
+					Logger.Warn(e, "[PinMAME] Cannot start ROM {Rom}, libpinmame {Version} doesn't know it. Check the ROM name of the table.", RunningRom, _nativeVersion ?? "unknown");
 				}
 				catch (Exception e) {
 					_awaitingGameStart = false;
 					_startFailure = "start failed: " + e.Message;
-					Logger.Error(e, "[PinMAME] Cannot start ROM {Rom}.", romId);
+					Logger.Error(e, "[PinMAME] Cannot start ROM {Rom}.", RunningRom);
 				}
 
 			} catch (Exception e) when (e is DllNotFoundException || e is EntryPointNotFoundException || e is BadImageFormatException) {
@@ -1222,7 +1303,7 @@ namespace VisualPinball.Engine.PinMAME
 				_awaitingGameStart = false;
 				_startFailure = "native library not loaded";
 				// a broken local install, a missing runtime dependency, or no build for this platform
-				Logger.Warn(e, "[PinMAME] Cannot start ROM {Rom}, PinMAME's native library could not be loaded.", romId);
+				Logger.Warn(e, "[PinMAME] Cannot start ROM {Rom}, PinMAME's native library could not be loaded.", RunningRom);
 
 			} finally {
 				if (_startFailure != null) EndAltSound(Volatile.Read(ref _romRun), "the ROM didn't start");
@@ -1240,7 +1321,7 @@ namespace VisualPinball.Engine.PinMAME
 			} catch (InvalidOperationException e) {
 				Logger.Error(e, "[PinMAME] Could not set the ROM folder.");
 			}
-			PinMameFolders.ImportFromVpm(romId);
+			PinMameFolders.ImportFromVpm(RunningRom);
 
 			try {
 				_romFolder = _pinMame.RomPath;
@@ -1254,17 +1335,17 @@ namespace VisualPinball.Engine.PinMAME
 			// missing, although they run. So only a failed audit without a zip is reported here.
 			// StartGame reports unknown ROMs, OnGameEnded ROMs that fail to load.
 			try {
-				_romAuditPassed = _pinMame.GetGame(romId).RomFound;
+				_romAuditPassed = _pinMame.GetGame(RunningRom).RomFound;
 			} catch (InvalidOperationException e) {
 				_romKnown = false;
-				Logger.Debug(e, "[PinMAME] PinMAME doesn't know ROM {Rom}.", romId);
+				Logger.Debug(e, "[PinMAME] PinMAME doesn't know ROM {Rom}.", RunningRom);
 			}
 			if (_romAuditPassed == false) {
-				if (!PinMameFolders.HasRomZip(_romFolder, romId)) {
+				if (!PinMameFolders.HasRomZip(_romFolder, RunningRom)) {
 					_romMissingReported = true;
-					Logger.Warn("[PinMAME] ROM {Rom} not found, there is no zip file of that name in {RomFolders:l}. Put the ROM there, or set the ROM folder to where your ROMs are.", romId, _romFolder ?? "<no ROM folder>");
+					Logger.Warn("[PinMAME] ROM {Rom} not found, there is no zip file of that name in {RomFolders:l}. Put the ROM there, or set the ROM folder to where your ROMs are.", RunningRom, _romFolder ?? "<no ROM folder>");
 				} else {
-					Logger.Debug("[PinMAME] PinMAME's audit reports ROM {Rom} as incomplete in {RomFolders:l}. Clones often do and still run.", romId, _romFolder);
+					Logger.Debug("[PinMAME] PinMAME's audit reports ROM {Rom} as incomplete in {RomFolders:l}. Clones often do and still run.", RunningRom, _romFolder);
 				}
 			}
 		}
@@ -1298,7 +1379,7 @@ namespace VisualPinball.Engine.PinMAME
 			}
 			Interlocked.Exchange(ref _hardwareGen, hardwareGen); // a full fence, see StartAltSound
 			Volatile.Read(ref _altSound)?.SetHardwareGen(hardwareGen);
-			Logger.Info("[PinMAME] Game {Rom} started (hardware {HardwareGen}, libpinmame {Version}).", romId, ((PinMameHardwareGen)(ulong)hardwareGen).ToString(), _nativeVersion ?? "unknown");
+			Logger.Info("[PinMAME] Game {Rom} started (hardware {HardwareGen}, libpinmame {Version}).", RunningRom, ((PinMameHardwareGen)(ulong)hardwareGen).ToString(), _nativeVersion ?? "unknown");
 			_isRunning = true;
 
 			_solenoidDelayStartTimestampUsec = TimestampUsec;
@@ -1310,7 +1391,7 @@ namespace VisualPinball.Engine.PinMAME
 			}
 
 			catch(Exception e) {
-				Logger.Error(e, "[PinMAME] Could not send the initial switches and mechs to ROM {Rom}.", romId);
+				Logger.Error(e, "[PinMAME] Could not send the initial switches and mechs to ROM {Rom}.", RunningRom);
 			}
 
 			EnqueueMainThreadDispatch(() => {
@@ -1339,7 +1420,7 @@ namespace VisualPinball.Engine.PinMAME
 			}
 			// Native can report ended more than once during teardown; keep it idempotent.
 			if (_isRunning) {
-				Logger.Info("[PinMAME] Game {Rom} ended.", romId);
+				Logger.Info("[PinMAME] Game {Rom} ended.", RunningRom);
 				var run = Volatile.Read(ref _romRun);
 				EnqueueMainThreadDispatch(() => EndAltSound(run, "the ROM stopped"));
 
@@ -1348,7 +1429,7 @@ namespace VisualPinball.Engine.PinMAME
 				_awaitingGameStart = false;
 				_startFailure = "stopped before it started";
 				if (!_romMissingReported) {
-					Logger.Warn("[PinMAME] PinMAME stopped ROM {Rom} before it started. The ROM is probably missing or incomplete in {RomFolders:l}.", romId, _romFolder ?? "<default ROM folder>");
+					Logger.Warn("[PinMAME] PinMAME stopped ROM {Rom} before it started. The ROM is probably missing or incomplete in {RomFolders:l}.", RunningRom, _romFolder ?? "<default ROM folder>");
 				}
 				// only now: the audit before the start can't tell a missing ROM from a clone that
 				// runs from its parent's zip
@@ -2464,10 +2545,14 @@ namespace VisualPinball.Engine.PinMAME
 				writer.Add("hardware", ((PinMameHardwareGen)(ulong)hardwareGen).ToString());
 			}
 
+			if (!string.Equals(RunningRom, romId, StringComparison.OrdinalIgnoreCase)) {
+				writer.Add("running-rom", RunningRom);
+				writer.Add("table-rom", romId);
+			}
 			var romFolder = _romFolder ?? GamelogicPaths.RomFolder;
 			writer.Add("rom-folder", romFolder ?? "<default>");
-			if (!string.IsNullOrWhiteSpace(romFolder) && !string.IsNullOrWhiteSpace(romId)) {
-				writer.Add("rom-zip-found", PinMameFolders.HasRomZip(romFolder, romId));
+			if (!string.IsNullOrWhiteSpace(romFolder) && !string.IsNullOrWhiteSpace(RunningRom)) {
+				writer.Add("rom-zip-found", PinMameFolders.HasRomZip(romFolder, RunningRom));
 			}
 			if (!_romKnown) {
 				writer.Add("rom-known", false);
@@ -2477,8 +2562,8 @@ namespace VisualPinball.Engine.PinMAME
 			}
 			if (_nvramFolder != null) {
 				writer.Add("nvram-folder", _nvramFolder);
-				if (!string.IsNullOrWhiteSpace(romId)) {
-					writer.Add("nvram-found", System.IO.File.Exists(System.IO.Path.Combine(_nvramFolder, romId + ".nv")));
+				if (!string.IsNullOrWhiteSpace(RunningRom)) {
+					writer.Add("nvram-found", System.IO.File.Exists(System.IO.Path.Combine(_nvramFolder, RunningRom + ".nv")));
 				}
 			}
 			if (_configFolder != null) {
@@ -2516,6 +2601,8 @@ namespace VisualPinball.Engine.PinMAME
 		public string GameType;
 		public string GameId;
 		public string RomId;
+		// ROMs that can run the table in place of RomId; missing in packages written before they were exported
+		public PinMameCompatibleRom[] CompatibleRoms;
 		public bool DisableMechs;
 		public float SolenoidDelay;
 	}

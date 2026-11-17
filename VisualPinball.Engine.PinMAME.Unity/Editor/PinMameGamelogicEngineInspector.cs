@@ -220,6 +220,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				}
 				// candidates for the manager dropdowns; the table's mappings stay until Populate Hardware
 				_gle.SetAvailableHardware(_definition.Switches, _definition.Coils, _definition.Lamps, _definition.Wires);
+				_gle.SetCompatibleRoms(_definition.CompatibleRoms);
 				EditorUtility.SetDirty(_gle);
 			} else if (!string.IsNullOrWhiteSpace(preferredRomId) && selectedRomId == null) {
 				_loadWarning = CombineWarnings(_loadWarning, $"The saved ROM '{preferredRomId}' is not listed for {selectedMachine.Name}; the saved component value was left unchanged.");
@@ -229,8 +230,28 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				// The selection and the table's mappings stay as they are.
 				if (forceRefresh) Undo.RecordObject(_gle, "Refresh PinMAME hardware candidates");
 				_gle.SetAvailableHardware(_definition.Switches, _definition.Coils, _definition.Lamps, _definition.Wires);
+				_gle.SetCompatibleRoms(CompatibleRomsOf(selectedRomId));
+				EditorUtility.SetDirty(_gle);
+			} else if (fillCandidates && selectedRomId != null && !SameCompatibleRoms(_gle.CompatibleRoms, CompatibleRomsOf(selectedRomId))) {
+				// tables saved before the compatible ROMs were kept, or the catalog learned more since
+				Undo.RecordObject(_gle, "Update compatible PinMAME ROMs");
+				_gle.SetCompatibleRoms(CompatibleRomsOf(selectedRomId));
 				EditorUtility.SetDirty(_gle);
 			}
+		}
+
+		private PinMameCompatibleRom[] CompatibleRomsOf(string romId)
+			=> string.IsNullOrWhiteSpace(_definitionJson) ? Array.Empty<PinMameCompatibleRom>() : PinMameGameDefinitionConverter.ReadCompatibleRoms(_definitionJson, romId);
+
+		private static bool SameCompatibleRoms(IReadOnlyList<PinMameCompatibleRom> current, IReadOnlyList<PinMameCompatibleRom> updated)
+		{
+			if (current.Count != updated.Count) return false;
+			for (var i = 0; i < current.Count; i++) {
+				if (!string.Equals(current[i].Id, updated[i].Id, StringComparison.OrdinalIgnoreCase)
+				    || !string.Equals(current[i].Description ?? string.Empty, updated[i].Description ?? string.Empty, StringComparison.Ordinal)
+				    || current[i].Compatibility != updated[i].Compatibility) return false;
+			}
+			return true;
 		}
 
 		private static string CombineWarnings(string first, string second)
@@ -383,6 +404,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 					Undo.RecordObject(_tableComponent, "Populate PinMAME hardware");
 					_gle.SetMachineSelection(_definition.MachineId, _roms[_selectedRomIndex].Id);
 					_gle.SetAvailableHardware(_definition.Switches, _definition.Coils, _definition.Lamps, _definition.Wires);
+					_gle.SetCompatibleRoms(_definition.CompatibleRoms);
 					_tableComponent.RepopulateHardware(_gle);
 					_gle.MarkMappingsPopulated();
 					EditorUtility.SetDirty(_gle);
@@ -502,6 +524,7 @@ namespace VisualPinball.Engine.PinMAME.Editor
 				_gle.SetMachineSelection(definition.MachineId, selectedRomId);
 				// a ROM of the same machine: refresh the dropdown candidates, keep the mappings
 				_gle.SetAvailableHardware(definition.Switches, definition.Coils, definition.Lamps, definition.Wires);
+				_gle.SetCompatibleRoms(definition.CompatibleRoms);
 				_loadError = null;
 				_spatialAssignmentMessage = null;
 				EditorUtility.SetDirty(_gle);
