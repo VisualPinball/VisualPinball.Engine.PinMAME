@@ -9,7 +9,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
-using PinMame;
 using VisualPinball.Unity;
 
 namespace VisualPinball.Engine.PinMAME
@@ -50,14 +49,6 @@ namespace VisualPinball.Engine.PinMAME
 
 			public bool Lists(string rom) => Compatible.Any(candidate => string.Equals(candidate.Id, rom, StringComparison.OrdinalIgnoreCase));
 		}
-
-		/// <summary>
-		/// The ';'-separated folders PinMAME looks for ROMs in, as <see cref="PinMameFolders.ApplyRomFolder"/>
-		/// sets them: the player's or editor's ROM folder, else VPM's, else "roms" in VPE's data folder.
-		/// </summary>
-		internal static string RomFolders => GamelogicPaths.RomFolder
-			?? PinMame.PinMame.FindVpmPath(PinMameFileType.Roms)
-			?? Path.Combine(PinMameFolders.DataFolderPath, "roms");
 
 		/// <summary>
 		/// Whether the ROM's zip is in the ROM folder. Clones also need their parent's zip, which

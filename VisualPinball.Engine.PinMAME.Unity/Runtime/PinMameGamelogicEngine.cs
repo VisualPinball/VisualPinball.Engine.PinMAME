@@ -90,6 +90,7 @@ namespace VisualPinball.Engine.PinMAME
 		// the ROM started, which is romId unless the player substituted a compatible one
 		private string _runningRomId;
 		private string _romSubstitute;
+		private string _gameRomFolders;
 		// the compatible ROM chosen in place of the table's one counts from the moment it's chosen, so the plugins prepared
 		// after PinMAME's (the DMD's colorization) see it before OnInit
 		private string RunningRom => !string.IsNullOrEmpty(_runningRomId) ? _runningRomId : !string.IsNullOrWhiteSpace(_romSubstitute) ? _romSubstitute : romId;
@@ -101,20 +102,18 @@ namespace VisualPinball.Engine.PinMAME
 		public IReadOnlyList<PinMameCompatibleRom> CompatibleRoms => _compatibleRoms ?? Array.Empty<PinMameCompatibleRom>();
 
 		/// <summary>
-		/// Starts <paramref name="rom"/> in place of the table's ROM, or the table's own ROM again
-		/// when null. Only before the game starts.
-		/// </summary>
-		/// <summary>
 		/// The compatible ROM that plays in place of the table's, or null.
 		/// </summary>
 		internal string RomSubstitute => _romSubstitute;
 
-		internal void UseCompatibleRom(string rom)
+		/// <summary>Sets the search path and any compatible ROM chosen for this game before it starts.</summary>
+		internal void ConfigureRom(string folders, string substitute)
 		{
 			if (Volatile.Read(ref _onInitCalled) != 0) {
 				throw new InvalidOperationException("The ROM can only be changed before the game starts.");
 			}
-			_romSubstitute = string.IsNullOrWhiteSpace(rom) || string.Equals(rom, romId, StringComparison.OrdinalIgnoreCase) ? null : rom.Trim();
+			_gameRomFolders = folders;
+			_romSubstitute = string.IsNullOrWhiteSpace(substitute) || string.Equals(substitute, romId, StringComparison.OrdinalIgnoreCase) ? null : substitute.Trim();
 		}
 
 		// the ROM that runs, whose files colorizations and the like belong to
@@ -1317,7 +1316,7 @@ namespace VisualPinball.Engine.PinMAME
 		private void PrepareDesktopFolders()
 		{
 			try {
-				PinMameFolders.ApplyRomFolder(_pinMame);
+				PinMameFolders.ApplyRomFolder(_pinMame, _gameRomFolders);
 			} catch (InvalidOperationException e) {
 				Logger.Error(e, "[PinMAME] Could not set the ROM folder.");
 			}
@@ -2549,7 +2548,7 @@ namespace VisualPinball.Engine.PinMAME
 				writer.Add("running-rom", RunningRom);
 				writer.Add("table-rom", romId);
 			}
-			var romFolder = _romFolder ?? GamelogicPaths.RomFolder;
+			var romFolder = _romFolder ?? _gameRomFolders ?? GamelogicPaths.RomFolder;
 			writer.Add("rom-folder", romFolder ?? "<default>");
 			if (!string.IsNullOrWhiteSpace(romFolder) && !string.IsNullOrWhiteSpace(RunningRom)) {
 				writer.Add("rom-zip-found", PinMameFolders.HasRomZip(romFolder, RunningRom));

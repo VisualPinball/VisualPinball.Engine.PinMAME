@@ -75,7 +75,7 @@ namespace VisualPinball.Engine.PinMAME
 					EmptyMessage = "This table lists no compatible ROMs. Export it again with a current VPE to add them.",
 				};
 			}
-			var folders = PinMameRomAvailability.RomFolders;
+			var folders = PinMameFolders.ResolveRomFolders(package);
 			var choices = roms.Compatible
 				.Where(rom => PinMameRomAvailability.IsAvailable(rom.Id, folders))
 				.Select(rom => new PluginChoice(rom.Id, ChoiceLabel(rom), Explain(rom)))
@@ -120,7 +120,7 @@ namespace VisualPinball.Engine.PinMAME
 				if (mobile || string.IsNullOrWhiteSpace(package)) return Array.Empty<PluginValidationIssue>();
 				var roms = PinMameRomAvailability.Read(package, cancellation);
 				if (roms == null || roms.Compatible.Count == 0) return Array.Empty<PluginValidationIssue>();
-				var folders = PinMameRomAvailability.RomFolders;
+				var folders = PinMameFolders.ResolveRomFolders(package);
 				if (PinMameRomAvailability.IsAvailable(roms.Rom, folders)) return Array.Empty<PluginValidationIssue>();
 				if (roms.Lists(chosen) && PinMameRomAvailability.IsAvailable(chosen, folders)) return Array.Empty<PluginValidationIssue>();
 				if (!roms.Compatible.Any(rom => PinMameRomAvailability.IsAvailable(rom.Id, folders))) return Array.Empty<PluginValidationIssue>();
@@ -131,16 +131,9 @@ namespace VisualPinball.Engine.PinMAME
 		/// <summary>
 		/// The ROM to play in place of the table's own, or null to play the table's own.
 		/// </summary>
-		private static string SubstituteRom(PinMameGamelogicEngine engine, string chosen)
-		{
-			if (engine == null || string.IsNullOrWhiteSpace(chosen) || string.IsNullOrWhiteSpace(engine.romId)) return null;
-			return SubstituteRom(engine.romId, chosen, rom => engine.CompatibleRoms.Any(compatible => string.Equals(compatible.Id, rom, StringComparison.OrdinalIgnoreCase)));
-		}
-
-		private static string SubstituteRom(string tableRom, string chosen, Func<string, bool> lists)
+		private static string SubstituteRom(string tableRom, string chosen, Func<string, bool> lists, string folders)
 		{
 			if (string.IsNullOrWhiteSpace(tableRom) || string.IsNullOrWhiteSpace(chosen) || !lists(chosen)) return null;
-			var folders = PinMameRomAvailability.RomFolders;
 			return !PinMameRomAvailability.IsAvailable(tableRom, folders) && PinMameRomAvailability.IsAvailable(chosen, folders) ? chosen : null;
 		}
 
@@ -152,7 +145,7 @@ namespace VisualPinball.Engine.PinMAME
 			if (string.IsNullOrWhiteSpace(chosen) || string.IsNullOrWhiteSpace(package)) return tableRom;
 			var roms = PinMameRomAvailability.Read(package, cancellation);
 			if (roms == null || !string.Equals(roms.Rom, tableRom, StringComparison.OrdinalIgnoreCase)) return tableRom;
-			return SubstituteRom(tableRom, chosen, roms.Lists) ?? tableRom;
+			return SubstituteRom(tableRom, chosen, roms.Lists, PinMameFolders.ResolveRomFolders(package)) ?? tableRom;
 		}
 
 		public IReadOnlyList<PluginValidationIssue> Validate(PluginChoiceRequest request) => Array.Empty<PluginValidationIssue>();
@@ -193,8 +186,10 @@ namespace VisualPinball.Engine.PinMAME
 				_engine = scene.Table.GetComponentInChildren<PinMameGamelogicEngine>(true);
 				if (_engine != null) {
 					if (!Application.isMobilePlatform) {
-						var substitute = SubstituteRom(_engine, game.Settings.String(CompatibleRomField));
-						_engine.UseCompatibleRom(substitute);
+						var folders = PinMameFolders.ResolveRomFolders(game.PackagePath);
+						var substitute = SubstituteRom(_engine.romId, game.Settings.String(CompatibleRomField),
+							rom => _engine.CompatibleRoms.Any(compatible => string.Equals(compatible.Id, rom, StringComparison.OrdinalIgnoreCase)), folders);
+						_engine.ConfigureRom(folders, substitute);
 						if (substitute != null) Logger.Info("[PinMAME] ROM {Rom} isn't in the ROM folder; playing {Substitute}, the compatible ROM chosen for it.", _engine.romId, substitute);
 					}
 					_original = _engine.OutputGain;

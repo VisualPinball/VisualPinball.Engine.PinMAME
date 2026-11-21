@@ -27,8 +27,8 @@ namespace VisualPinball.Engine.PinMAME
 	/// <summary>
 	/// Where VPE's PinMAME keeps its files on desktop. VPE ships its own PinMAME and doesn't depend
 	/// on a Visual PinMAME (VPM) installation: NVRAM, config and high scores live in VPE's data
-	/// folder, shared by all VPE apps. ROMs use <see cref="GamelogicPaths.RomFolder"/> when set,
-	/// otherwise VPM's ROM folder if available, then "roms" in VPE's data folder. A game's NVRAM,
+	/// folder, shared by all VPE apps. A table's own pinmame/roms folder is searched first, followed by
+	/// <see cref="GamelogicPaths.RomFolder"/> when set, otherwise VPM's ROM folder or VPE's. A game's NVRAM,
 	/// high scores and config are copied from VPM the first time VPE runs that game.
 	/// </summary>
 	public static class PinMameFolders
@@ -62,13 +62,32 @@ namespace VisualPinball.Engine.PinMAME
 		/// </summary>
 		internal static string DataFolderPath => Path.Combine(GamelogicPaths.DataRoot, "PinMAME");
 
+		private static string SharedRomFolders => GamelogicPaths.RomFolder ?? PinMame.PinMame.FindVpmPath(PinMameFileType.Roms);
+
+		/// <summary>The search path for a package, shared by the launch checks and emulation.</summary>
+		internal static string ResolveRomFolders(string packagePath)
+		{
+			var shared = SharedRomFolders ?? Path.Combine(DataFolderPath, "roms");
+			var directory = string.IsNullOrWhiteSpace(packagePath) ? null : Path.GetDirectoryName(Path.GetFullPath(packagePath));
+			if (string.IsNullOrEmpty(directory)) {
+				return shared;
+			}
+
+			var local = Path.Combine(directory, "pinmame", "roms");
+			// PinMAME uses semicolons to separate folders and cannot escape them within a folder name.
+			return !local.Contains(';') && Directory.Exists(local) ? $"{local};{shared}" : shared;
+		}
+
 		/// <summary>
 		/// Points PinMAME at the configured ROM folder, falling back to VPM's ROM folder when
 		/// available, then "roms" in VPE's data folder. Must not be called while a game is running.
 		/// </summary>
 		public static void ApplyRomFolder(PinMame.PinMame pinMame)
+			=> ApplyRomFolder(pinMame, null);
+
+		internal static void ApplyRomFolder(PinMame.PinMame pinMame, string romFolders)
 		{
-			pinMame.RomPath = GamelogicPaths.RomFolder ?? PinMame.PinMame.FindVpmPath(PinMameFileType.Roms);
+			pinMame.RomPath = romFolders ?? SharedRomFolders;
 			Logger.Info($"[PinMAME] ROM folder: {pinMame.RomPath}; NVRAM: {pinMame.GetPath(PinMameFileType.Nvram)}; config: {pinMame.GetPath(PinMameFileType.Config)}.");
 		}
 
